@@ -25,15 +25,15 @@ def test_spawner_does_nothing_when_test_mode_disabled() -> None:
         set_test_mode_enabled(False)
 
 
-def test_drops_only_the_arc_gun_once_at_spawn() -> None:
+def test_drops_only_the_scythe_once_at_spawn() -> None:
     set_test_mode_enabled(True)
     try:
         state = GameplayState()
         update_test_mode_fork_spawner(state, 0.016)
 
         drops = _weapon_drops(state)
-        assert [WeaponId(d.amount) for d in drops] == [WeaponId.RAYGUN]
-        assert _TEST_MODE_WEAPON_DROPS == ((64.0, WeaponId.RAYGUN),)
+        assert [WeaponId(d.amount) for d in drops] == [WeaponId.EVIL_SCYTHE]
+        assert _TEST_MODE_WEAPON_DROPS == ((64.0, WeaponId.EVIL_SCYTHE),)
 
         # subsequent ticks do not re-drop
         for _ in range(20):
