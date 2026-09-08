@@ -14,11 +14,9 @@ from crimson.weapon_runtime.arc_gun import (
     ARC_CHAIN_RANGE,
     ARC_DAMAGE,
     ARC_MAX_RANGE,
-    ARC_SOUND_LOOP_S,
     ARC_WPU_DAMAGE_MULT,
     ARC_WPU_EXTRA_LINKS,
     arc_chain_points,
-    arc_sound_loop_index,
     start_arc_strike,
     update_arc_gun,
 )
@@ -174,20 +172,3 @@ def test_bolt_ages_out() -> None:
     update_arc_gun([player], [], ARC_BOLT_LIFETIME + 0.01, rng=_rng(), creature_damage_runtime=None)
     assert player.arc_gun.bolt_timer == 0.0
     assert player.arc_gun.chain == []
-
-
-def test_sound_loop_clock_runs_while_firing_and_resets_when_it_stops() -> None:
-    player = PlayerState(index=0, pos=Vec2(0.0, 0.0))
-
-    # sustained fire: re-strike every few frames so bolt_timer never hits 0
-    for _ in range(int(ARC_SOUND_LOOP_S * 3 / 0.03) + 2):
-        start_arc_strike(player, Vec2(50.0, 0.0), weapon_power_up=False)
-        update_arc_gun([player], [], 0.03, rng=_rng(), creature_damage_runtime=None)
-    assert player.arc_gun.sound_elapsed > ARC_SOUND_LOOP_S * 2
-    assert arc_sound_loop_index(player.arc_gun.sound_elapsed) >= 2
-
-    # stop firing: the clock drains to zero once the bolt lapses
-    for _ in range(int(ARC_BOLT_LIFETIME / 0.016) + 3):
-        update_arc_gun([player], [], 0.016, rng=_rng(), creature_damage_runtime=None)
-    assert player.arc_gun.sound_elapsed == 0.0
-    assert arc_sound_loop_index(0.0) == 0

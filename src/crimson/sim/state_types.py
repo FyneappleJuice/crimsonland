@@ -79,8 +79,6 @@ class ArcGunState(msgspec.Struct):
     bolt_timer: float = 0.0
     chain: list[float] = msgspec.field(default_factory=list)
     seed: int = 0
-    # Seconds the gun has been firing without a break - drives the looping crackle.
-    sound_elapsed: float = 0.0
 
 
 class PlayerState(msgspec.Struct):

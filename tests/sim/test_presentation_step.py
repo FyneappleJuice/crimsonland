@@ -89,6 +89,41 @@ def test_arc_gun_emits_no_per_shot_fire_sound() -> None:
     assert SfxId.PISTOL_FIRE in sfx
 
 
+def test_arc_gun_crackle_fires_once_per_shot_on_the_soft_channel() -> None:
+    from crimson.weapon_runtime.arc_gun import ARC_SOUND
+
+    state = GameplayState()
+    player = PlayerState(index=0, pos=Vec2(0.0, 0.0))
+    player.weapon.weapon_id = WeaponId.RAYGUN
+
+    def plan(prev_shot_seq: int, shot_seq: int) -> DeterministicPresentationPlan:
+        player.shot_seq = shot_seq
+        return plan_world_presentation_step(
+            state=state,
+            players=[player],
+            fx_queue=FxQueue(),
+            hits=[],
+            pickups=[],
+            event_sfx=[],
+            prev_audio=[(prev_shot_seq, False, 0.0)],
+            prev_perk_pending=0,
+            game_mode=GameMode.SURVIVAL,
+            demo_mode_active=False,
+            perk_progression_enabled=True,
+            rng=ScriptedCrand(0, fallback=ScriptedCrand.Fallback.REPEAT_LAST),
+            detail_preset=5,
+            violence_disabled=0,
+            game_tune_started=False,
+        )
+
+    fired = plan(3, 4)
+    assert fired.soft_sfx.count(ARC_SOUND) == 1
+    assert ARC_SOUND not in fired.sfx  # never on the replay-visible channel
+
+    idle = plan(4, 4)
+    assert ARC_SOUND not in idle.soft_sfx
+
+
 def test_plan_world_presentation_step_orders_sfx() -> None:
     state = GameplayState()
     player = PlayerState(index=0, pos=Vec2(0.0, 0.0))

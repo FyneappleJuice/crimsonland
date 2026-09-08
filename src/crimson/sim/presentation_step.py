@@ -10,7 +10,7 @@ from grim.rand import CrandLike
 from grim.sfx_map import SfxId
 
 from ..bonuses.blade_orbit import BLADE_SOUND, blade_sound_loop_index
-from ..weapon_runtime.arc_gun import ARC_SOUND, arc_sound_loop_index
+from ..weapon_runtime.arc_gun import ARC_SOUND
 from ..bonuses.fire_bullets import LargeHitDecalRuntime
 from ..bonuses.freeze import freeze_bonus_active
 from ..effects import FxQueue
@@ -364,9 +364,7 @@ def plan_world_presentation_step(
     hits: list[ProjectileHit],
     pickups: list[BonusPickupEvent],
     event_sfx: list[SfxId],
-    prev_audio: Sequence[
-        tuple[int, bool, float] | tuple[int, bool, float, int] | tuple[int, bool, float, int, int]
-    ],
+    prev_audio: Sequence[tuple[int, bool, float] | tuple[int, bool, float, int]],
     prev_perk_pending: int,
     game_mode: GameMode,
     demo_mode_active: bool,
@@ -429,13 +427,11 @@ def plan_world_presentation_step(
             now_idx = blade_sound_loop_index(orbit.elapsed)
             if now_idx != prev_blade_snd:
                 commands.soft_sfx.append(BLADE_SOUND)
-        # Not native: loop the Arc Gun crackle while the gun is firing.
-        prev_arc_snd = int(prev_snapshot[4]) if len(prev_snapshot) > 4 else -1
-        arc = player.arc_gun
-        if float(arc.bolt_timer) > 0.0:
-            now_arc = arc_sound_loop_index(arc.sound_elapsed)
-            if now_arc != prev_arc_snd:
-                commands.soft_sfx.append(ARC_SOUND)
+        # Not native: the Arc Gun's crackle plays once per shot (its per-shot fire
+        # cue lives on the soft channel so it can be volume-scaled for the tail
+        # overlap). plan_player_audio_sfx deliberately emits nothing for RAYGUN.
+        if player.weapon.weapon_id == WeaponId.RAYGUN and int(player.shot_seq) > int(prev_shot_seq):
+            commands.soft_sfx.append(ARC_SOUND)
     if pickups:
         commands.sfx.extend(SfxId.UI_BONUS for _ in pickups)
     commands.sfx.extend(event_sfx[:4])
