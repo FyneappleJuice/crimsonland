@@ -76,6 +76,10 @@ def plan_player_audio_sfx(
             plasma_minigun = WEAPON_BY_ID[WeaponId.PLASMA_MINIGUN]
             sfx.append(fire_bullets.fire_sound)
             sfx.append(plasma_minigun.fire_sound)
+        elif player.weapon.weapon_id == WeaponId.RAYGUN:
+            # Arc Gun has no per-shot cue - its voice is the looping crackle
+            # (ARC_SOUND) driven off the soft-sfx channel below.
+            pass
         else:
             sfx.append(weapon.fire_sound)
 

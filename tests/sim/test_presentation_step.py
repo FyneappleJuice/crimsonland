@@ -12,6 +12,7 @@ from crimson.sim.presentation_step import (
     PresentationPlanRuntime,
     apply_presentation_plan,
     plan_hit_sfx,
+    plan_player_audio_sfx,
     plan_world_presentation_step,
     queue_projectile_decals,
 )
@@ -72,6 +73,20 @@ def test_plan_hit_sfx_no_skip_when_tune_started() -> None:
         RngCallerStatic.PROJECTILE_UPDATE_HIT_SFX,
         RngCallerStatic.PROJECTILE_UPDATE_HIT_SFX,
     ]
+
+
+def test_arc_gun_emits_no_per_shot_fire_sound() -> None:
+    player = PlayerState(index=0, pos=Vec2(0.0, 0.0))
+    player.weapon.weapon_id = WeaponId.RAYGUN
+    player.shot_seq = 1
+
+    sfx = plan_player_audio_sfx(player, prev_shot_seq=0, prev_reload_active=False, prev_reload_timer=0.0)
+    assert sfx == []  # the looping crackle is the Arc Gun's only voice
+
+    # a normal weapon still cues its shot
+    player.weapon.weapon_id = WeaponId.PISTOL
+    sfx = plan_player_audio_sfx(player, prev_shot_seq=0, prev_reload_active=False, prev_reload_timer=0.0)
+    assert SfxId.PISTOL_FIRE in sfx
 
 
 def test_plan_world_presentation_step_orders_sfx() -> None:
