@@ -29,8 +29,9 @@ from ..sim.state_types import PlayerState, ScytheSwingState
 
 # Total cone the blade sweeps (radians). ~162 degrees.
 SCYTHE_ARC = math.radians(162.0)
-# Seconds for one full sweep.
-SCYTHE_SWING_DURATION_S = 0.28
+# Seconds for one full sweep. Slow, heavy arc - paired with the doubled
+# per-swing damage and halved fire cadence (weapons.py) for the same DPS.
+SCYTHE_SWING_DURATION_S = 0.56
 # Blade reach from the player centre, plus a small slice of the target's own
 # size so big aliens connect from a touch further out. Kept tight so the hit
 # window matches the drawn blade rather than reaching past it.
@@ -39,7 +40,7 @@ SCYTHE_CREATURE_REACH_FACTOR = 0.3
 # Angular slack on the leading/trailing edge of the swept slice each tick - just
 # enough that a fast sweep never skips a creature between ticks.
 SCYTHE_EDGE_PAD = math.radians(5.0)
-SCYTHE_DAMAGE = 45.6
+SCYTHE_DAMAGE = 91.2
 SCYTHE_KNOCKBACK = 2.6
 
 # Weapon Power Up: ~+30% DPS, delivered as swing damage (no cadence change - the

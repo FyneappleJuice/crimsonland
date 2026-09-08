@@ -525,8 +525,10 @@ WEAPON_TABLE = [
         name='Evil Scythe',
         ammo_class=4,
         clip_size=2,
-        shot_cooldown=0.3,
-        reload_time=0.5,
+        # Heavy, slow swings: cadence halved vs the first tuning (0.3 / 0.5),
+        # swing damage doubled to match (scythe_sweep.SCYTHE_DAMAGE) - same DPS.
+        shot_cooldown=0.6,
+        reload_time=1.0,
         spread_heat_inc=0.0,
         fire_sound=SfxId.SHOCK_FIRE_ALT,
         reload_sound=SfxId.SHOCK_RELOAD,

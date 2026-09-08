@@ -133,7 +133,7 @@ def test_clip_of_two_then_reload() -> None:
     fire_weapon(WeaponFireCtx(player=player, input_state=PlayerInput(fire_down=True, aim=Vec2(200.0, 0.0)), dt=0.016, state=state))
     assert player.weapon.ammo <= 0.0
     assert player.weapon.reload_active
-    assert player.weapon.reload_timer == pytest.approx(0.5, abs=1e-3)
+    assert player.weapon.reload_timer == pytest.approx(1.0, abs=1e-3)
 
 
 # --- Weapon Power Up: ~+30% damage, same cadence --------------------------
@@ -167,7 +167,7 @@ def test_wpu_does_not_speed_up_the_scythe_cadence() -> None:
     assert wpu_boosts_fire_rate(int(WeaponId.EVIL_SCYTHE)) is False
     assert wpu_boosts_fire_rate(int(WeaponId.PISTOL)) is True
 
-    # reload timer under WPU is still the raw 0.5s, unscaled
+    # reload timer under WPU is still the raw 1.0s, unscaled
     state = GameplayState()
     state.bonuses.weapon_power_up = 5.0
     player = _player_with_scythe(state)
@@ -175,4 +175,4 @@ def test_wpu_does_not_speed_up_the_scythe_cadence() -> None:
     from crimson.weapon_runtime.assign import player_start_reload
 
     player_start_reload(player, state, players=[player])
-    assert player.weapon.reload_timer == pytest.approx(0.5, abs=1e-3)
+    assert player.weapon.reload_timer == pytest.approx(1.0, abs=1e-3)
