@@ -21,6 +21,7 @@ from ..math_parity import (
 )
 from ..perks import PerkId
 from ..perks.helpers import perk_active
+from ..progression import refresh_player_stats
 from ..player_damage import PlayerDeathRuntime
 from ..projectiles.runtime import SecondarySpawnSpec
 from ..projectiles.types import ProjectileTemplateId, SecondaryProjectileTypeId
@@ -30,7 +31,9 @@ from ..sim.state_types import GameplayState, PlayerState
 from ..weapons import WEAPON_TABLE, WeaponId, weapon_entry_for_projectile_type_id
 from .assign import player_start_reload, weapon_entry
 from .fire_recipes import (
+    ArcStrikeMode,
     MaskCenteredJitter,
+    MeleeSweepMode,
     ModuloCenteredJitter,
     ModuloSpeedScale,
     MultiPlasmaFanMode,
@@ -43,6 +46,7 @@ from .fire_recipes import (
     UseAimTargetHint,
     resolve_fire_recipe,
 )
+from .plasma_heat import is_plasma_heat_weapon, plasma_energy_heat_mult
 from .spawn import owner_ref_for_player, owner_ref_for_player_projectiles, travel_budget_for_type_id
 
 if TYPE_CHECKING:
@@ -200,6 +204,9 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
     force_pre_swap_fire_gate = bool(ctx.force_pre_swap_fire_gate)
     player_death_runtime = ctx.player_death_runtime
     perk_player = players[0] if state.preserve_bugs and players else player
+    # `player.stats` is a per-tick cache; keep it fresh for callers (unit
+    # tests, tools) that reach fire_weapon without going through WorldState.step.
+    refresh_player_stats(list(players) if players else [player])
 
     weapon_id = player.weapon.weapon_id
     weapon = weapon_entry(weapon_id)
@@ -266,10 +273,12 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
     spread_heat_base = fire_bullets_spread_heat if is_fire_bullets else weapon_spread_heat
     spread_inc = x87_pc24_mul(spread_heat_base, f32(1.3))
 
-    if perk_active(perk_player, PerkId.FASTSHOT):
-        shot_cooldown = float(f32(float(shot_cooldown) * 0.88))
-    if perk_active(perk_player, PerkId.SHARPSHOOTER):
-        shot_cooldown = float(f32(float(shot_cooldown) * 1.05))
+    # Fastshot (x0.88), Sharpshooter (x1.05) and any new fire-rate content are
+    # folded into stats.shot_cooldown_mult by crimson.progression. A single
+    # perk resolves to exactly its old constant; two now fold into one multiply.
+    cooldown_mult = float(perk_player.stats.shot_cooldown_mult)
+    if cooldown_mult != 1.0:
+        shot_cooldown = float(f32(float(shot_cooldown) * cooldown_mult))
     player.weapon.shot_cooldown = max(0.0, float(f32(float(shot_cooldown))))
 
     aim = input_state.aim
@@ -338,6 +347,19 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
     )
     ammo_cost = float(recipe.ammo_cost)
 
+    weapon_power_up_active = float(state.bonuses.weapon_power_up) > 0.0
+
+    # Plasma clip-heat ramp: energy damage scales up as the clip drains. Resolved
+    # once here from the clip state this shot leaves behind, then stamped onto
+    # every bolt it spawns. (Always-on - WPU only touches fire rate for plasma.)
+    energy_heat_mult = 1.0
+    if is_plasma_heat_weapon(int(weapon_id)):
+        energy_heat_mult = plasma_energy_heat_mult(
+            int(weapon_id),
+            clip_size=float(player.weapon.clip_size),
+            ammo_after_shot=float(player.weapon.ammo) - float(ammo_cost),
+        )
+
     match recipe.mode:
         case PrimaryPelletsMode(type_id=type_id, count=count, jitter=jitter_rule, speed_scale=speed_rule):
             if type_id is None:
@@ -374,6 +396,8 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
                     travel_budget=meta,
                     hits_players=projectile_hits_players,
                 )
+                if energy_heat_mult != 1.0:
+                    state.projectiles.entries[int(proj_id)].energy_heat_mult = float(energy_heat_mult)
                 if isinstance(speed_rule, ModuloSpeedScale):
                     assert pellet_speed_caller is not None
                     _apply_speed_scale_rule(
@@ -404,6 +428,8 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
             )
         case ParticleStreamMode(style=style, slow=slow):
             counts_accuracy_shots = False
+            # WPU for a stream weapon is +30% per-particle damage (fire rate is a
+            # no-op - the stream already emits every frame); see world_state.py.
             if slow:
                 state.particles.spawn_particle_slow(
                     pos=muzzle,
@@ -432,7 +458,7 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
                 (x87_pc24_add(shot_angle, spread_small), ProjectileTemplateId.PLASMA_RIFLE),
             )
             for angle, type_id in patterns:
-                state.projectiles.spawn(
+                fan_proj_id = state.projectiles.spawn(
                     pos=muzzle,
                     angle=angle,
                     type_id=type_id,
@@ -440,6 +466,8 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
                     travel_budget=travel_budget_for_type_id(type_id),
                     hits_players=projectile_hits_players,
                 )
+                if energy_heat_mult != 1.0:
+                    state.projectiles.entries[int(fan_proj_id)].energy_heat_mult = float(energy_heat_mult)
         case SwarmerDumpMode():
             # Mini-Rocket Swarmers -> secondary type 2 (fires the full clip in a spread).
             # Native spawns one rocket per integer counter step below the float ammo
@@ -477,6 +505,26 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
             # the clip was fractional or negative.
             ammo_cost = clip_ammo
             shot_count = rocket_count
+        case MeleeSweepMode():
+            # Evil Scythe: no projectile - start a cone sweep on the player.
+            # The clip holds two swings; they alternate direction.
+            from .scythe_sweep import start_scythe_swing
+
+            counts_accuracy_shots = False
+            shots_fired_this_clip = int(player.weapon.clip_size) - int(round(float(player.weapon.ammo)))
+            start_scythe_swing(
+                player,
+                aim,
+                shots_fired_this_clip=shots_fired_this_clip,
+                weapon_power_up=weapon_power_up_active,
+            )
+        case ArcStrikeMode():
+            # Arc Gun: no projectile - flag a chain-lightning strike for the
+            # world step to resolve (weapon_runtime/arc_gun.py).
+            from .arc_gun import start_arc_strike
+
+            counts_accuracy_shots = False
+            start_arc_strike(player, aim, weapon_power_up=weapon_power_up_active)
 
     if 0 <= int(player.index) < len(state.shots_fired):
         if counts_accuracy_shots:

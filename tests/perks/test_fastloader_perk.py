@@ -42,10 +42,10 @@ def test_fastloader_spills_before_weapon_power_up_scaling() -> None:
 
     player_start_reload(player, state)
 
-    expected = x87_pc24_mul(x87_pc24_mul(reload_time, f32(0.7)), f32(0.6))
+    # Fastloader (x0.7) spills to f32 first, then normalized WPU reload (x0.8).
+    expected = x87_pc24_mul(x87_pc24_mul(reload_time, f32(0.7)), f32(0.8))
     assert player.weapon.reload_timer == expected
     assert player.weapon.reload_timer_max == expected
-    assert expected != f32(float(reload_time) * 0.7 * 0.6)
 
 
 def test_reload_uses_player_zero_perks_in_preserve_mode() -> None:

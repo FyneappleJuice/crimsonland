@@ -9,6 +9,7 @@ from grim.geom import Vec2
 from grim.rand import CrandLike
 from grim.sfx_map import SfxId
 
+from ..bonuses.blade_orbit import BLADE_SOUND, blade_sound_loop_index
 from ..bonuses.fire_bullets import LargeHitDecalRuntime
 from ..bonuses.freeze import freeze_bonus_active
 from ..effects import FxQueue
@@ -40,6 +41,9 @@ class DeterministicPresentationPlan(msgspec.Struct):
     sfx: list[SfxId] = msgspec.field(default_factory=list)
     terrain_fx: TerrainFxBatch = TerrainFxBatch()
     post_apply_sfx: tuple[SfxId, ...] = ()
+    # Not native: quiet, non-parity ambience (currently the Blade orbit whir).
+    # Kept off `sfx` so it never enters replay checkpoint sfx streams.
+    soft_sfx: list[SfxId] = msgspec.field(default_factory=list)
 
 
 class PresentationPlanRuntime(msgspec.Struct):
@@ -48,6 +52,10 @@ class PresentationPlanRuntime(msgspec.Struct):
 
     def play_sfx(self, sfx: SfxId) -> None:
         _ = sfx
+
+    def play_soft_sfx(self, sfx: SfxId) -> None:
+        # Default: treat it like any other sfx.
+        self.play_sfx(sfx)
 
 
 def plan_player_audio_sfx(
@@ -351,7 +359,7 @@ def plan_world_presentation_step(
     hits: list[ProjectileHit],
     pickups: list[BonusPickupEvent],
     event_sfx: list[SfxId],
-    prev_audio: Sequence[tuple[int, bool, float]],
+    prev_audio: Sequence[tuple[int, bool, float] | tuple[int, bool, float, int]],
     prev_perk_pending: int,
     game_mode: GameMode,
     demo_mode_active: bool,
@@ -397,7 +405,8 @@ def plan_world_presentation_step(
     for idx, player in enumerate(players):
         if idx >= len(prev_audio):
             continue
-        prev_shot_seq, prev_reload_active, prev_reload_timer = prev_audio[idx]
+        prev_snapshot = prev_audio[idx]
+        prev_shot_seq, prev_reload_active, prev_reload_timer = prev_snapshot[:3]
         commands.sfx.extend(
             plan_player_audio_sfx(
                 player,
@@ -406,6 +415,13 @@ def plan_world_presentation_step(
                 prev_reload_timer=float(prev_reload_timer),
             ),
         )
+        # Not native: re-trigger the Blade orbit's quiet whir each loop period.
+        prev_blade_snd = int(prev_snapshot[3]) if len(prev_snapshot) > 3 else -1
+        orbit = player.blade_orbit
+        if orbit.active:
+            now_idx = blade_sound_loop_index(orbit.elapsed)
+            if now_idx != prev_blade_snd:
+                commands.soft_sfx.append(BLADE_SOUND)
     if pickups:
         commands.sfx.extend(SfxId.UI_BONUS for _ in pickups)
     commands.sfx.extend(event_sfx[:4])
@@ -424,3 +440,5 @@ def apply_presentation_plan(
         runtime.trigger_game_tune()
     for sfx in plan.sfx:
         runtime.play_sfx(sfx)
+    for sfx in plan.soft_sfx:
+        runtime.play_soft_sfx(sfx)

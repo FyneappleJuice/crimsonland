@@ -75,7 +75,30 @@ class SwarmerDumpMode(msgspec.Struct, frozen=True, tag=True):
     pass
 
 
-type FireMode = PrimaryPelletsMode | SecondaryShotMode | ParticleStreamMode | MultiPlasmaFanMode | SwarmerDumpMode
+class MeleeSweepMode(msgspec.Struct, frozen=True, tag=True):
+    """Rewrite-only: a melee scythe swing (Evil Scythe). No projectile; the shot
+    kicks off a cone sweep tracked on the player (weapon_runtime/scythe_sweep.py).
+    Alternating clip: swing 0 sweeps left->right, swing 1 right->left."""
+
+    pass
+
+
+class ArcStrikeMode(msgspec.Struct, frozen=True, tag=True):
+    """Rewrite-only: a chain-lightning strike (Arc Gun). No projectile; the shot
+    flags a pending strike that the world step resolves (weapon_runtime/arc_gun.py)."""
+
+    pass
+
+
+type FireMode = (
+    PrimaryPelletsMode
+    | SecondaryShotMode
+    | ParticleStreamMode
+    | MultiPlasmaFanMode
+    | SwarmerDumpMode
+    | MeleeSweepMode
+    | ArcStrikeMode
+)
 
 
 class FireRecipe(msgspec.Struct, frozen=True):
@@ -135,6 +158,8 @@ FIRE_RECIPE_BY_WEAPON: dict[WeaponId, FireRecipe] = {
     ),
     WeaponId.MULTI_PLASMA: FireRecipe(mode=MultiPlasmaFanMode()),
     WeaponId.MINI_ROCKET_SWARMERS: FireRecipe(mode=SwarmerDumpMode()),
+    WeaponId.EVIL_SCYTHE: FireRecipe(mode=MeleeSweepMode(), ammo_cost=1.0),
+    WeaponId.RAYGUN: FireRecipe(mode=ArcStrikeMode(), ammo_cost=1.0),
     WeaponId.PLASMA_SHOTGUN: FireRecipe(
         mode=PrimaryPelletsMode(
             type_id=ProjectileTemplateId.PLASMA_MINIGUN,
@@ -212,6 +237,8 @@ __all__ = [
     "MaskCenteredJitter",
     "ModuloCenteredJitter",
     "ModuloSpeedScale",
+    "ArcStrikeMode",
+    "MeleeSweepMode",
     "MultiPlasmaFanMode",
     "NoJitter",
     "NoSpeedScale",

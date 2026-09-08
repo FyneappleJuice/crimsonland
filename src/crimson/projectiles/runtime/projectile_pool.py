@@ -25,9 +25,11 @@ from ...math_parity import (
 )
 from ...owner_ref import OwnerRef
 from ...perks import PerkId
+from ...progression import resolve_team_stats
 from ...rng_caller_static import RngCallerStatic
-from ...weapons import weapon_entry_for_projectile_type_id
+from ...weapons import WeaponId, weapon_entry_for_projectile_type_id
 from ..types import (
+    ENERGY_PROJECTILE_TEMPLATE_IDS,
     MAIN_PROJECTILE_POOL_SIZE,
     Projectile,
     ProjectileCollisionProfile,
@@ -86,6 +88,21 @@ _DEFAULT_PROJECTILE_COLLISION_PROFILE = ProjectileCollisionProfile(
     hit_radius=1.0,
     initial_damage_pool=1.0,
 )
+
+# Fork Shot bonus (not native): same +-60 degree split Splitter Gun uses on
+# its own projectile type (see behaviors.py::_pre_hit_splitter), generalized
+# to any non-piercing projectile while the bonus timer is active.
+_FORK_SHOT_ANGLE_RAD = 1.0471976
+# Fork children fired off a shotgun deal half damage - shotguns already put a
+# lot of pellets on target, so a full-power fork off each one is too much.
+_FORK_SHOT_SHOTGUN_DAMAGE_MULT = 0.5
+# `Projectile.reserved` (native "unused" field, offset 0x28) doubles as fork
+# state: 0 = normal, 1 = has forked / is a plain fork child, 2 = fork child
+# that carries the shotgun damage penalty.
+_FORK_RESERVED_NONE = 0.0
+_FORK_RESERVED_FORKED = 1.0
+_FORK_RESERVED_SHOTGUN_CHILD = 2.0
+_SHOTGUN_WEAPON_IDS = frozenset({WeaponId.SHOTGUN})
 
 _PROJECTILE_COLLISION_PROFILE_BY_TYPE_ID: dict[ProjectileTemplateId, ProjectileCollisionProfile] = {
     ProjectileTemplateId.ION_MINIGUN: ProjectileCollisionProfile(hit_radius=3.0, initial_damage_pool=1.0),
@@ -170,6 +187,8 @@ class ProjectilePool:
         # Native stores the f32 literal 0.4.
         entry.life_timer = float(f32(0.4))
         entry.reserved = 0.0
+        entry.energy_heat_mult = 1.0
+        entry.pierce_left = 0.0
         entry.speed_scale = 1.0
         entry.travel_budget = float(travel_budget)
         weapon_entry = weapon_entry_for_projectile_type_id(type_id)
@@ -208,23 +227,20 @@ class ProjectilePool:
         if dt <= 0.0:
             return []
 
-        barrel_greaser_active = False
-        ion_gun_master_active = False
         poison_bullets_active = False
         ion_scale = float(ion_aoe_scale)
         poison_idx = int(PerkId.POISON_BULLETS)
-        barrel_idx = int(PerkId.BARREL_GREASER)
-        ion_idx = int(PerkId.ION_GUN_MASTER)
         # Native's perk_count_get helper always reads player slot zero. Keep the
         # generalized any-player behavior available outside bug-compatible mode.
         perk_players = players[:1] if runtime_state.preserve_bugs else players
+        # Barrel Greaser (double step count) and Ion Gun Master (ion blast
+        # radius) resolve through crimson.progression now; Poison Bullets is
+        # still a raw perk check.
+        team_stats = resolve_team_stats(perk_players)
+        barrel_greaser_active = team_stats.has("projectile_double_steps")
+        ion_gun_master_active = float(team_stats.damage_mult_ion) != 1.0
         for player in perk_players:
             perk_counts = player.perk_counts
-
-            if 0 <= barrel_idx < len(perk_counts) and int(perk_counts[barrel_idx]) > 0:
-                barrel_greaser_active = True
-            if 0 <= ion_idx < len(perk_counts) and int(perk_counts[ion_idx]) > 0:
-                ion_gun_master_active = True
             if 0 <= poison_idx < len(perk_counts) and int(perk_counts[poison_idx]) > 0:
                 poison_bullets_active = True
 
@@ -256,7 +272,47 @@ class ProjectilePool:
             dist_sq = float(f32(float(f32(float(dx) * float(dx))) + float(f32(float(dy) * float(dy)))))
             return float(f32(math.sqrt(float(dist_sq))))
 
-        def _damage_type_for() -> int:
+        def _maybe_fork_shot_on_hit(proj: Projectile, hit_idx: int) -> None:
+            """Fork Shot bonus (not native): split a non-piercing hit into two.
+
+            Re-owns children to the struck creature, same as Splitter Gun's own
+            `_pre_hit_splitter` - the hit-resolution loop below explicitly
+            discards a hit when `owner_creature_idx == hit_idx` (see
+            `owner_collision`), so without this the children spawn on top of
+            the creature they just came from and can be consumed by it again
+            before ever traveling anywhere.
+            """
+
+            if proj.reserved != _FORK_RESERVED_NONE:
+                return  # already a fork product (or already forked) - fork once
+            owner_player_index = proj.owner.player_index_in_bounds(len(players))
+            if owner_player_index is None:
+                return
+            if float(players[owner_player_index].projectile_fork_timer) <= 0.0:
+                return
+            profile = _PROJECTILE_COLLISION_PROFILE_BY_TYPE_ID.get(proj.type_id)
+            if profile is not None and profile.initial_damage_pool > 1.0:
+                return  # already pierces - leave piercing weapons alone
+            proj.reserved = _FORK_RESERVED_FORKED
+            child_reserved = (
+                _FORK_RESERVED_SHOTGUN_CHILD
+                if players[owner_player_index].weapon.weapon_id in _SHOTGUN_WEAPON_IDS
+                else _FORK_RESERVED_FORKED
+            )
+            for offset in (-_FORK_SHOT_ANGLE_RAD, _FORK_SHOT_ANGLE_RAD):
+                child_index = self.spawn(
+                    pos=proj.pos,
+                    angle=float(proj.angle) + offset,
+                    type_id=proj.type_id,
+                    owner=OwnerRef.from_creature(int(hit_idx)),
+                    travel_budget=float(proj.travel_budget),
+                    hits_players=bool(proj.hits_players),
+                )
+                self._entries[child_index].reserved = child_reserved
+
+        def _damage_type_for(type_id: int) -> int:
+            if ProjectileTemplateId(type_id) in ENERGY_PROJECTILE_TEMPLATE_IDS:
+                return int(CreatureDamageType.ENERGY)
             return int(CreatureDamageType.BULLET)
 
         update_ctx = _ProjectileUpdateCtx(
@@ -354,6 +410,10 @@ class ProjectilePool:
                         creature = creatures[idx]
                         if not _creature_is_collidable(creature):
                             continue
+                        if proj.pierce_left >= 1.0 and creature.hp <= 0.0:
+                            # WPU pierce: a corpse we just punched through must not
+                            # count as the hit that stops the bolt.
+                            continue
                         if _within_native_find_radius(
                             origin=proj.pos,
                             target=creature.pos,
@@ -424,6 +484,7 @@ class ProjectilePool:
                         hook(perk_ctx)
 
                     rule.pre_hit(update_ctx, proj, int(hit_idx))
+                    _maybe_fork_shot_on_hit(proj, int(hit_idx))
 
                     # Native increments the global shots-hit counter for any
                     # owner (creature-owned splitter children included) when the
@@ -444,7 +505,7 @@ class ProjectilePool:
                     hits.append(hit)
                     hit_presentation = hit_runtime.begin_hit_presentation(hit)
 
-                    if proj.life_timer != 0.25 and rule.stop_on_hit:
+                    if proj.life_timer != 0.25 and rule.stop_on_hit and proj.pierce_left < 1.0:
                         proj.life_timer = 0.25
                         jitter = rng.rand_tagged(RngCallerStatic.PROJECTILE_UPDATE_STOP_ON_HIT_JITTER) & 3
                         # Native rounds the multiply and add as separate PC24 operations.
@@ -468,7 +529,13 @@ class ProjectilePool:
 
                     damage_scale = _damage_scale(type_id)
                     damage_amount = _projectile_damage_amount_f32(dist, damage_scale)
+                    if proj.reserved == _FORK_RESERVED_SHOTGUN_CHILD:
+                        damage_amount = float(f32(float(damage_amount) * _FORK_SHOT_SHOTGUN_DAMAGE_MULT))
+                    if proj.energy_heat_mult != 1.0:
+                        # Plasma clip-heat ramp, stamped on the bolt when it was fired.
+                        damage_amount = float(f32(float(damage_amount) * float(proj.energy_heat_mult)))
 
+                    did_pierce = False
                     if damage_amount > 0.0 and creature.hp > 0.0:
                         remaining = proj.damage_pool - 1.0
                         proj.damage_pool = remaining
@@ -477,7 +544,7 @@ class ProjectilePool:
                         impulse_angle = f32(float(proj.angle) - NATIVE_HALF_PI)
                         impulse_axis = f32(math.cos(float(impulse_angle)) * float(proj.speed_scale))
                         impulse = Vec2(float(impulse_axis), float(impulse_axis))
-                        damage_type = _damage_type_for()
+                        damage_type = _damage_type_for(type_id)
                         if remaining <= 0.0:
                             _apply_damage_to_creature(
                                 creatures,
@@ -489,7 +556,12 @@ class ProjectilePool:
                                 creature_damage_runtime=creature_damage_runtime,
                             )
                             creature_spatial.sync_index(int(hit_idx))
-                            if proj.life_timer != 0.25:
+                            if proj.pierce_left >= 1.0:
+                                # WPU kinetic pierce: full-damage pass-through.
+                                proj.pierce_left = float(proj.pierce_left) - 1.0
+                                proj.damage_pool = 1.0
+                                did_pierce = True
+                            elif proj.life_timer != 0.25:
                                 proj.life_timer = 0.25
                         else:
                             _apply_damage_to_creature(
@@ -509,7 +581,7 @@ class ProjectilePool:
                     # post-hit decal branch, after the burn draw, in
                     # `queue_projectile_decals_post_hit`.
 
-                    if proj.damage_pool == 1.0:
+                    if not did_pierce and proj.damage_pool == 1.0:
                         # Native clears damage_pool to 0.0 whenever it's exactly 1.0
                         # in this branch, even if life_timer is already 0.25.
                         life_before = float(proj.life_timer)
@@ -522,7 +594,7 @@ class ProjectilePool:
                             hit_runtime.finish_hit_presentation(hit, hit_presentation)
                         break
 
-                    if proj.damage_pool <= 0.0:
+                    if not did_pierce and proj.damage_pool <= 0.0:
                         if hit_presentation is not None:
                             hit_runtime.finish_hit_presentation(hit, hit_presentation)
                         break

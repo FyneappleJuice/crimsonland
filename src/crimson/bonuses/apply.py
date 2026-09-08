@@ -6,10 +6,9 @@ from typing import TYPE_CHECKING
 from grim.geom import Vec2
 
 from ..creatures.damage_runtime import CreatureDamageRuntime
-from ..perks import PerkId
-from ..perks.helpers import perk_count_get
 from ..sim.state_types import GameplayState, PlayerState
 from .apply_context import BonusApplyCtx, BonusApplyHandler
+from .blade_orbit import apply_blade
 from .double_experience import apply_double_experience
 from .energizer import apply_energizer
 from .fire_bullets import apply_fire_bullets
@@ -19,6 +18,7 @@ from .ids import BONUS_BY_ID, BonusId
 from .medikit import apply_medikit
 from .nuke import apply_nuke
 from .points import apply_points
+from .projectile_fork import apply_projectile_fork
 from .reflex_boost import apply_reflex_boost
 from .shield import apply_shield
 from .shock_chain import apply_shock_chain
@@ -44,6 +44,8 @@ _BONUS_APPLY_HANDLERS: dict[BonusId, BonusApplyHandler] = {
     BonusId.WEAPON: apply_weapon,
     BonusId.FIREBLAST: apply_fireblast,
     BonusId.NUKE: apply_nuke,
+    BonusId.PROJECTILE_FORK: apply_projectile_fork,
+    BonusId.BLADE: apply_blade,
 }
 
 
@@ -69,10 +71,12 @@ def bonus_apply(
     if amount is None:
         amount = int(meta.native_amount or 0)
 
-    # Native perk_count_get always reads player slot zero, even when player one
-    # is the pickup owner. Corrected mode keeps intuitive per-player ownership.
+    # Native perk lookups always read player slot zero, even when player one is
+    # the pickup owner. Corrected mode keeps intuitive per-player ownership.
     perk_player = players[0] if state.preserve_bugs and players else player
-    economist_multiplier = 1.5 if perk_count_get(perk_player, PerkId.BONUS_ECONOMIST) != 0 else 1.0
+    # Bonus Economist is folded into stats.bonus_duration_mult by
+    # crimson.progression; with only Economist active this resolves to 1.5.
+    economist_multiplier = float(perk_player.stats.bonus_duration_mult)
     icon_id = int(meta.icon_id) if meta.icon_id is not None else -1
     label = meta.name
     ctx = BonusApplyCtx(

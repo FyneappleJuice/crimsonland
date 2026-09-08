@@ -61,6 +61,10 @@ def _bonus_pick_suppressed(
     return False
 
 
+# Rewrite-only bonuses folded into the Maps drop table's dead-space slot.
+_NONNATIVE_BONUS_POOL: tuple[BonusId, ...] = (BonusId.PROJECTILE_FORK, BonusId.BLADE)
+
+
 def bonus_pick_random_type(pool: BonusPool, state: GameplayState, players: list[PlayerState]) -> BonusId:
     has_fire_bullets_drop = any(entry.bonus_id == BonusId.FIRE_BULLETS and not entry.picked for entry in pool.entries)
 
@@ -86,7 +90,20 @@ def bonus_pick_random_type(pool: BonusPool, state: GameplayState, players: list[
                 bucket_offset -= 10
                 bonus_value += 1
                 if bonus_value >= 15:
-                    bonus_value = int(BonusId.UNUSED)
+                    # Native always rerolls here (this whole tail of the 162-roll
+                    # table was dead space in the original game), so every native
+                    # mode - Survival, Rush, Quests - rerolls byte-for-byte.
+                    # The rewrite-only Maps mode opts in via `fork_bonus_in_pool`
+                    # and spends that dead slot on a rewrite-only bonus, picked
+                    # uniformly (a small extra RNG draw - Maps has no parity
+                    # requirement).
+                    if state.fork_bonus_in_pool and bonus_value == 15:
+                        pick = state.rng.rand_tagged(
+                            RngCallerStatic.REWRITE_MAPS_NONNATIVE_BONUS_PICK,
+                        ) % len(_NONNATIVE_BONUS_POOL)
+                        bonus_value = int(_NONNATIVE_BONUS_POOL[pick])
+                    else:
+                        bonus_value = int(BonusId.UNUSED)
                     break
             bonus_id = BonusId(bonus_value)
         if bonus_id == BonusId.UNUSED:

@@ -115,7 +115,9 @@ def test_player_update_weapon_power_up_scales_shot_cooldown_decay() -> None:
     )
     player_update(player, PlayerInput(aim=Vec2(101.0, 100.0)), 0.5, state)
 
-    assert_float_close(player.weapon.shot_cooldown, 0.25)
+    # Normalized WPU: cooldown decays x1.3 (0.5 * 1.3 = 0.65 off a 1.0 timer).
+    decay = float(f32(0.5 * 1.3))
+    assert float(player.weapon.shot_cooldown) == pytest.approx(float(f32(1.0 - decay)), abs=1e-6)
 
 
 def test_player_update_shot_cooldown_decay_keeps_tiny_positive_residual() -> None:

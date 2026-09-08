@@ -8,6 +8,10 @@ import msgspec
 from grim.geom import Vec2
 from grim.sfx_map import SfxId
 
+from ..bonuses.blade_orbit import update_blade_orbits
+from ..weapon_runtime.arc_gun import update_arc_gun
+from ..weapon_runtime.power_up import WPU_FLAME_DAMAGE_MULT
+from ..weapon_runtime.scythe_sweep import update_scythe_swings
 from ..bonuses.pickup_fx import emit_bonus_pickup_effects
 from ..bonuses.update import bonus_update, bonus_update_pre_pickup_timers
 from ..camera import camera_shake_update
@@ -32,6 +36,7 @@ from ..perks.helpers import perk_active
 from ..perks.runtime.effects import perks_update_effects
 from ..perks.runtime.manifest import PLAYER_DEATH_HOOKS, WORLD_DT_STEPS
 from ..player_damage import PlayerDeathRuntime, player_take_projectile_damage
+from ..progression import refresh_player_stats
 from ..projectiles.runtime import PrimaryStepCtx, ProjectileHitRuntime, ProjectileUpdateOptions, SecondaryStepCtx
 from ..projectiles.types import ProjectileHit
 from ..rng_caller_static import RngCallerStatic
@@ -330,6 +335,9 @@ class WorldState(msgspec.Struct):
             for idx, creature in enumerate(self.creatures.entries)
             if creature.active and float(creature.hp) <= 0.0
         }
+        # Not native: fold perks/affixes/modifiers into each player's resolved
+        # stat block before any gameplay code reads it this tick.
+        refresh_player_stats(self.players)
         perks_update_effects(self.state, self.players, dt, creatures=self.creatures.entries, fx_queue=fx_queue)
         # `effects_update` runs early in the native frame loop, before creature/projectile updates.
         self.state.effects.update(dt, fx_queue=fx_queue)
@@ -397,6 +405,11 @@ class WorldState(msgspec.Struct):
             creature_damage_runtime=step_runtime,
             fx_queue=fx_queue,
             sprite_effects=self.state.sprite_effects,
+            # Not native: Weapon Power Up's flame-weapon lever is +30% per-particle
+            # damage (fire rate does nothing for a stream).
+            flame_damage_mult=(
+                WPU_FLAME_DAMAGE_MULT if float(self.state.bonuses.weapon_power_up) > 0.0 else 1.0
+            ),
         )
         reload_active_any = any(bool(entry.reload_down) or bool(entry.reload_pressed) for entry in inputs)
         player_dt = float(dt)
@@ -451,6 +464,8 @@ class WorldState(msgspec.Struct):
             defer_freeze_corpse_fx=bool(defer_freeze_corpse_fx),
             freeze_corpse_indices=freeze_corpse_indices_at_tick_start,
             creature_damage_runtime=step_runtime,
+            world_width=float(world_size),
+            world_height=float(world_size),
         )
         if pickups:
             emit_bonus_pickup_effects(
@@ -458,6 +473,28 @@ class WorldState(msgspec.Struct):
                 pickups=pickups,
                 detail_preset=int(detail_preset),
             )
+        # Not native: advance orbiting-blade bonuses and apply their contact hits.
+        update_blade_orbits(
+            self.players,
+            self.creatures.entries,
+            dt,
+            creature_damage_runtime=step_runtime,
+        )
+        # Not native: advance the Evil Scythe melee sweep and apply its edge hits.
+        update_scythe_swings(
+            self.players,
+            self.creatures.entries,
+            dt,
+            creature_damage_runtime=step_runtime,
+        )
+        # Not native: resolve pending Arc Gun chain-lightning strikes.
+        update_arc_gun(
+            self.players,
+            self.creatures.entries,
+            dt,
+            rng=self.state.rng,
+            creature_damage_runtime=step_runtime,
+        )
         if self.state.sfx_queue:
             step_runtime.sfx.extend(self.state.sfx_queue)
             self.state.sfx_queue.clear()

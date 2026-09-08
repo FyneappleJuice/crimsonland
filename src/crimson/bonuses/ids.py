@@ -25,6 +25,11 @@ class BonusId(IntEnum):
     SPEED = 13
     FIRE_BULLETS = 14
 
+    # Not native ids: rewrite-only bonuses with no native counterpart, assigned
+    # values past the real native table (0-14).
+    PROJECTILE_FORK = 15
+    BLADE = 16
+
 
 class BonusMeta(msgspec.Struct, frozen=True):
     bonus_id: BonusId
@@ -160,6 +165,39 @@ BONUS_TABLE = [
         native_amount=4,
         apply_seconds=5.0,
         notes="`bonus_apply` updates `player_fire_bullets_timer` (fixed +5 seconds, scaled by Bonus Economist). While active, `projectile_spawn` overrides player-owned projectiles to type `0x2d` (pellet count from `weapon_projectile_pellet_count[weapon_id]`).",
+    ),
+    BonusMeta(
+        bonus_id=BonusId.PROJECTILE_FORK,
+        name="Fork Shot",
+        description="Every shot that isn't already piercing forks into two on impact.",
+        # Cell 15 of the shared 4x4 bonus icon sheet (game/bonuses.tga) - the one
+        # frame unused by any native bonus. Holds art authored for this project
+        # addition: a three-prong fork whose tines splay to 0 / +-60 degrees
+        # (matching _FORK_SHOT_ANGLE_RAD = pi/3) and end in gold bullets. Cell 13
+        # was avoided: it collides with the 1000-points variant (POINTS + 1).
+        icon_id=15,
+        native_amount=8,
+        apply_seconds=8.0,
+        notes=(
+            "Not a native bonus - project addition. Generalizes Splitter Gun's "
+            "on-hit fork (projectiles/runtime/behaviors.py::_pre_hit_splitter) "
+            "to every non-piercing weapon for a limited time."
+        ),
+    ),
+    BonusMeta(
+        bonus_id=BonusId.BLADE,
+        name="Blade",
+        description="Five blades orbit you on a precessing ellipse, shredding anything they sweep.",
+        # Placeholder: reuses the crossed-shape icon frame (cell 3) until real
+        # art is authored, same as Fork Shot started on a borrowed frame.
+        icon_id=3,
+        native_amount=8,
+        notes=(
+            "Not a native bonus - project addition. Spawns a 5-blade orbit on a "
+            "precessing centred ellipse (bonuses/blade_orbit.py): 10 revolutions "
+            "= 2 precessions over ~8s, contact damage with a per-creature hit "
+            "cooldown."
+        ),
     ),
 ]
 

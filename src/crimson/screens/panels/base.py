@@ -54,6 +54,7 @@ FADE_TO_GAME_ACTIONS = frozenset(
         "start_typo",
         "start_tutorial",
         "start_quest",
+        "start_maps",
     },
 )
 

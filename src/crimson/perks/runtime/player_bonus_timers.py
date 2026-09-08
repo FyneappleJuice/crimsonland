@@ -29,3 +29,11 @@ def update_player_bonus_timers(ctx: PerksUpdateEffectsCtx) -> None:
                 f32(float(player.speed_bonus_timer)),
                 dt,
             )
+
+        if player.projectile_fork_timer <= 0.0:
+            player.projectile_fork_timer = 0.0
+        else:
+            player.projectile_fork_timer = x87_pc24_sub(
+                f32(float(player.projectile_fork_timer)),
+                dt,
+            )

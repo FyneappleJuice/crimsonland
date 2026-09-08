@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import math
 
+import pytest
+
 from crimson.creatures.runtime import CreatureState
 from crimson.effects import EffectPool, FxQueue, FxQueueRotated, ParticlePool, ParticleStyleId, SpriteEffectPool
 from crimson.effects_atlas import effect_src_rect
@@ -413,6 +415,61 @@ def test_particle_update_uses_explicit_damage_applier() -> None:
     assert damage_runtime.calls[0][2] == 4
     assert damage_runtime.calls[0][4] == OwnerRef.from_player(0)
     assert_float_close(creature.hp, 100.0)
+
+
+def test_flame_particle_burns_every_creature_in_its_radius() -> None:
+    from crimson.effects import _FLAME_PARTICLE_HITS_ALL_IN_RADIUS
+
+    assert _FLAME_PARTICLE_HITS_ALL_IN_RADIUS  # sanity: the AoE mode is on
+
+    def _c(pos: Vec2) -> CreatureState:
+        c = CreatureState()
+        c.active = True
+        c.hp = 100.0
+        c.pos = pos
+        c.size = 50.0
+        c.lifecycle_stage = 16.0
+        return c
+
+    # three creatures stacked at the muzzle, one far away
+    creatures = [_c(Vec2()), _c(Vec2(2.0, 0.0)), _c(Vec2(-3.0, 1.0)), _c(Vec2(400.0, 400.0))]
+    runtime = RecordingCreatureDamageRuntime(creatures=creatures, apply_damage=True)
+
+    pool = ParticlePool(size=1, rng=ScriptedCrand(0, fallback=ScriptedCrand.Fallback.REPEAT_LAST))
+    pool.spawn_particle(pos=Vec2(), angle=0.0, intensity=1.0, owner=OwnerRef.from_player(0))
+    pool.update(0.016, creatures=creatures, creature_damage_runtime=runtime)
+
+    hit = {call[0] for call in runtime.calls}
+    assert hit == {0, 1, 2}  # all three clustered creatures, not the far one
+    per_hit = runtime.calls[0][1]
+    assert all(call[1] == per_hit for call in runtime.calls)  # same damage to each
+    assert all(call[2] == 4 for call in runtime.calls)  # all FIRE type
+    assert creatures[3].hp == 100.0  # untouched
+
+
+def test_flame_damage_mult_hook_scales_per_particle_damage() -> None:
+    # Generic hook (relics / map affixes); Weapon Power Up no longer feeds it.
+    def _hit(mult: float) -> float:
+        c = CreatureState()
+        c.active, c.hp, c.pos, c.size, c.lifecycle_stage = True, 1e9, Vec2(), 50.0, 16.0
+        rt = RecordingCreatureDamageRuntime(creatures=[c], apply_damage=False)
+        pool = ParticlePool(size=1, rng=ScriptedCrand(0, fallback=ScriptedCrand.Fallback.REPEAT_LAST))
+        pool.spawn_particle(pos=Vec2(), angle=0.0, intensity=1.0)
+        pool.update(0.016, creatures=[c], creature_damage_runtime=rt, flame_damage_mult=mult)
+        return rt.calls[0][1]
+
+    assert _hit(1.25) == pytest.approx(_hit(1.0) * 1.25)
+
+
+def test_flame_hits_accumulate_ignite_heat() -> None:
+    from crimson.creatures.ignite import IGNITE_HEAT_PER_HIT
+
+    c = CreatureState()
+    c.active, c.hp, c.pos, c.size, c.lifecycle_stage = True, 1e9, Vec2(), 50.0, 16.0
+    pool = ParticlePool(size=1, rng=ScriptedCrand(0, fallback=ScriptedCrand.Fallback.REPEAT_LAST))
+    pool.spawn_particle(pos=Vec2(), angle=0.0, intensity=1.0)
+    pool.update(0.016, creatures=[c], creature_damage_runtime=RecordingCreatureDamageRuntime(creatures=[c]))
+    assert c.ignite_heat == pytest.approx(IGNITE_HEAT_PER_HIT * 1.0, abs=1.0)  # ~ one full-intensity hit
 
 
 def test_effect_pool_blood_splatter_queues_decal_on_expiry() -> None:

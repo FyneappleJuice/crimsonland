@@ -36,6 +36,18 @@ class ProjectileTemplateId(IntEnum):
     FIRE_BULLETS = 0x2D
 
 
+# Rewrite-only: templates that deal CreatureDamageType.ENERGY instead of BULLET.
+# Covers every plasma weapon (Multi-Plasma / Plasma Shotgun spawn these types).
+ENERGY_PROJECTILE_TEMPLATE_IDS: frozenset[ProjectileTemplateId] = frozenset(
+    {
+        ProjectileTemplateId.PLASMA_RIFLE,
+        ProjectileTemplateId.PLASMA_MINIGUN,
+        ProjectileTemplateId.PLASMA_CANNON,
+        ProjectileTemplateId.SPIDER_PLASMA,
+    }
+)
+
+
 class SecondaryProjectileTypeId(IntEnum):
     NONE = 0
     ROCKET = 1
@@ -65,6 +77,13 @@ class Projectile(msgspec.Struct):
     type_id: ProjectileTemplateId = ProjectileTemplateId.PISTOL
     life_timer: float = 0.0
     reserved: float = 0.0
+    # Rewrite-only: outgoing energy-damage multiplier stamped at spawn from the
+    # firing weapon's clip-heat (see weapon_runtime/plasma_heat.py). 1.0 = no
+    # ramp / not a plasma bolt.
+    energy_heat_mult: float = 1.0
+    # Rewrite-only: extra full-damage targets this bolt punches through before it
+    # stops (Weapon Power Up for kinetic lead). 0 = native stop-on-first-hit.
+    pierce_left: float = 0.0
     speed_scale: float = 1.0
     damage_pool: float = 1.0
     hit_radius: float = 1.0
@@ -88,6 +107,7 @@ class SecondaryProjectile(msgspec.Struct):
 
 
 __all__ = [
+    "ENERGY_PROJECTILE_TEMPLATE_IDS",
     "MAIN_PROJECTILE_POOL_SIZE",
     "SECONDARY_PROJECTILE_POOL_SIZE",
     "OwnerRef",

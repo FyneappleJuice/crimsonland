@@ -89,6 +89,26 @@ def draw_plasma_particles(ctx: ProjectileDrawCtx) -> bool:
     aura_size = plasma_cfg.aura_size
     aura_alpha_mul = plasma_cfg.aura_alpha_mul
 
+    # Clip-heat tell: a hot bolt (energy_heat_mult up to ~2.0) glows brighter,
+    # bigger, and shifts toward white-hot orange.
+    heat_t = clamp((float(ctx.proj.energy_heat_mult) - 1.0), 0.0, 1.0)
+    if heat_t > 1e-3:
+        blend = heat_t * 0.7
+        rgb = (
+            rgb[0] + (1.0 - rgb[0]) * blend,
+            rgb[1] + (0.78 - rgb[1]) * blend,
+            rgb[2] + (0.42 - rgb[2]) * blend,
+        )
+        aura_rgb = (
+            aura_rgb[0] + (1.0 - aura_rgb[0]) * blend,
+            aura_rgb[1] + (0.7 - aura_rgb[1]) * blend,
+            aura_rgb[2] + (0.35 - aura_rgb[2]) * blend,
+        )
+        head_size *= 1.0 + heat_t * 0.45
+        aura_size *= 1.0 + heat_t * 0.6
+        head_alpha_mul = min(1.0, head_alpha_mul * (1.0 + heat_t * 0.35))
+        aura_alpha_mul = min(1.0, aura_alpha_mul * (1.0 + heat_t * 0.35))
+
     if float(ctx.life) >= 0.4:
         # Native converts both operands to signed integers before dividing.
         # The numerator is the rendered origin-to-position distance; it does

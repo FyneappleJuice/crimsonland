@@ -232,7 +232,10 @@ def test_zig_weapon_ids_match_python_port() -> None:
 
 
 def test_zig_bonus_ids_match_python_port() -> None:
-    assert _zig_enum_values("BonusId") == _python_enum_values(BonusId)
+    # "projectile_fork" and "blade" are Python-rewrite-only bonuses with no
+    # native reference and no Zig port counterpart, same reason "maps" is
+    # excluded from the game-mode-ids guard above.
+    assert _zig_enum_values("BonusId") == _python_enum_values(BonusId, exclude={"projectile_fork", "blade"})
 
 
 def test_zig_perk_ids_match_python_port() -> None:
@@ -240,7 +243,9 @@ def test_zig_perk_ids_match_python_port() -> None:
 
 
 def test_zig_game_mode_ids_match_python_playable_modes() -> None:
-    assert _zig_enum_values("GameModeId") == _python_enum_values(GameMode, exclude={"demo"})
+    # "maps" is a Python-rewrite-only mode with no native reference and no Zig
+    # port counterpart, same reason "demo" is already excluded here.
+    assert _zig_enum_values("GameModeId") == _python_enum_values(GameMode, exclude={"demo", "maps"})
 
 
 def test_python_projectile_template_ids_are_known_to_zig() -> None:

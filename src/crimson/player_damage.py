@@ -15,6 +15,7 @@ from grim.sfx_map import SfxId
 from .math_parity import f32, x87_pc24_add, x87_pc24_mul, x87_pc24_sub
 from .perks import PerkId
 from .perks.helpers import perk_active
+from .progression import refresh_player_stats
 from .rng_caller_static import RngCallerStatic
 from .sim.state_types import GameplayState, PlayerState
 
@@ -25,7 +26,6 @@ _PLAYER_PAIN_SFX: tuple[SfxId, ...] = (
     SfxId.TROOPER_INPAIN_03,
 )
 _PLAYER_DEATH_SFX: tuple[SfxId, ...] = (SfxId.TROOPER_DIE_01, SfxId.TROOPER_DIE_02)
-_THICK_SKINNED_DAMAGE_SCALE_F32 = 0.6660000085830688
 
 
 class PlayerDeathRuntime(msgspec.Struct):
@@ -51,6 +51,7 @@ def player_take_damage(
     # Native perk_count_get() is hard-wired to player 1 even though the
     # surrounding player fields are indexed by the actual damage target.
     perk_player = players[0] if state.preserve_bugs and players else player
+    refresh_player_stats(list(players) if players else [player])
 
     if perk_active(perk_player, PerkId.DEATH_CLOCK):
         return 0.0
@@ -67,9 +68,11 @@ def player_take_damage(
 
     was_alive = float(perk_player.health) > 0.0
 
-    if perk_active(perk_player, PerkId.THICK_SKINNED):
-        # Native uses an f32 constant (`~0.666`) here, not exact 2/3.
-        damage_scaled = float(f32(float(damage_scaled) * float(_THICK_SKINNED_DAMAGE_SCALE_F32)))
+    # Thick Skinned feeds stats.damage_taken_mult; alone it resolves to the
+    # same f32 ~0.666 constant the perk used directly.
+    damage_taken_mult = float(perk_player.stats.damage_taken_mult)
+    if damage_taken_mult != 1.0:
+        damage_scaled = float(f32(float(damage_scaled) * damage_taken_mult))
 
     dodged = False
     if perk_active(perk_player, PerkId.NINJA):
@@ -115,7 +118,7 @@ def player_take_damage(
             death_runtime.on_player_lethal(player, dt=0.0 if dt is None else float(dt))
 
     if not dodged:
-        if not perk_active(perk_player, PerkId.UNSTOPPABLE):
+        if not perk_player.stats.has("no_hit_stagger"):  # Unstoppable
             heading_jitter = x87_pc24_mul(
                 float((state.rng.rand_tagged(RngCallerStatic.PLAYER_TAKE_DAMAGE_HEADING) % 100) - 50),
                 f32(0.04),

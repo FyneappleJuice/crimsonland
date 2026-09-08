@@ -13,6 +13,12 @@ from ...effects_atlas import EFFECT_ID_ATLAS_TABLE_BY_ID, SIZE_CODE_GRID, Effect
 from .constants import _RAD_TO_DEG
 from .context import WorldRenderCtx
 
+# Not native: how many flame-flake sprites to draw per flame particle. 1 = the
+# original look; 2 = twice the visual density (extra copies are billowed around
+# the particle centre - purely cosmetic, no gameplay effect).
+_FLAME_VISUAL_COPIES = 2
+_GOLDEN_ANGLE = 2.399963
+
 
 def draw_particle_pool(
     render_ctx: WorldRenderCtx,
@@ -89,11 +95,26 @@ def draw_particle_pool(
         if size <= 0.0:
             continue
         screen = render_ctx._world_to_screen_with(entry.pos, camera=camera, view_scale=view_scale)
-        dst = rl.Rectangle(screen.x, screen.y, size, size)
         origin = rl.Vector2(size * 0.5, size * 0.5)
-        rotation_deg = float(entry.spin) * _RAD_TO_DEG
+        base_rotation = float(entry.spin) * _RAD_TO_DEG
         tint = RGBA(entry.scale_x, entry.scale_y, entry.scale_z, float(entry.age) * alpha).to_rl()
-        rl.draw_texture_pro(texture, src_normal, dst, origin, rotation_deg, tint)
+        billow = radius * 0.55 * scale
+        for copy in range(_FLAME_VISUAL_COPIES):
+            if copy == 0:
+                cx, cy, rot = screen.x, screen.y, base_rotation
+            else:
+                phase = float(entry.spin) * 1.7 + copy * _GOLDEN_ANGLE
+                cx = screen.x + math.cos(phase) * billow
+                cy = screen.y + math.sin(phase) * billow
+                rot = base_rotation + copy * 53.0
+            rl.draw_texture_pro(
+                texture,
+                src_normal,
+                rl.Rectangle(cx, cy, size, size),
+                origin,
+                rot,
+                tint,
+            )
 
     alpha_byte = int(clamp(alpha, 0.0, 1.0) * 255.0 + 0.5)
     for entry in particles:

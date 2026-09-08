@@ -185,6 +185,7 @@ def play_sfx(
     sfx: SfxId,
     *,
     reflex_boost_timer: float = 0.0,
+    volume_scale: float = 1.0,
 ) -> None:
     if state is None or not state.ready or not state.enabled:
         return
@@ -196,6 +197,10 @@ def play_sfx(
     )
     voice = sample.acquire_voice()
     _set_sound_pitch_safe(voice, _pitch_scale_from_rate_hz(int(state.rate_scale_hz)))
+    # Always set the voice volume explicitly so a scaled one-off can't leak into
+    # the next unscaled play of the same (aliased) voice.
+    scale = 1.0 if volume_scale >= 1.0 else max(0.0, float(volume_scale))
+    rl.set_sound_volume(voice, state.volume * scale)
     rl.play_sound(voice)
 
 

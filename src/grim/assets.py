@@ -89,6 +89,9 @@ class TextureId(Enum):
     UI_TEXT_CONTROLS = auto()
     UI_TEXT_PICK_A_PERK = auto()
     UI_TEXT_LEVEL_UP = auto()
+    # Rewrite-only content. Loaded best-effort: absent from a stock PAQ, the
+    # renderer falls back to a procedural shape (see OPTIONAL_TEXTURE_SPECS).
+    SCYTHE = auto()
 
 
 class TextureSpec(msgspec.Struct, frozen=True):
@@ -170,6 +173,14 @@ TEXTURE_SPECS: Final[dict[TextureId, TextureSpec]] = {
     TextureId.UI_TEXT_LEVEL_UP: TextureSpec("ui/ui_textLevelUp.jaz", clamp=True),
 }
 
+# Rewrite-only textures that may be missing from a stock PAQ. `load_runtime_resources`
+# loads these best-effort (PAQ first, then the committed fallback below) and
+# never raises when one is absent.
+OPTIONAL_TEXTURE_SPECS: Final[dict[TextureId, TextureSpec]] = {
+    TextureId.SCYTHE: TextureSpec("game/scythe.tga", clamp=True),
+}
+_OPTIONAL_TEXTURE_FALLBACK_DIR: Final[Path] = Path(__file__).resolve().parent / "optional_textures"
+
 class RuntimeResources(msgspec.Struct):
     assets_dir: Path
     textures: dict[TextureId, rl.Texture]
@@ -181,6 +192,11 @@ class RuntimeResources(msgspec.Struct):
             rel_path = TEXTURE_SPECS[texture_id].rel_path
             raise RuntimeError(f"runtime texture is not available: {rel_path}")
         return texture
+
+    def texture_optional(self, texture_id: TextureId) -> rl.Texture | None:
+        """Like `texture()` but returns None instead of raising - for OPTIONAL_TEXTURE_SPECS."""
+
+        return self.textures.get(texture_id)
 
     def unload(self) -> None:
         seen: set[int] = set()
@@ -295,6 +311,25 @@ def load_runtime_resources(assets_dir: Path) -> RuntimeResources:
         texture = _load_texture_asset_from_bytes(asset_path, payload)
         if texture is None:
             raise FileNotFoundError(f"Missing runtime texture: {spec.rel_path}")
+        _apply_texture_settings(texture, clamp=bool(spec.clamp), point_filter=bool(spec.point_filter))
+        textures[texture_id] = texture
+
+    for texture_id, spec in OPTIONAL_TEXTURE_SPECS.items():
+        asset_path, payload = _select_texture_asset(entries, spec.rel_path)
+        if payload is None:
+            # Fall back to the copy committed alongside the source (so a fresh
+            # clone renders it without a PAQ rebuild).
+            fallback = _OPTIONAL_TEXTURE_FALLBACK_DIR / Path(spec.rel_path).name
+            if fallback.is_file():
+                asset_path, payload = str(fallback), fallback.read_bytes()
+        if payload is None:
+            continue
+        try:
+            texture = _load_texture_asset_from_bytes(asset_path, payload)
+        except (FileNotFoundError, OSError, ValueError):
+            continue
+        if texture is None:
+            continue
         _apply_texture_settings(texture, clamp=bool(spec.clamp), point_filter=bool(spec.point_filter))
         textures[texture_id] = texture
 

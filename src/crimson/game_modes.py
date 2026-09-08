@@ -13,3 +13,7 @@ class GameMode(IntEnum):
     TYPO = 4
     TUTORIAL = 8
 
+    # Not a native id: this rewrite-only mode has no equivalent in the original
+    # game, so it is assigned a value well outside the native table's range.
+    MAPS = 100
+

@@ -50,6 +50,7 @@ from .typo.state import TypoState
 from .weapon_runtime import (
     WeaponFireCtx as _WeaponFireCtx,
 )
+from .weapon_runtime.power_up import wpu_boosts_fire_rate
 from .weapon_runtime import (
     fire_weapon as _fire_weapon,
 )
@@ -167,6 +168,16 @@ class GameplayState(msgspec.Struct):
     weapon_usage_time: list[int] = msgspec.field(default_factory=lambda: [0] * WEAPON_USAGE_TIME_SLOT_COUNT)
     highscore_score_xp: int = 0
     debug_god_mode: bool = False
+    # Not native: test-mode non-native-bonus auto-spawn countdown + which one to
+    # spawn next (cycles through the rewrite-only bonuses). See test_mode.py.
+    test_mode_fork_spawn_timer: float = 5.0
+    test_mode_bonus_cycle: int = 0
+    test_mode_shotgun_dropped: bool = False
+    # Not native: when set, the random bonus picker (bonuses/selection.py) spends
+    # the native drop table's one dead-space slot on a rewrite-only bonus
+    # instead of rerolling. Only the rewrite-only Maps mode opts in; every native
+    # mode leaves this off and keeps the original drop table untouched.
+    fork_bonus_in_pool: bool = False
 
     def __post_init__(self) -> None:
         self.particles = ParticlePool(rng=self.rng)
@@ -715,7 +726,14 @@ def player_update(
             x87_pc24_mul(dt, f32(2.0)),
         ),
     )
-    cooldown_decay = float(f32(float(dt) * (1.5 if state.bonuses.weapon_power_up > 0.0 else 1.0)))
+    wpu_rate = (
+        state.bonuses.weapon_power_up > 0.0
+        and wpu_boosts_fire_rate(int(player.weapon.weapon_id))
+    )
+    # Normalized: WPU is tuned to ~+30% sustained DPS across weapons. The
+    # fire-rate half is x1.3 (with reload x0.8 in assign.py); classes whose WPU
+    # is a damage/area buff instead sit in power_up.WPU_NO_RATE_WEAPON_IDS.
+    cooldown_decay = float(f32(float(dt) * (1.3 if wpu_rate else 1.0)))
     next_shot_cooldown = float(f32(float(player.weapon.shot_cooldown) - float(cooldown_decay)))
     player.weapon.shot_cooldown = max(0.0, float(next_shot_cooldown))
 

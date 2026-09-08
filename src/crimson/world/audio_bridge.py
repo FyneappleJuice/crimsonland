@@ -5,6 +5,7 @@ from grim.rand import CrandLike
 from grim.sfx_map import SfxId
 
 from ..audio_router import AudioRouter, AudioRouterRuntime
+from ..bonuses.blade_orbit import BLADE_SOUND_VOLUME
 from ..sim.presentation_step import DeterministicPresentationPlan, PresentationPlanRuntime, apply_presentation_plan
 
 
@@ -58,3 +59,6 @@ class _AudioBridgePresentationPlanRuntime(PresentationPlanRuntime):
 
     def play_sfx(self, sfx: SfxId) -> None:
         self.bridge.router.play_sfx(sfx)
+
+    def play_soft_sfx(self, sfx: SfxId) -> None:
+        self.bridge.router.play_sfx(sfx, volume_scale=BLADE_SOUND_VOLUME)

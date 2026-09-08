@@ -13,6 +13,7 @@ from grim.math import clamp
 from grim.rand import CallerStatic, Crand, CrandLike
 
 from .creatures.damage_runtime import CreatureDamageRuntime, DirectCreatureDamageRuntime
+from .creatures.ignite import IGNITE_HEAT_PER_HIT, flame_ignite_accumulate
 from .creatures.lifecycle import creature_lifecycle_is_collidable
 from .effects_atlas import EffectId
 from .math_parity import (
@@ -65,6 +66,18 @@ FX_QUEUE_ROTATED_MAX_COUNT = 0x3F
 _NATIVE_PARTICLE_SPIN_SCALE = f32(0.01)
 _NATIVE_SPRITE_ROTATION_SCALE = f32(0.01)
 
+# Not native: when True a flame particle burns every creature inside its radius
+# (up to _FLAME_PARTICLE_MAX_TARGETS) instead of only the first one found. The
+# particle is still spent after the hit; its bounce/deflection is still driven
+# by the nearest-index creature. Bubblegun is unaffected.
+_FLAME_PARTICLE_HITS_ALL_IN_RADIUS = True
+_FLAME_PARTICLE_MAX_TARGETS = 8
+
+# Not native: scales how far each flame particle travels per tick (Flamethrower,
+# Blow Torch, HR Flamer). 1.0 = original reach; 1.5 = half again as far. Only the
+# movement is scaled - lifetime, per-hit damage, decay and the intensity-driven
+# AoE radius are all unchanged, so the particles just fly further/faster.
+_FLAME_PARTICLE_RANGE_MULT = 1.5
 
 def _native_particle_velocity(angle: float, speed: float) -> Vec2:
     angle_f32 = f32(angle)
@@ -85,6 +98,25 @@ def _native_clamp_unit(value: float) -> float:
     if value > 1.0:
         return 1.0
     return value
+
+
+def _flame_char_creature(creature: CreatureState, intensity: float) -> None:
+    """Darken a creature's tint on a flame hit (the native 'charring' effect)."""
+
+    tint = creature.tint
+    tint_sum = x87_pc24_add(x87_pc24_add(tint.g, tint.b), tint.r)
+    tint_r, tint_g, tint_b = f32(tint.r), f32(tint.g), f32(tint.b)
+    if tint_sum > f32(1.6):
+        factor = x87_pc24_sub(1.0, x87_pc24_mul(f32(intensity), 0.01))
+        tint_r = x87_pc24_mul(factor, tint_r)
+        tint_g = x87_pc24_mul(factor, tint_g)
+        tint_b = x87_pc24_mul(factor, tint_b)
+    creature.tint = RGBA(
+        _native_clamp_unit(tint_r),
+        _native_clamp_unit(tint_g),
+        _native_clamp_unit(tint_b),
+        _native_clamp_unit(tint.a),
+    )
 
 
 class ParticleStyleId(IntEnum):
@@ -206,6 +238,7 @@ class ParticlePool:
         creature_damage_runtime: CreatureDamageRuntime | None = None,
         fx_queue: FxQueue | None = None,
         sprite_effects: SpriteEffectPool | None = None,
+        flame_damage_mult: float = 1.0,
     ) -> list[int]:
         """Advance particles and deactivate expired entries.
 
@@ -222,11 +255,18 @@ class ParticlePool:
         if creature_damage_runtime is None and creatures is not None:
             creature_damage_runtime = DirectCreatureDamageRuntime(creatures=creatures)
 
-        def _creature_find_in_radius(*, pos: Vec2, radius: float) -> int:
-            if creatures is None:
-                return -1
+        def _creatures_in_radius(*, pos: Vec2, radius: float, limit: int) -> list[int]:
+            """Every creature the particle's radius covers, lowest index first.
+
+            Native only ever takes the first match; `limit` lets the AoE version
+            cap how many it also burns. Bit-for-bit the same acceptance test.
+            """
+
+            if creatures is None or limit <= 0:
+                return []
             max_index = min(len(creatures), 0x180)
             radius = f32(float(radius))
+            found: list[int] = []
 
             for creature_idx in range(max_index):
                 creature = creatures[creature_idx]
@@ -247,9 +287,11 @@ class ParticlePool:
                 # Native acceptance is strict (`dist < threshold`); reject equality.
                 if float(threshold) <= float(dist):
                     continue
-                return int(creature_idx)
+                found.append(int(creature_idx))
+                if len(found) >= limit:
+                    break
 
-            return -1
+            return found
 
         expired: list[int] = []
         rng = self._rng
@@ -274,7 +316,7 @@ class ParticlePool:
             else:
                 entry.intensity = f32(float(entry.intensity) - float(dt) * 0.9)
                 entry.spin = f32(float(entry.spin) + float(dt))
-                move_scale = max(float(entry.intensity), 0.15) * 2.5
+                move_scale = max(float(entry.intensity), 0.15) * 2.5 * _FLAME_PARTICLE_RANGE_MULT
                 move = entry.vel * (float(dt) * float(move_scale))
                 entry.pos = Vec2(
                     f32(float(entry.pos.x) + float(move.x)),
@@ -336,8 +378,14 @@ class ParticlePool:
             # Native only updates scale_x/scale_y; scale_z stays at its spawn value (1.0).
 
             if entry.render_flag and creatures is not None:
-                hit_idx = _creature_find_in_radius(pos=entry.pos, radius=max(float(entry.intensity), 0.0) * 8.0)
-                if hit_idx != -1:
+                _aoe = _FLAME_PARTICLE_HITS_ALL_IN_RADIUS and style != int(ParticleStyleId.BUBBLEGUN)
+                hit_indices = _creatures_in_radius(
+                    pos=entry.pos,
+                    radius=max(float(entry.intensity), 0.0) * 8.0,
+                    limit=_FLAME_PARTICLE_MAX_TARGETS if _aoe else 1,
+                )
+                if hit_indices:
+                    hit_idx = hit_indices[0]
                     entry.render_flag = False
                     creature = creatures[hit_idx]
                     if style == int(ParticleStyleId.BUBBLEGUN):
@@ -384,6 +432,12 @@ class ParticlePool:
                         )
 
                         damage = max(0.0, x87_pc24_mul(entry.intensity, 10.0))
+                        # Not native: generic per-flame-particle damage hook for
+                        # future content (relics / map affixes). Weapon Power Up
+                        # now boosts the flamethrower via emission rate, not this.
+                        if flame_damage_mult != 1.0:
+                            damage = max(0.0, float(f32(float(damage) * float(flame_damage_mult))))
+                        heat_gain = IGNITE_HEAT_PER_HIT * float(entry.intensity)
                         if damage > 0.0:
                             if creature_damage_runtime is not None:
                                 creature_damage_runtime.apply_creature_damage(
@@ -396,22 +450,8 @@ class ParticlePool:
                             else:
                                 creature.hp -= float(damage)
 
-                        tint = creature.tint
-                        tint_sum = x87_pc24_add(x87_pc24_add(tint.g, tint.b), tint.r)
-                        tint_r = f32(tint.r)
-                        tint_g = f32(tint.g)
-                        tint_b = f32(tint.b)
-                        if tint_sum > f32(1.6):
-                            factor = x87_pc24_sub(1.0, x87_pc24_mul(entry.intensity, 0.01))
-                            tint_r = x87_pc24_mul(factor, tint_r)
-                            tint_g = x87_pc24_mul(factor, tint_g)
-                            tint_b = x87_pc24_mul(factor, tint_b)
-                        creature.tint = RGBA(
-                            _native_clamp_unit(tint_r),
-                            _native_clamp_unit(tint_g),
-                            _native_clamp_unit(tint_b),
-                            _native_clamp_unit(tint.a),
-                        )
+                        _flame_char_creature(creature, entry.intensity)
+                        flame_ignite_accumulate(creature, heat_gain)
 
                         if sprite_effects is not None and (idx % 3 == 0):
                             sprite_vel = Vec2(
@@ -439,6 +479,25 @@ class ParticlePool:
                             x87_pc24_add(creature.pos.x, x87_pc24_mul(entry.vel.x, dt)),
                             x87_pc24_add(creature.pos.y, x87_pc24_mul(entry.vel.y, dt)),
                         )
+
+                        # Not native: same burn to every other creature the
+                        # particle covers. Damage + char + the post-bounce shove,
+                        # but no per-creature bounce math or sprite/fx RNG.
+                        if _aoe and damage > 0.0 and len(hit_indices) > 1:
+                            for extra_idx in hit_indices[1:]:
+                                extra = creatures[extra_idx]
+                                if creature_damage_runtime is not None:
+                                    creature_damage_runtime.apply_creature_damage(
+                                        int(extra_idx), float(damage), 4, Vec2(), entry.owner,
+                                    )
+                                else:
+                                    extra.hp -= float(damage)
+                                _flame_char_creature(extra, entry.intensity)
+                                flame_ignite_accumulate(extra, heat_gain)
+                                extra.pos = Vec2(
+                                    x87_pc24_add(extra.pos.x, x87_pc24_mul(entry.vel.x, dt)),
+                                    x87_pc24_add(extra.pos.y, x87_pc24_mul(entry.vel.y, dt)),
+                                )
 
         return expired
 

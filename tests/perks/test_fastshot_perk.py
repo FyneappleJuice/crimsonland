@@ -3,6 +3,7 @@ from __future__ import annotations
 from crimson.gameplay import GameplayState
 from crimson.math_parity import f32
 from crimson.perks import PerkId
+from crimson.progression import refresh_player_stats
 from crimson.sim.input import PlayerInput
 from crimson.sim.state_types import PlayerState, WeaponSlot
 from crimson.weapon_runtime import WeaponFireCtx, fire_weapon
@@ -12,6 +13,9 @@ from tests.support.helpers import assert_float_close
 
 
 def _fire_once(state: GameplayState, player: PlayerState, *, players: list[PlayerState] | None = None) -> float:
+    # player.stats is a per-tick resolved cache; unit tests that bypass
+    # WorldState.step must resolve it themselves.
+    refresh_player_stats(players if players is not None else [player])
     fire_weapon(
         WeaponFireCtx(
             player=player,

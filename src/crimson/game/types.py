@@ -44,6 +44,7 @@ class GameConfig(msgspec.Struct, frozen=True):
     debug: bool = False
     rtx: bool = False
     preserve_bugs: bool = False
+    test_mode: bool = False
     pending_network_session: PendingNetworkSession | None = None
 
 

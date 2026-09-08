@@ -23,6 +23,7 @@ def test_play_sfx_applies_native_reflex_rate_scaling(mocker) -> None:
     state.samples[SfxId.PISTOL_FIRE] = cast(Any, sample)
 
     set_sound_pitch = mocker.patch.object(grim_sfx.rl, "set_sound_pitch", create=True)
+    mocker.patch.object(grim_sfx.rl, "set_sound_volume", create=True)
     mocker.patch.object(grim_sfx.rl, "play_sound")
 
     grim_sfx.play_sfx(state, SfxId.PISTOL_FIRE, reflex_boost_timer=0.0)

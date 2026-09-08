@@ -291,6 +291,12 @@ class PlayGameMenuView(PanelMenuView):
                     game_mode=GameMode.SURVIVAL,
                     show_count=True,
                 ),
+                _PlayGameModeEntry(
+                    key="maps",
+                    label=" Maps  ",
+                    tooltip="Roll a randomized map with a guaranteed boss.",
+                    action="open_maps",
+                ),
             ],
         )
 
@@ -621,6 +627,7 @@ class PlayGameMenuView(PanelMenuView):
             "quests": (-8.0, 0.0),
             "rush": (32.0, 0.0),
             "survival": (20.0, 0.0),
+            "maps": (28.0, 0.0),
             "typo": (0.0, -12.0),
             "tutorial": (38.0, 0.0),
         }

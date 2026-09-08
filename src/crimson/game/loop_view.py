@@ -13,6 +13,7 @@ from ..demo import DemoView
 from ..demo_trial import demo_trial_overlay_info, tick_demo_trial_timers
 from ..game_modes import GameMode
 from ..input_codes import input_begin_frame
+from ..modes.maps_mode import MapsMode
 from ..modes.quest_mode import QuestMode
 from ..modes.rush_mode import RushMode
 from ..modes.survival_mode import SurvivalMode
@@ -28,6 +29,7 @@ from ..screens.panels.base import PanelMenuView
 from ..screens.panels.controls import ControlsMenuView
 from ..screens.panels.credits import CreditsView
 from ..screens.panels.databases import UnlockedPerksDatabaseView, UnlockedWeaponsDatabaseView
+from ..screens.panels.maps_menu import MapsMenuView
 from ..screens.panels.mods import ModsMenuView
 from ..screens.panels.network_lobby import NetworkLobbyPanelView
 from ..screens.panels.network_session import NetworkSessionPanelView
@@ -142,6 +144,13 @@ class GameLoopView:
         self._boot = BootView(state)
         self._demo = DemoView(state)
         self._menu = MenuView(state)
+        maps_mode = MapsMode(
+            _mode_view_context(state),
+            config=state.config,
+            console=state.console,
+            audio=state.audio,
+            audio_rng=state.rng,
+        )
         self._front_views: dict[str, Screen] = {
             "open_play_game": PlayGameMenuView(state),
             "open_lan_session": NetworkSessionPanelView(state),
@@ -174,6 +183,8 @@ class GameLoopView:
                 audio=state.audio,
                 audio_rng=state.rng,
             ),
+            "open_maps": MapsMenuView(state, maps_mode=maps_mode),
+            "start_maps": maps_mode,
             "start_typo": TypoShooterMode(
                 _mode_view_context(state),
                 config=state.config,
@@ -629,13 +640,14 @@ class GameLoopView:
                 self._front_active = pause_view
                 self._active = pause_view
                 return
-            if action in {"start_survival", "start_rush", "start_typo"}:
+            if action in {"start_survival", "start_rush", "start_typo", "start_maps"}:
                 # Temporary: bump the counter on mode start so the Play Game overlay (F1)
                 # and Statistics screen reflect activity.
                 mode_id = {
                     "start_survival": GameMode.SURVIVAL,
                     "start_rush": GameMode.RUSH,
                     "start_typo": GameMode.TYPO,
+                    "start_maps": GameMode.MAPS,
                 }.get(action)
                 if mode_id is not None:
                     self.state.status.increment_mode_play_count_for_mode(mode_id)
@@ -656,9 +668,11 @@ class GameLoopView:
                             "start_typo",
                             "start_tutorial",
                             "start_quest",
+                            "start_maps",
                             "open_play_game",
                             "open_lan_session",
                             "open_quests",
+                            "open_maps",
                         }:
                             self.state.pause_background = None
                             while self._front_stack:

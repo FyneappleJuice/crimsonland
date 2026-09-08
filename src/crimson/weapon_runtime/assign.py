@@ -7,9 +7,11 @@ import msgspec
 from ..math_parity import f32, x87_pc24_mul
 from ..perks import PerkId
 from ..perks.helpers import perk_active
+from ..progression import refresh_player_stats
 from ..sim.state_types import GameplayState, PlayerState, WeaponSlot
 from ..weapon_usage import weapon_usage_slot_for_weapon_id
 from ..weapons import WEAPON_BY_ID, Weapon, WeaponId
+from .power_up import wpu_boosts_fire_rate
 
 
 def weapon_entry(weapon_id: WeaponId) -> Weapon:
@@ -24,20 +26,25 @@ class _WeaponAssignCtx(msgspec.Struct):
 _WeaponAssignClipModifier = Callable[[_WeaponAssignCtx], None]
 
 
-def _weapon_assign_clip_ammo_maniac(ctx: _WeaponAssignCtx) -> None:
-    if perk_active(ctx.player, PerkId.AMMO_MANIAC):
-        ctx.clip_size += max(1, int(float(ctx.clip_size) * 0.25))
+def _weapon_assign_clip_stats(ctx: _WeaponAssignCtx) -> None:
+    """Clip-size perks, via crimson.progression stats.
+
+    Ammo Maniac feeds `clip_size_mult` (+25%); with only that perk the term is
+    exactly 0.25, so `+= max(1, floor(clip * 0.25))` is unchanged. My Favourite
+    Weapon feeds `clip_size_add` (+2). Percent applies before the flat add,
+    matching the original modifier order.
+    """
+
+    stats = ctx.player.stats
+    inc = float(stats.clip_size_mult) - 1.0
+    if inc != 0.0:
+        ctx.clip_size += max(1, int(float(ctx.clip_size) * inc))
+    add = int(stats.clip_size_add)
+    if add != 0:
+        ctx.clip_size += add
 
 
-def _weapon_assign_clip_my_favourite_weapon(ctx: _WeaponAssignCtx) -> None:
-    if perk_active(ctx.player, PerkId.MY_FAVOURITE_WEAPON):
-        ctx.clip_size += 2
-
-
-_WEAPON_ASSIGN_CLIP_MODIFIERS: tuple[_WeaponAssignClipModifier, ...] = (
-    _weapon_assign_clip_ammo_maniac,
-    _weapon_assign_clip_my_favourite_weapon,
-)
+_WEAPON_ASSIGN_CLIP_MODIFIERS: tuple[_WeaponAssignClipModifier, ...] = (_weapon_assign_clip_stats,)
 
 
 def init_default_alt_weapon(player: PlayerState) -> None:
@@ -58,6 +65,7 @@ def weapon_assign_player(player: PlayerState, weapon_id: WeaponId, *, state: Gam
     """Assign weapon and reset per-weapon runtime state (ammo/cooldowns)."""
 
     weapon_id = WeaponId(weapon_id)
+    refresh_player_stats([player])
     if state.status is not None and not state.demo_mode_active:
         usage_slot = weapon_usage_slot_for_weapon_id(int(weapon_id))
         if usage_slot is not None:
@@ -132,6 +140,7 @@ def player_start_reload(
     # Fastloader directly from slot zero) even while mutating another overlay
     # player. Corrected mode keeps the intuitive per-player policy.
     perk_player = players[0] if state.preserve_bugs and players else player
+    refresh_player_stats(list(players) if players else [player])
 
     if player.weapon.reload_active and (
         perk_active(perk_player, PerkId.AMMUNITION_WITHIN) or perk_active(perk_player, PerkId.REGRESSION_BULLETS)
@@ -145,9 +154,12 @@ def player_start_reload(
         player.weapon.reload_active = True
 
     player.weapon.reload_timer = reload_time
-    if perk_active(perk_player, PerkId.FASTLOADER):
-        player.weapon.reload_timer = x87_pc24_mul(reload_time, f32(0.7))
-    if state.bonuses.weapon_power_up > 0.0:
-        player.weapon.reload_timer = x87_pc24_mul(player.weapon.reload_timer, f32(0.6))
+    # Fastloader feeds stats.reload_time_mult (x0.7 alone).
+    reload_mult = float(perk_player.stats.reload_time_mult)
+    if reload_mult != 1.0:
+        player.weapon.reload_timer = x87_pc24_mul(reload_time, f32(reload_mult))
+    if state.bonuses.weapon_power_up > 0.0 and wpu_boosts_fire_rate(int(player.weapon.weapon_id)):
+        # Normalized WPU (~+30% DPS): reload x0.8 alongside the x1.3 fire rate.
+        player.weapon.reload_timer = x87_pc24_mul(player.weapon.reload_timer, f32(0.8))
 
     player.weapon.reload_timer_max = player.weapon.reload_timer

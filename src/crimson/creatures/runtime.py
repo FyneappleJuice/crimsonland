@@ -55,6 +55,7 @@ from ..weapons import weapon_entry_for_projectile_type_id
 from .ai import creature_ai7_tick_link_timer, creature_ai_update_target
 from .damage_runtime import CreatureDamageRuntime
 from .damage_types import CreatureDamageType
+from .ignite import ignite_tick
 from .lifecycle import (
     CREATURE_LIFECYCLE_ALIVE,
     CreatureLifecyclePhase,
@@ -281,6 +282,12 @@ class CreatureState(msgspec.Struct):
     spawn_slot_index: int | None = None
     bonus_id: BonusId | None = None
     bonus_duration_override: int | None = None
+
+    # Rewrite-only: flamethrower ignite DoT (creatures/ignite.py). `ignite_heat`
+    # builds from flame hits; at IGNITE_HEAT_THRESHOLD it starts `ignite_timer`
+    # seconds of separate fire damage and cannot re-trigger until that expires.
+    ignite_heat: float = 0.0
+    ignite_timer: float = 0.0
 
 
 class CreatureDeath(msgspec.Struct, frozen=True):
@@ -1137,6 +1144,18 @@ class CreaturePool:
                 continue
 
             poison_killed = _apply_self_damage_tick(idx, creature)
+            # Not native: flamethrower ignite burn, same tick/death path as poison.
+            ignite_killed = ignite_tick(
+                creature,
+                creature_index=int(idx),
+                dt=dt,
+                state=state,
+                players=players,
+                rng=rng,
+                detail_preset=int(detail_preset),
+                creature_damage_runtime=creature_damage_runtime,
+            )
+            poison_killed = poison_killed or ignite_killed
             # Native order runs AI7 link timer update after periodic self-damage
             # and before any live-branch kill handling/retargeting.
             creature_ai7_tick_link_timer(creature, dt_ms=dt_ms, rng=rng)

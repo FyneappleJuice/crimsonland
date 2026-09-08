@@ -173,7 +173,13 @@ def test_damage_perks_use_player_zero_only_when_preserving_native_bugs() -> None
     assert_float_close(native_creature.hp, 90.0)
 
 
-def test_damage_modifier_chain_rounds_each_native_pc24_operation() -> None:
+def test_stacked_bullet_damage_perks_fold_into_one_multiply() -> None:
+    # Barrel Greaser (x1.4) and Doctor (x1.2) now both feed
+    # stats.damage_mult_bullet (crimson.progression) and resolve to a single
+    # x1.68 multiply instead of the original two sequential pc24 multiplies -
+    # a deliberate, documented ULP change (build content no longer chases
+    # native float parity). A single perk still matches its old constant
+    # exactly; see tests/progression/test_migrated_perks.py.
     creature = CreatureState(
         active=True,
         hp=435.9342956542969,
@@ -196,7 +202,7 @@ def test_damage_modifier_chain_rounds_each_native_pc24_operation() -> None:
     )
 
     assert killed is True
-    assert creature.hp == -3.921539306640625
+    assert creature.hp == -3.9215087890625
 
 
 def test_damage_float_parameter_rounds_at_the_native_abi_boundary() -> None:

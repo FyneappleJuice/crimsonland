@@ -7,6 +7,7 @@ import msgspec
 from grim.rand import CrandLike, RecordingCrand
 from grim.sfx_map import SfxId
 
+from ..bonuses.blade_orbit import blade_sound_loop_index
 from ..creatures.spawn import advance_survival_spawn_stage, tick_rush_mode_spawns, tick_survival_wave_spawns
 from ..game_modes import GameMode
 from ..gameplay import survival_update_weapon_handouts
@@ -524,7 +525,13 @@ class DeterministicSession(msgspec.Struct):
         state.demo_mode_active = self.demo_mode_active
 
         prev_audio = [
-            (player.shot_seq, player.weapon.reload_active, player.weapon.reload_timer) for player in self.world.players
+            (
+                player.shot_seq,
+                player.weapon.reload_active,
+                player.weapon.reload_timer,
+                blade_sound_loop_index(player.blade_orbit.elapsed) if player.blade_orbit.active else -1,
+            )
+            for player in self.world.players
         ]
         prev_perk_pending = state.perk_selection.pending_count
 

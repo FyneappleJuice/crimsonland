@@ -77,10 +77,16 @@ def play_sfx(
     sfx_id: SfxId,
     *,
     reflex_boost_timer: float = 0.0,
+    volume_scale: float = 1.0,
 ) -> None:
     if state is None:
         return
-    sfx.play_sfx(state.sfx, sfx_id, reflex_boost_timer=float(reflex_boost_timer))
+    sfx.play_sfx(
+        state.sfx,
+        sfx_id,
+        reflex_boost_timer=float(reflex_boost_timer),
+        volume_scale=float(volume_scale),
+    )
 
 
 def set_sfx_volume(state: AudioState | None, volume: float) -> None:

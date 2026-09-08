@@ -15,6 +15,7 @@ from ..math_parity import NATIVE_HALF_PI, f32, x87_pc24_add, x87_pc24_div, x87_p
 from ..owner_ref import OwnerRef
 from ..perks import PerkId
 from ..perks.helpers import perk_active
+from ..progression import PlayerStats, resolve_team_stats
 from ..rng_caller_static import RngCallerStatic
 from ..sim.state_types import PlayerState
 from .damage_runtime import CreatureDamageRuntime
@@ -43,6 +44,10 @@ class _CreatureDamageCtx(msgspec.Struct):
     players: list[PlayerState]
     rng: CrandLike
     preserve_bugs: bool
+    # Resolved once per hit from the union of every relevant player's perks /
+    # affixes (crimson.progression). Reads perk_counts directly, so it is
+    # correct without depending on the per-tick player.stats cache.
+    team_stats: PlayerStats = PlayerStats()
 
 
 _CreatureDamageStep = Callable[[_CreatureDamageCtx], None]
@@ -105,10 +110,39 @@ def creature_death_sfx_for_slot(type_id: CreatureTypeId, sound_slot: int) -> Sfx
     return options[slot]
 
 
-def _damage_type1_uranium_filled_bullets(ctx: _CreatureDamageCtx) -> None:
-    if not _damage_perk_active(ctx, PerkId.URANIUM_FILLED_BULLETS):
-        return
-    ctx.damage = x87_pc24_add(ctx.damage, ctx.damage)
+def _damage_projectile_damage_mult(ctx: _CreatureDamageCtx) -> None:
+    """Outgoing multiplier for any main-pool projectile hit (kinetic + energy).
+
+    Doctor (x1.2) and Barrel Greaser (x1.4) feed stats.damage_mult_projectile -
+    they are about aim / barrel, not the ammo, so they apply to plasma too.
+    """
+
+    mult = float(ctx.team_stats.damage_mult_projectile)
+    if mult != 1.0:
+        ctx.damage = x87_pc24_mul(ctx.damage, f32(mult))
+
+
+def _damage_kinetic_bullet_damage_mult(ctx: _CreatureDamageCtx) -> None:
+    """Outgoing multiplier for kinetic lead only (Uranium Filled Bullets, x2).
+
+    Feeds stats.damage_mult_bullet. Does NOT touch energy/plasma.
+    """
+
+    mult = float(ctx.team_stats.damage_mult_bullet)
+    if mult != 1.0:
+        ctx.damage = x87_pc24_mul(ctx.damage, f32(mult))
+
+
+def _damage_energy_damage_mult(ctx: _CreatureDamageCtx) -> None:
+    """Outgoing multiplier for energy/plasma hits (stats.damage_mult_energy).
+
+    Fed by future plasma perks and by relic / map affixes. The per-shot clip-heat
+    ramp is applied earlier, on the projectile itself (energy_heat_mult).
+    """
+
+    mult = float(ctx.team_stats.damage_mult_energy)
+    if mult != 1.0:
+        ctx.damage = x87_pc24_mul(ctx.damage, f32(mult))
 
 
 def _damage_type1_living_fortress(ctx: _CreatureDamageCtx) -> None:
@@ -121,18 +155,6 @@ def _damage_type1_living_fortress(ctx: _CreatureDamageCtx) -> None:
         if timer > 0.0:
             scale = x87_pc24_add(x87_pc24_mul(timer, f32(0.05)), 1.0)
             ctx.damage = x87_pc24_mul(ctx.damage, scale)
-
-
-def _damage_type1_barrel_greaser(ctx: _CreatureDamageCtx) -> None:
-    if not _damage_perk_active(ctx, PerkId.BARREL_GREASER):
-        return
-    ctx.damage = x87_pc24_mul(ctx.damage, f32(1.4))
-
-
-def _damage_type1_doctor(ctx: _CreatureDamageCtx) -> None:
-    if not _damage_perk_active(ctx, PerkId.DOCTOR):
-        return
-    ctx.damage = x87_pc24_mul(ctx.damage, f32(1.2))
 
 
 def _damage_type1_heading_jitter(ctx: _CreatureDamageCtx) -> None:
@@ -150,16 +172,28 @@ def _damage_type1_heading_jitter(ctx: _CreatureDamageCtx) -> None:
     creature.heading = x87_pc24_add(turn, creature.heading)
 
 
-def _damage_type7_ion_gun_master(ctx: _CreatureDamageCtx) -> None:
-    if _damage_perk_active(ctx, PerkId.ION_GUN_MASTER):
-        ctx.damage = x87_pc24_mul(ctx.damage, f32(1.2))
+def _damage_type7_ion_damage_mult(ctx: _CreatureDamageCtx) -> None:
+    # Ion Gun Master's damage bump (x1.2). Its ion blast-radius bump stays in
+    # projectile_pool.py.
+    mult = float(ctx.team_stats.damage_mult_ion)
+    if mult != 1.0:
+        ctx.damage = x87_pc24_mul(ctx.damage, f32(mult))
 
 
-def _damage_type4_pyromaniac(ctx: _CreatureDamageCtx) -> None:
-    if not _damage_perk_active(ctx, PerkId.PYROMANIAC):
-        return
-    ctx.damage = x87_pc24_mul(ctx.damage, f32(1.5))
-    ctx.rng.rand_tagged(RngCallerStatic.CREATURE_APPLY_DAMAGE_PYROMANIAC)
+def _damage_lightning_damage_mult(ctx: _CreatureDamageCtx) -> None:
+    # Chain lightning (Arc Gun) - its own scaling line (crimson.progression).
+    mult = float(ctx.team_stats.damage_mult_lightning)
+    if mult != 1.0:
+        ctx.damage = x87_pc24_mul(ctx.damage, f32(mult))
+
+
+def _damage_type4_fire_damage_mult(ctx: _CreatureDamageCtx) -> None:
+    # Pyromaniac (x1.5). The trailing RNG draw is native and only happens when
+    # a fire-damage multiplier is in play, matching the old perk gate.
+    mult = float(ctx.team_stats.damage_mult_fire)
+    if mult != 1.0:
+        ctx.damage = x87_pc24_mul(ctx.damage, f32(mult))
+        ctx.rng.rand_tagged(RngCallerStatic.CREATURE_APPLY_DAMAGE_PYROMANIAC)
 
 
 def _damage_lethal_ranged_shock_burst(
@@ -225,20 +259,25 @@ def resolve_native_death_sfx(
 
 _CREATURE_DAMAGE_PRE_STEPS: dict[int, tuple[_CreatureDamageStep, ...]] = {
     CreatureDamageType.BULLET: (
-        _damage_type1_uranium_filled_bullets,
+        _damage_kinetic_bullet_damage_mult,
+        _damage_projectile_damage_mult,
         _damage_type1_living_fortress,
-        _damage_type1_barrel_greaser,
-        _damage_type1_doctor,
+    ),
+    CreatureDamageType.ENERGY: (
+        _damage_projectile_damage_mult,
+        _damage_energy_damage_mult,
+        _damage_type1_living_fortress,
     ),
 }
 
 _CREATURE_DAMAGE_GLOBAL_PRE_STEPS: dict[int, tuple[_CreatureDamageStep, ...]] = {
-    CreatureDamageType.ION: (_damage_type7_ion_gun_master,),
+    CreatureDamageType.ION: (_damage_type7_ion_damage_mult,),
+    CreatureDamageType.LIGHTNING: (_damage_lightning_damage_mult,),
 }
 
 
 _CREATURE_DAMAGE_ALIVE_STEPS: dict[int, tuple[_CreatureDamageStep, ...]] = {
-    CreatureDamageType.FIRE: (_damage_type4_pyromaniac,),
+    CreatureDamageType.FIRE: (_damage_type4_fire_damage_mult,),
 }
 
 
@@ -277,6 +316,9 @@ def creature_apply_damage(
         players=players,
         rng=rng,
         preserve_bugs=bool(preserve_bugs),
+        # Native applies these damage perks if *any* player owns them (or only
+        # player 0 in preserve-bugs mode), not attributed to the shooter.
+        team_stats=resolve_team_stats(players[:1] if preserve_bugs else players),
     )
 
     for step in _CREATURE_DAMAGE_GLOBAL_PRE_STEPS.get(ctx.damage_type, ()):
@@ -284,7 +326,11 @@ def creature_apply_damage(
 
     for step in _CREATURE_DAMAGE_PRE_STEPS.get(ctx.damage_type, ()):
         step(ctx)
-    if ctx.damage_type == CreatureDamageType.BULLET:
+    if ctx.damage_type in (
+        CreatureDamageType.BULLET,
+        CreatureDamageType.ENERGY,
+        CreatureDamageType.LIGHTNING,
+    ):
         _damage_type1_heading_jitter(ctx)
 
     if creature.hp <= 0.0:

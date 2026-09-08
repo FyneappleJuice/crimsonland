@@ -263,6 +263,22 @@ class BonusPool:
             entry.amount = int(meta.native_amount or 0) if meta is not None else 0
         return entry
 
+    def spawn_forced_at_pos(self, pos: Vec2, *, bonus_id: BonusId) -> BonusEntry:
+        """Force-spawn a specific bonus at a position, bypassing the random
+        pick. Not native - used by test mode to reliably spawn a bonus under
+        development (see `test_mode.py`) without disturbing the native random
+        drop table's RNG consumption."""
+
+        entry = self._alloc_slot_or_sentinel()
+        meta = BONUS_BY_ID.get(bonus_id)
+        entry.bonus_id = bonus_id
+        entry.picked = False
+        entry.pos = pos
+        entry.time_left = BONUS_TIME_MAX
+        entry.time_max = BONUS_TIME_MAX
+        entry.amount = int(meta.native_amount or 0) if meta is not None else 0
+        return entry
+
     def try_spawn_on_kill(
         self,
         pos: Vec2,

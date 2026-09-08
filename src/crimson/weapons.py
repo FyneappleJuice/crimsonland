@@ -518,13 +518,16 @@ WEAPON_TABLE = [
         pellet_count=1,
     ),
     Weapon(
+        # Rewrite-only: native Evil Scythe was cut content (name-only, would
+        # crash - no projectile template 0x1B). Repurposed as a melee sweep
+        # test weapon: two swings per clip (left->right, then right->left).
         weapon_id=WeaponId.EVIL_SCYTHE,
         name='Evil Scythe',
         ammo_class=4,
-        clip_size=3,
-        shot_cooldown=1.0,
-        reload_time=3.0,
-        spread_heat_inc=0.68,
+        clip_size=2,
+        shot_cooldown=0.3,
+        reload_time=0.5,
+        spread_heat_inc=0.0,
         fire_sound=SfxId.SHOCK_FIRE_ALT,
         reload_sound=SfxId.SHOCK_RELOAD,
         icon_index=25,
@@ -614,13 +617,16 @@ WEAPON_TABLE = [
         pellet_count=1,
     ),
     Weapon(
+        # Rewrite-only: native RayGun was a stub. Repurposed as the Arc Gun -
+        # a chain-lightning weapon (weapon_runtime/arc_gun.py). Fast re-strike so
+        # it reads as a continuous arc; damage per link is small but chains.
         weapon_id=WeaponId.RAYGUN,
-        name='RayGun',
+        name='Arc Gun',
         ammo_class=4,
-        clip_size=12,
-        shot_cooldown=0.7,
-        reload_time=2.0,
-        spread_heat_inc=0.38,
+        clip_size=26,
+        shot_cooldown=0.075,
+        reload_time=1.5,
+        spread_heat_inc=0.0,
         fire_sound=SfxId.SHOCK_FIRE_ALT,
         reload_sound=SfxId.SHOCK_RELOAD,
         icon_index=30,

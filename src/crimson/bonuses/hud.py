@@ -79,10 +79,15 @@ def bonus_hud_update(state: GameplayState, players: list[PlayerState], *, dt: fl
             raise ValueError(f"Unexpected bonus HUD global timer key: {key}") from exc
 
     def _player_timer_value(player: PlayerState, key: str) -> float:
+        from .blade_orbit import BLADE_DURATION_S
+
+        blade = player.blade_orbit
         player_timers = {
             "fire_bullets_timer": float(player.fire_bullets_timer),
             "shield_timer": float(player.shield_timer),
             "speed_bonus_timer": float(player.speed_bonus_timer),
+            "projectile_fork_timer": float(player.projectile_fork_timer),
+            "blade_orbit": max(0.0, BLADE_DURATION_S - float(blade.elapsed)) if blade.active else 0.0,
         }
         try:
             return player_timers[key]

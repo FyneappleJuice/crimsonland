@@ -26,6 +26,7 @@ from ..effects import (
     _spawn_splitter_hit_effects,
 )
 from ..types import (
+    ENERGY_PROJECTILE_TEMPLATE_IDS,
     Projectile,
     ProjectileTemplateId,
 )
@@ -77,10 +78,13 @@ def _projectile_hit_perk_poison_bullets(ctx: _ProjectileHitPerkCtx) -> None:
     # Native gates on player slot zero, so the rand is drawn for every projectile
     # hit while that player owns the perk - including creature-owned projectiles
     # such as splitter children and shock-chain segments.
-    if (
-        ctx.poison_bullets_active
-        and (ctx.rng.rand_tagged(RngCallerStatic.PROJECTILE_UPDATE_POISON_BULLETS_GATE) & 7) == 1
-    ):
+    if not ctx.poison_bullets_active:
+        return
+    # Keep the RNG draw unconditional (native draws it for every hit while the
+    # perk is owned) so a co-op partner's stream is unaffected, but a plasma bolt
+    # never actually gets poisoned - Poison Bullets coats a lead round.
+    poisoned = (ctx.rng.rand_tagged(RngCallerStatic.PROJECTILE_UPDATE_POISON_BULLETS_GATE) & 7) == 1
+    if poisoned and ProjectileTemplateId(ctx.proj.type_id) not in ENERGY_PROJECTILE_TEMPLATE_IDS:
         ctx.creature.flags |= CreatureFlags.SELF_DAMAGE_TICK
 
 

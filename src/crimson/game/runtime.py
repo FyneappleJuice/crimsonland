@@ -22,6 +22,7 @@ from grim.view import View
 
 from ..assets_fetch import download_missing_paqs
 from ..debug import set_debug_enabled
+from ..test_mode import set_test_mode_enabled
 from ..demo_trial import (
     DEMO_QUEST_GRACE_TIME_MS,
     DEMO_TOTAL_PLAY_TIME_MS,
@@ -242,6 +243,8 @@ def _resolve_assets_dir(config: GameConfig) -> Path:
 def run_game(config: GameConfig) -> None:
     if config.debug:
         set_debug_enabled(True)
+    if config.test_mode:
+        set_test_mode_enabled(True)
     base_dir = config.base_dir
     base_dir.mkdir(parents=True, exist_ok=True)
     crash_path = base_dir / "crash.log"

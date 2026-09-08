@@ -20,6 +20,9 @@ from ...perks.helpers import perk_active
 from ...sim.world_defs import CREATURE_ANIM, CREATURE_ASSET
 from ...ui.cursor import draw_aim_cursor
 from . import viewport
+from .arc_gun import draw_arc_bolts
+from .blades import draw_blade_orbits
+from .scythe import draw_scythe_swings
 from .bonuses import draw_bonus_hover_labels, draw_bonus_pickups
 from .constants import _RAD_TO_DEG, monster_vision_fade_alpha
 from .context import WorldRenderCtx
@@ -101,6 +104,30 @@ def draw_world(
             draw_players(render_ctx, ctx=draw_ctx, alive=True)
         with profile_pass("projectiles_effects"):
             draw_projectiles_and_effects(render_ctx, ctx=draw_ctx)
+        with profile_pass("blade_orbits"):
+            draw_blade_orbits(
+                render_ctx,
+                camera=camera,
+                view_scale=view_scale,
+                scale=scale,
+                alpha=entity_alpha,
+            )
+        with profile_pass("scythe_swings"):
+            draw_scythe_swings(
+                render_ctx,
+                camera=camera,
+                view_scale=view_scale,
+                scale=scale,
+                alpha=entity_alpha,
+            )
+        with profile_pass("arc_bolts"):
+            draw_arc_bolts(
+                render_ctx,
+                camera=camera,
+                view_scale=view_scale,
+                scale=scale,
+                alpha=entity_alpha,
+            )
         with profile_pass("bonus_ui"):
             draw_bonus_and_ui(render_ctx, ctx=draw_ctx, draw_aim_indicators_enabled=draw_aim_indicators)
 
@@ -274,6 +301,18 @@ def draw_creature_overlays(
             origin = rl.Vector2(size * 0.5, size * 0.5)
             tint = rl.Color(255, 0, 0, int(clamp(poison_alpha, 0.0, 1.0) * 255.0 + 0.5))
             rl.draw_texture_pro(ctx.particles_texture, ctx.poison_src, dst, origin, 0.0, tint)
+
+    # Not native: flickering orange aura on creatures burning from the ignite DoT.
+    if ctx.particles_texture is not None and ctx.poison_src is not None and float(creature.ignite_timer) > 0.0:
+        t = float(render_ctx.frame.elapsed_ms) * 0.018 + float(creature.pos.x) * 0.1
+        flicker = 0.6 + 0.4 * math.sin(t)
+        ignite_alpha = fade * ctx.entity_alpha * flicker
+        if ignite_alpha > 1e-3:
+            size = (58.0 + 6.0 * math.sin(t * 1.7)) * ctx.scale
+            dst = rl.Rectangle(screen.x, screen.y, size, size)
+            origin = rl.Vector2(size * 0.5, size * 0.5)
+            tint = rl.Color(255, 130, 20, int(clamp(ignite_alpha, 0.0, 1.0) * 255.0 + 0.5))
+            rl.draw_texture_pro(ctx.particles_texture, ctx.poison_src, dst, origin, float(t * 40.0), tint)
 
 
 def draw_creatures(render_ctx: WorldRenderCtx, *, ctx: WorldDrawContext) -> None:

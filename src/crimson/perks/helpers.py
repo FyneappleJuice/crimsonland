@@ -1,7 +1,11 @@
 from __future__ import annotations
 
-from ..sim.state_types import PlayerState
+from typing import TYPE_CHECKING
+
 from .ids import PerkId
+
+if TYPE_CHECKING:
+    from ..sim.state_types import PlayerState
 
 
 def perk_count_get(player: PlayerState, perk_id: PerkId) -> int:

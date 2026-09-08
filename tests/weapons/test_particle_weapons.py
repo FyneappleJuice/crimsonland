@@ -68,6 +68,29 @@ def test_particle_weapons_spawn_particles_and_use_fractional_ammo() -> None:
         assert state.weapon_shots_fired[0][weapon_id] == 1
 
 
+def test_weapon_power_up_does_not_change_flame_stream_emission() -> None:
+    # WPU's flame lever is +30% per-particle damage now (world_state.py), not
+    # extra particles - so one shot still emits exactly one particle.
+    def _emitted(*, weapon_power_up: bool) -> int:
+        state = GameplayState(rng=ScriptedCrand(0, fallback=ScriptedCrand.Fallback.REPEAT_LAST))
+        if weapon_power_up:
+            state.bonuses.weapon_power_up = 5.0
+        player = PlayerState(index=0, pos=Vec2())
+        weapon_assign_player(player, WeaponId.FLAMETHROWER, state=state)
+        fire_weapon(
+            WeaponFireCtx(
+                player=player,
+                input_state=PlayerInput(fire_down=True, aim=Vec2(200.0, 0.0)),
+                dt=0.016,
+                state=state,
+            ),
+        )
+        return len([entry for entry in state.particles.entries if entry.active])
+
+    assert _emitted(weapon_power_up=False) == 1
+    assert _emitted(weapon_power_up=True) == 1
+
+
 def test_flamethrower_particles_spawn_from_barrel_offset_muzzle() -> None:
     state = GameplayState(rng=ScriptedCrand(0, fallback=ScriptedCrand.Fallback.REPEAT_LAST))
     player = PlayerState(index=0, pos=Vec2())

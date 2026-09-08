@@ -42,13 +42,17 @@ class AudioRouter(msgspec.Struct):
     def _reflex_boost_timer(self) -> float:
         return float(self.runtime.reflex_boost_timer())
 
-    def play_sfx(self, sfx: SfxId) -> None:
+    def play_sfx(self, sfx: SfxId, *, volume_scale: float = 1.0) -> None:
         if self.audio is None or (not self.sfx_enabled):
             return
+        # Keep the common full-volume call shape unchanged; only pass the
+        # scale through when a caller actually wants a quieter one-off.
+        extra = {} if volume_scale >= 1.0 else {"volume_scale": float(volume_scale)}
         play_sfx(
             self.audio,
             sfx,
             reflex_boost_timer=self._reflex_boost_timer(),
+            **extra,
         )
 
     def trigger_game_tune(self) -> str | None:

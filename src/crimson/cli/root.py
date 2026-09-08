@@ -270,6 +270,11 @@ def cmd_game(
     debug: bool = typer.Option(False, "--debug", help="enable debug cheats and overlays"),
     rtx: bool = typer.Option(False, "--rtx", help="enable non-canonical RTX render mode"),
     preserve_bugs: bool = typer.Option(False, "--preserve-bugs", help="preserve known original exe bugs/quirks"),
+    test_mode: bool = typer.Option(
+        False,
+        "--test-mode",
+        help="enable in-development test mechanics (currently: auto-spawns the rewrite-only bonuses - Fork Shot, Blade - one every 5s, cycling)",
+    ),
     base_dir: Path = typer.Option(
         default_runtime_dir(),
         "--base-dir",
@@ -298,6 +303,7 @@ def cmd_game(
         debug=debug,
         rtx=bool(rtx),
         preserve_bugs=bool(preserve_bugs),
+        test_mode=bool(test_mode),
     )
     run_game(config)
 
