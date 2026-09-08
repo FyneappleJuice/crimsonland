@@ -29,7 +29,7 @@ from .apply_context import BonusApplyCtx
 BLADE_COUNT = 5
 BLADE_REVOLUTIONS = 2.0
 BLADE_DURATION_S = 5.0
-BLADE_RADIUS = 130.0
+BLADE_RADIUS = 50.0
 
 # Full orbital sweep is BLADE_REVOLUTIONS turns over BLADE_DURATION_S.
 BLADE_OMEGA = BLADE_REVOLUTIONS * math.tau / BLADE_DURATION_S
@@ -38,7 +38,7 @@ BLADE_OMEGA = BLADE_REVOLUTIONS * math.tau / BLADE_DURATION_S
 # fraction of the creature's own footprint, so bigger aliens/spiders connect
 # from further out - closer to what the sprites look like they should do than
 # the very tight native `size/7 + 3` margin.
-BLADE_HIT_RADIUS = 20.0
+BLADE_HIT_RADIUS = 15.0
 BLADE_CREATURE_RADIUS_FACTOR = 0.45
 BLADE_HIT_COOLDOWN_S = 0.2
 BLADE_HIT_DAMAGE = 22.0
