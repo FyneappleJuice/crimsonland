@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import shutil
+import sys
 from collections.abc import Callable
 from pathlib import Path
 
@@ -11,6 +12,39 @@ from .view import View
 
 SCREENSHOT_DIR = Path("screenshots")
 SCREENSHOT_KEY = rl.KeyboardKey.KEY_F12
+
+
+def _make_process_dpi_aware() -> None:
+    """Windows only: opt the process into real physical pixels before the window
+    is created.
+
+    Without this, a DPI-unaware process on a scaled display gets its window
+    virtualised: raylib renders at the requested size and Windows bitmap-scales
+    the result to the screen (blurry), while ``GetMousePosition`` and
+    ``GetScreenWidth`` end up in different unit spaces - which made the aim
+    reticle snap to a point in a screen corner (the letterbox mouse map divided
+    by a window size that was off by the DPI factor).
+    """
+    if sys.platform != "win32":
+        return
+    import ctypes
+
+    try:
+        # PER_MONITOR_AWARE_V2 (Win10 1703+).
+        if ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4)):
+            return
+    except (AttributeError, OSError):
+        pass
+    try:
+        # SYSTEM_DPI_AWARE (Win8.1+).
+        ctypes.windll.shcore.SetProcessDpiAwareness(1)
+        return
+    except (AttributeError, OSError):
+        pass
+    try:
+        ctypes.windll.user32.SetProcessDPIAware()
+    except (AttributeError, OSError):
+        pass
 
 
 class RunViewHooks:
@@ -75,6 +109,7 @@ def run_view(
     called with the logical size whenever it changes (initially and on resize).
     Omit ``virtual_size`` (the default) to draw straight to the window as before.
     """
+    _make_process_dpi_aware()
     if config_flags:
         rl.set_config_flags(config_flags)
     rl.init_window(width, height, title)

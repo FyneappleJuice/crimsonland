@@ -9,7 +9,13 @@ from grim.geom import Vec2
 from grim.math import clamp
 from grim.raylib_api import rl
 
-from ...bonuses.blade_orbit import blade_orbit_offsets, blade_orbit_progress
+from ...bonuses.blade_orbit import (
+    BLADE_HIT_RADIUS,
+    BLADE_RADIUS,
+    blade_orbit_offsets,
+    blade_orbit_progress,
+)
+from ...debug import debug_enabled
 from ...projectiles.types import ProjectileTemplateId
 from ...sim.world_defs import KNOWN_PROJ_FRAMES
 from .context import WorldRenderCtx
@@ -39,6 +45,8 @@ def draw_blade_orbits(
 
     spin = float(frame.elapsed_ms) * 0.02
 
+    debug = debug_enabled()
+
     for player in players:
         orbit = player.blade_orbit
         if not orbit.active:
@@ -46,9 +54,29 @@ def draw_blade_orbits(
         # Fade the blades out over the final revolution.
         fade = clamp((1.0 - blade_orbit_progress(orbit)) * 6.0, 0.0, 1.0)
         tint = rl.Color(210, 210, 220, int(fade * alpha * 255.0 + 0.5))
+
+        if debug:
+            player_screen = WorldRenderCtx._world_to_screen_with(
+                player.pos, camera=camera, view_scale=view_scale,
+            )
+            # Orbit path.
+            rl.draw_circle_lines(
+                int(player_screen.x),
+                int(player_screen.y),
+                BLADE_RADIUS * float(scale),
+                rl.Color(80, 200, 255, int(140 * alpha)),
+            )
+
         for offset in blade_orbit_offsets(orbit):
             world = Vec2(player.pos.x + offset.x, player.pos.y + offset.y)
             screen = WorldRenderCtx._world_to_screen_with(world, camera=camera, view_scale=view_scale)
+            if debug:
+                # Blade contact hitbox (BLADE_HIT_RADIUS, before the per-creature
+                # size term); centre dot marks the blade's exact position.
+                rl.draw_circle_lines(
+                    int(screen.x), int(screen.y), BLADE_HIT_RADIUS * float(scale), rl.Color(255, 90, 90, int(220 * alpha)),
+                )
+                rl.draw_circle(int(screen.x), int(screen.y), max(1.5, 2.0 * float(scale)), rl.Color(255, 240, 120, int(230 * alpha)))
             render_ctx._draw_atlas_sprite(
                 texture,
                 grid=grid,

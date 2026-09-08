@@ -252,12 +252,20 @@ def run_game(config: GameConfig) -> None:
     faulthandler.enable(crash_file)
     crash_file.write(f"\n[{dt.datetime.now(tz=dt.UTC).astimezone().isoformat()}] run_game start\n")
     cfg = ensure_crimson_cfg(base_dir)
-    # The world/HUD/menu UI is laid out against this logical resolution; the OS
-    # window can be any size and the frame is letterboxed to fit (see run_view).
-    virtual_width = int(cfg.display.width)
-    virtual_height = int(cfg.display.height)
-    width = virtual_width if config.width is None else config.width
-    height = virtual_height if config.height is None else config.height
+    # Fixed logical resolution the world / HUD / menu UI is laid out against; the
+    # OS window is any size and the frame is letterboxed to fit (see run_view).
+    # Deliberately NOT read from cfg.display - _on_virtual_resize writes the
+    # runtime virtual size into cfg.display for the menus, and config.save()
+    # persists it, so reading it back as the base here would let it drift every
+    # session.
+    virtual_width, virtual_height = 1024, 768
+    # OS window size: the CLI flag, else the saved preference, sanitised so a
+    # drifted / corrupt cfg can't open a degenerate window.
+    win_w = int(config.width) if config.width is not None else int(cfg.display.width)
+    win_h = int(config.height) if config.height is not None else int(cfg.display.height)
+    if not (320 <= win_w <= 7680 and 240 <= win_h <= 4320):
+        win_w, win_h = 1280, 960
+    width, height = win_w, win_h
     rng = Crand(config.seed)
     assets_dir = _resolve_assets_dir(config)
     console = create_console(base_dir, assets_dir=assets_dir)

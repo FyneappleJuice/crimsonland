@@ -37,6 +37,10 @@ _PU_ICON = 21.0
 _PU_GAP = 4.0
 _BONUS_ICON_GRID = 4
 
+# Small bump over the default 16px small-font cell for the on-player readouts
+# (clip ammo, power-up seconds).
+_HUD_TEXT_SCALE = 1.2
+
 
 def _bonus_icon_src(texture: rl.Texture, icon_id: int) -> rl.Rectangle:
     cell_w = float(texture.width) / _BONUS_ICON_GRID
@@ -89,10 +93,10 @@ def draw_player_status(
     shadow = rl.Color(0, 0, 0, int(185 * a))
     fg = rl.Color(240, 240, 240, int(255 * a)) if ammo > 0 else rl.Color(210, 90, 90, int(255 * a))
     if font is not None:
-        draw_small_text(font, text, Vec2(tx + 1.0, ty + 1.0), shadow)
-        draw_small_text(font, text, Vec2(tx, ty), fg)
+        draw_small_text(font, text, Vec2(tx + 1.0, ty + 1.0), shadow, scale=_HUD_TEXT_SCALE)
+        draw_small_text(font, text, Vec2(tx, ty), fg, scale=_HUD_TEXT_SCALE)
     else:
-        rl.draw_text(text, int(tx), int(ty), 18, fg)
+        rl.draw_text(text, int(tx), int(ty), 20, fg)
 
     _draw_player_powerups(render_ctx, screen=screen, scale=float(scale), r_out=r_out, alpha=a)
 
@@ -156,14 +160,20 @@ def _draw_player_powerups(
 
         secs = max(0, int(math.ceil(remaining)))
         label = str(secs)
-        chip_w = (len(label) * 6.0 + 4.0) * max(0.6, min(1.0, scale))
-        rl.draw_rectangle(int(x - 1.0), int(y - 1.0), int(chip_w), int(11.0 * max(0.7, min(1.0, scale)) + 2.0), rl.Color(0, 0, 0, int(150 * alpha)))
+        chip_w = (len(label) * 6.0 * _HUD_TEXT_SCALE + 4.0) * max(0.6, min(1.0, scale))
+        rl.draw_rectangle(
+            int(x - 1.0),
+            int(y - 1.0),
+            int(chip_w),
+            int(11.0 * _HUD_TEXT_SCALE * max(0.7, min(1.0, scale)) + 2.0),
+            rl.Color(0, 0, 0, int(150 * alpha)),
+        )
         tcol = rl.Color(245, 245, 245, a255) if secs > 3 else rl.Color(255, 120, 120, a255)
         if font is not None:
-            draw_small_text(font, label, Vec2(x + 1.0, y + 0.5), shadow)
-            draw_small_text(font, label, Vec2(x, y - 0.5), tcol)
+            draw_small_text(font, label, Vec2(x + 1.0, y + 0.5), shadow, scale=_HUD_TEXT_SCALE)
+            draw_small_text(font, label, Vec2(x, y - 0.5), tcol, scale=_HUD_TEXT_SCALE)
         else:
-            rl.draw_text(label, int(x), int(y), 12, tcol)
+            rl.draw_text(label, int(x), int(y), 14, tcol)
 
 
 def draw_players_status(

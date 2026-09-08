@@ -887,7 +887,11 @@ class BaseGameplayMode:
             return
         if not force and (tick_index % int(self._replay_checkpoints_sample_rate or 1)) != 0:
             return
-        if self._replay_checkpoints_last_tick == int(tick_index):
+        # Checkpoint tick indices must stay strictly increasing (the format
+        # validator rejects anything else). A debug XP grant / level-up spam and
+        # other off-tick pokes can hand us a tick that's <= the last recorded
+        # one; drop it rather than crash the game-over replay save.
+        if self._replay_checkpoints_last_tick is not None and int(tick_index) <= self._replay_checkpoints_last_tick:
             return
         self._replay_checkpoints.append(
             build_checkpoint(

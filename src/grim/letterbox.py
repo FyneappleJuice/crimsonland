@@ -50,6 +50,12 @@ def real_window_size() -> tuple[int, int]:
     return int(_real_get_screen_width()), int(_real_get_screen_height())
 
 
+def raw_mouse_position() -> tuple[float, float]:
+    """Cursor position in real window pixels, bypassing the virtual-space patch."""
+    p = _real_get_mouse_position()
+    return float(p.x), float(p.y)
+
+
 def virtual_for_window(base_w: int, base_h: int, ww: int, wh: int) -> tuple[int, int]:
     """Logical size that matches the window's aspect, locked on the shorter axis
     to the base size so the blit fills the window with a uniform scale."""
@@ -165,6 +171,7 @@ __all__ = [
     "begin_target",
     "end_target",
     "install",
+    "raw_mouse_position",
     "real_window_size",
     "target_open",
     "uninstall",

@@ -23,11 +23,12 @@ def load_small_font(assets_root: Path) -> SmallFontData:
     return runtime_resources_for(assets_root).small_font
 
 
-def draw_small_text(font: SmallFontData, text: str, pos: Vec2, color: rl.Color) -> None:
+def draw_small_text(font: SmallFontData, text: str, pos: Vec2, color: rl.Color, *, scale: float = 1.0) -> None:
+    scale = float(scale)
     x_pos = float(int(pos.x))
     y_pos = float(int(pos.y))
     base_x = x_pos
-    line_height = float(font.cell_size)
+    line_height = float(font.cell_size) * scale
     origin = rl.Vector2(0.0, 0.0)
     for value in text.encode("latin-1", errors="replace"):
         if value == 0x0A:
@@ -53,11 +54,11 @@ def draw_small_text(font: SmallFontData, text: str, pos: Vec2, color: rl.Color) 
         dst = rl.Rectangle(
             x_pos,
             y_pos,
-            float(width),
-            float(font.cell_size),
+            float(width) * scale,
+            float(font.cell_size) * scale,
         )
         rl.draw_texture_pro(font.texture, src, dst, origin, 0.0, color)
-        x_pos += float(width)
+        x_pos += float(width) * scale
 
 
 def measure_small_text_height(font: SmallFontData, text: str) -> float:

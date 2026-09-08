@@ -9,6 +9,8 @@ from grim.config import (
 )
 from grim.console import ConsoleState
 from grim.geom import Vec2
+from grim.letterbox import raw_mouse_position as letterbox_raw_mouse_position
+from grim.letterbox import virtual_size as letterbox_virtual_size
 from grim.math import clamp
 from grim.rand import Crand
 from grim.raylib_api import rl
@@ -36,7 +38,7 @@ from ..ui.hud import HudRenderContext, draw_hud_overlay, hud_flags_for_game_mode
 from ..ui.perk_menu import PERK_MENU_TRANSITION_MS
 from ..weapon_runtime import weapon_assign_player
 from ..weapon_runtime.fire_recipes import fireable_weapon_ids
-from ..weapons import WeaponId
+from ..weapons import WeaponId, weapon_display_name
 from .base_gameplay_mode import (
     BaseGameplayMode,
     LanSession,
@@ -533,7 +535,18 @@ class SurvivalMode(BaseGameplayMode):
                 UI_HINT_COLOR,
                 scale=0.9,
             )
-            y_extra = y + line * 3.0
+            virt = rl.get_mouse_position()
+            raw_x, raw_y = letterbox_raw_mouse_position()
+            vw, vh = letterbox_virtual_size()
+            self._draw_ui_text(
+                f"mouse virt=({virt.x:.0f},{virt.y:.0f}) raw=({raw_x:.0f},{raw_y:.0f}) vsize={vw}x{vh}  "
+                f"weapon={weapon_display_name(self.player.weapon.weapon_id)} "
+                f"ammo={int(self.player.weapon.ammo)}/{int(self.player.weapon.clip_size)}",
+                Vec2(x, y + line * 3.0),
+                UI_HINT_COLOR,
+                scale=0.9,
+            )
+            y_extra = y + line * 4.0
             if self._paused:
                 self._draw_ui_text("paused (TAB)", Vec2(x, y_extra), UI_HINT_COLOR)
                 y_extra += line

@@ -34,6 +34,11 @@ HUD_VITALS_ON_CHARACTER = True
 # character. When True the sliding top-left bonus panel here is skipped.
 HUD_POWERUP_ON_CHARACTER = True
 
+# Not native (fork): the top-bar background strip (`ui_game_top`). Off now that
+# health / ammo live on the player; the remaining top-left elements (weapon
+# icon, clock, XP panel, score) still draw, just without the backing panel.
+HUD_TOP_BAR = False
+
 HUD_TOP_BAR_ALPHA = 0.7
 HUD_ICON_ALPHA = 0.8
 HUD_PANEL_ALPHA = 0.9
@@ -47,6 +52,11 @@ HUD_HEALTH_BAR_POS = (64.0, 16.0)
 HUD_HEALTH_BAR_SIZE = (120.0, 9.0)
 HUD_WEAPON_ICON_POS = (220.0, 2.0)
 HUD_WEAPON_ICON_SIZE = (64.0, 32.0)
+# Fork: single-player weapon icon parked in the top-left corner on a black
+# backing box (used when HUD_TOP_BAR is off).
+HUD_WEAPON_TL_POS = (7.0, 7.0)
+HUD_WEAPON_TL_SIZE = (84.0, 42.0)
+HUD_WEAPON_TL_PAD = 5.0
 HUD_CLOCK_POS = (220.0, 2.0)
 HUD_CLOCK_SIZE = (32.0, 32.0)
 HUD_CLOCK_ALPHA = 0.9
@@ -356,23 +366,24 @@ def draw_hud_overlay(
     hud_y_shift = layout.hud_y_shift
 
     # Top bar background.
-    src = rl.Rectangle(0.0, 0.0, float(game_top.width), float(game_top.height))
-    dst = rl.Rectangle(
-        ui(HUD_TOP_BAR_POS[0]),
-        ui(HUD_TOP_BAR_POS[1]),
-        ui(HUD_TOP_BAR_SIZE[0]),
-        ui(HUD_TOP_BAR_SIZE[1]),
-    )
-    top_alpha = alpha * HUD_TOP_BAR_ALPHA
-    rl.draw_texture_pro(
-        game_top,
-        src,
-        dst,
-        rl.Vector2(0.0, 0.0),
-        0.0,
-        rl.Color(255, 255, 255, int(255 * top_alpha)),
-    )
-    max_y = max(max_y, dst.y + dst.height)
+    if HUD_TOP_BAR:
+        src = rl.Rectangle(0.0, 0.0, float(game_top.width), float(game_top.height))
+        dst = rl.Rectangle(
+            ui(HUD_TOP_BAR_POS[0]),
+            ui(HUD_TOP_BAR_POS[1]),
+            ui(HUD_TOP_BAR_SIZE[0]),
+            ui(HUD_TOP_BAR_SIZE[1]),
+        )
+        top_alpha = alpha * HUD_TOP_BAR_ALPHA
+        rl.draw_texture_pro(
+            game_top,
+            src,
+            dst,
+            rl.Vector2(0.0, 0.0),
+            0.0,
+            rl.Color(255, 255, 255, int(255 * top_alpha)),
+        )
+        max_y = max(max_y, dst.y + dst.height)
 
     # Pulsing heart.
     if show_health and not HUD_VITALS_ON_CHARACTER:
@@ -455,7 +466,12 @@ def draw_hud_overlay(
 
     # Weapon icon.
     if show_weapon:
-        if player_count == 1:
+        weapon_tl = player_count == 1 and not HUD_TOP_BAR
+        if weapon_tl:
+            icon_base_pos = Vec2(*HUD_WEAPON_TL_POS)
+            icon_size = Vec2(*HUD_WEAPON_TL_SIZE)
+            icon_step = Vec2()
+        elif player_count == 1:
             icon_base_pos = Vec2(*HUD_WEAPON_ICON_POS)
             icon_size = Vec2(*HUD_WEAPON_ICON_SIZE)
             icon_step = Vec2()
@@ -470,19 +486,29 @@ def draw_hud_overlay(
                 continue
             src = _weapon_icon_src(wicons, icon_index)
             icon_pos = icon_base_pos + icon_step * float(idx)
+            if weapon_tl:
+                pad = HUD_WEAPON_TL_PAD
+                rl.draw_rectangle(
+                    int(ui(icon_pos.x - pad)),
+                    int(ui(icon_pos.y - pad)),
+                    int(ui(icon_size.x + 2.0 * pad)),
+                    int(ui(icon_size.y + 2.0 * pad)),
+                    rl.Color(0, 0, 0, int(215 * alpha)),
+                )
             dst = rl.Rectangle(
                 ui(icon_pos.x),
                 ui(icon_pos.y),
                 ui(icon_size.x),
                 ui(icon_size.y),
             )
+            icon_tint_alpha = alpha if weapon_tl else alpha * HUD_ICON_ALPHA
             rl.draw_texture_pro(
                 wicons,
                 src,
                 dst,
                 rl.Vector2(0.0, 0.0),
                 0.0,
-                rl.Color(255, 255, 255, int(255 * alpha * HUD_ICON_ALPHA)),
+                rl.Color(255, 255, 255, int(255 * icon_tint_alpha)),
             )
             max_y = max(max_y, dst.y + dst.height)
 
