@@ -101,35 +101,31 @@ def test_orbit_is_not_forced_on_outside_test_mode() -> None:
     assert not player.blade_orbit.active
 
 
-def test_a_blade_sweeping_a_creature_deals_contact_damage_once_per_cooldown() -> None:
+def test_a_blade_over_a_creature_deals_contact_damage_every_tick() -> None:
+    assert BLADE_HIT_COOLDOWN_S == 0.0  # no per-hit throttle
     player = PlayerState(index=0, pos=Vec2(0.0, 0.0))
     player.blade_orbit = _active_orbit()
     # blade 0 at t=0 sits at (+R, 0); park a creature right on it
     creature = make_creature_state(pos=Vec2(BLADE_RADIUS, 0.0), hp=100000.0, size=10.0)
     runtime = DirectCreatureDamageRuntime(creatures=[creature])
 
-    update_blade_orbits([player], [creature], 0.016, creature_damage_runtime=runtime)
+    update_blade_orbits([player], [creature], 0.001, creature_damage_runtime=runtime)
     assert creature.hp == 100000.0 - BLADE_HIT_DAMAGE
-    assert 0 in player.blade_orbit.hit_cooldowns
+    assert not player.blade_orbit.hit_cooldowns  # nothing tracked
 
-    update_blade_orbits([player], [creature], 0.016, creature_damage_runtime=runtime)
-    assert creature.hp == 100000.0 - BLADE_HIT_DAMAGE  # still on cooldown
+    update_blade_orbits([player], [creature], 0.001, creature_damage_runtime=runtime)
+    assert creature.hp == 100000.0 - 2 * BLADE_HIT_DAMAGE  # hit again immediately
 
 
-def test_cooldown_lets_a_blade_hit_the_same_target_again_later() -> None:
+def test_multiple_blades_over_one_target_all_land_in_the_same_tick() -> None:
     player = PlayerState(index=0, pos=Vec2(0.0, 0.0))
     player.blade_orbit = _active_orbit()
+    # a creature huge enough that every blade overlaps it
     creature = make_creature_state(pos=Vec2(0.0, 0.0), hp=100000.0, size=4000.0)
     runtime = DirectCreatureDamageRuntime(creatures=[creature])
 
     update_blade_orbits([player], [creature], 0.001, creature_damage_runtime=runtime)
-    assert round((100000.0 - creature.hp) / BLADE_HIT_DAMAGE) == 1  # one blade lands per tick
-
-    update_blade_orbits([player], [creature], 0.001, creature_damage_runtime=runtime)
-    assert round((100000.0 - creature.hp) / BLADE_HIT_DAMAGE) == 1  # still on cooldown
-
-    update_blade_orbits([player], [creature], BLADE_HIT_COOLDOWN_S + 0.01, creature_damage_runtime=runtime)
-    assert round((100000.0 - creature.hp) / BLADE_HIT_DAMAGE) == 2  # cooldown lapsed
+    assert round((100000.0 - creature.hp) / BLADE_HIT_DAMAGE) == BLADE_COUNT
 
 
 @pytest.mark.parametrize("creature_size", [32.0, 45.0, 55.0, 65.0, 80.0])

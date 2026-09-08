@@ -27,7 +27,9 @@ from ..test_mode import test_mode_enabled
 from .apply_context import BonusApplyCtx
 
 BLADE_COUNT = 5
-BLADE_REVOLUTIONS = 2.0
+# Whole number: the test-mode infinite orbit wraps `elapsed` by BLADE_DURATION_S
+# and relies on OMEGA*DURATION being an exact multiple of a full turn.
+BLADE_REVOLUTIONS = 6.0
 BLADE_DURATION_S = 5.0
 BLADE_RADIUS = 50.0
 
@@ -40,7 +42,10 @@ BLADE_OMEGA = BLADE_REVOLUTIONS * math.tau / BLADE_DURATION_S
 # the very tight native `size/7 + 3` margin.
 BLADE_HIT_RADIUS = 15.0
 BLADE_CREATURE_RADIUS_FACTOR = 0.45
-BLADE_HIT_COOLDOWN_S = 0.2
+# 0.0 = no per-creature cooldown: a blade damages whatever it overlaps every
+# tick. >0.0 re-enables the throttle (seconds before the same target can be
+# struck again).
+BLADE_HIT_COOLDOWN_S = 0.0
 BLADE_HIT_DAMAGE = 22.0
 _BLADE_KNOCKBACK = 2.0
 
@@ -120,11 +125,15 @@ def update_blade_orbits(
             orbit.phi0 = 0.0
             orbit.hit_cooldowns = {}
 
+        track_cooldown = BLADE_HIT_COOLDOWN_S > 0.0
+
         orbit.elapsed = float(orbit.elapsed) + dt
-        if orbit.hit_cooldowns:
+        if track_cooldown and orbit.hit_cooldowns:
             orbit.hit_cooldowns = {
                 idx: remaining - dt for idx, remaining in orbit.hit_cooldowns.items() if remaining - dt > 0.0
             }
+        elif not track_cooldown and orbit.hit_cooldowns:
+            orbit.hit_cooldowns = {}
 
         if orbit.elapsed >= BLADE_DURATION_S:
             orbit.hit_cooldowns = {}
@@ -147,7 +156,7 @@ def update_blade_orbits(
             for idx, creature in enumerate(creatures):
                 if not creature.active or float(creature.hp) <= 0.0:
                     continue
-                if idx in orbit.hit_cooldowns:
+                if track_cooldown and idx in orbit.hit_cooldowns:
                     continue
                 reach = BLADE_HIT_RADIUS + float(creature.size) * BLADE_CREATURE_RADIUS_FACTOR
                 cdx = float(creature.pos.x) - bx
@@ -155,7 +164,8 @@ def update_blade_orbits(
                 dist_sq = cdx * cdx + cdy * cdy
                 if dist_sq > reach * reach:
                     continue
-                orbit.hit_cooldowns[idx] = BLADE_HIT_COOLDOWN_S
+                if track_cooldown:
+                    orbit.hit_cooldowns[idx] = BLADE_HIT_COOLDOWN_S
                 inv = 1.0 / math.sqrt(dist_sq) if dist_sq > 0.0 else 0.0
                 impulse = Vec2(-cdx * inv * _BLADE_KNOCKBACK, -cdy * inv * _BLADE_KNOCKBACK)
                 creature_damage_runtime.apply_creature_damage(
