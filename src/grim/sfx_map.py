@@ -79,6 +79,8 @@ class SfxId(Enum):
     UI_CLINK_01 = "sfx_ui_clink_01"
     BLOODSPILL_01 = "sfx_bloodspill_01"
     BLOODSPILL_02 = "sfx_bloodspill_02"
+    # Rewrite-only: Arc Gun chain-lightning loop.
+    ARC_LIGHTNING = "sfx_arc_lightning"
 
 
 class SfxSpec(msgspec.Struct, frozen=True):
@@ -161,6 +163,13 @@ _SFX_NATIVE_SPECS: Final[tuple[tuple[SfxId, SfxSpec], ...]] = (
 )
 
 SFX_SPECS: Final[dict[SfxId, SfxSpec]] = dict(_SFX_NATIVE_SPECS)
+
+# Rewrite-only sounds. Loaded best-effort: taken from sfx.paq if present, else
+# from the copy committed at grim/optional_sfx/. Never raises when absent.
+_SFX_OPTIONAL_SPECS: Final[tuple[tuple[SfxId, SfxSpec], ...]] = (
+    (SfxId.ARC_LIGHTNING, SfxSpec("lightning_sound.ogg")),
+)
+SFX_OPTIONAL_SPECS: Final[dict[SfxId, SfxSpec]] = dict(_SFX_OPTIONAL_SPECS)
 
 # Extracted from `audio_init_sfx` in `crimsonland.exe`.
 # `sfx_load_sample()` allocates the first free slot, so the load order defines stable ids.

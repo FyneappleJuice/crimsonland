@@ -11,9 +11,10 @@ from grim.raylib_api import rl
 
 from . import paq
 from .console import ConsoleState
-from .sfx_map import SFX_NATIVE_ORDER, SFX_SPECS, SfxId
+from .sfx_map import SFX_NATIVE_ORDER, SFX_OPTIONAL_SPECS, SFX_SPECS, SfxId
 
 SFX_PAK_NAME = "sfx.paq"
+_OPTIONAL_SFX_FALLBACK_DIR = Path(__file__).resolve().parent / "optional_sfx"
 DEFAULT_VOICE_COUNT = 4
 _SFX_RUNTIME_EXCEPTIONS = (RuntimeError, OSError, ValueError)
 _SFX_PITCH_RUNTIME_EXCEPTIONS = _SFX_RUNTIME_EXCEPTIONS + (AttributeError, TypeError)
@@ -115,6 +116,9 @@ class SfxState(msgspec.Struct):
             raise RuntimeError(f"runtime sfx is not available: {entry_name}")
         return sample
 
+    def sample_optional(self, sfx_id: SfxId) -> SfxSample | None:
+        return self.samples.get(sfx_id)
+
 
 def init_sfx_state(
     *,
@@ -174,6 +178,20 @@ def load_sfx_index(state: SfxState, assets_dir: Path, console: ConsoleState) -> 
             loaded_by_entry_name[spec.entry_name] = sample
         state.samples[sfx_id] = sample
 
+    for sfx_id, spec in SFX_OPTIONAL_SPECS.items():
+        data = paq_entries.get(spec.entry_name)
+        if data is None:
+            fallback = _OPTIONAL_SFX_FALLBACK_DIR / spec.entry_name
+            if fallback.is_file():
+                data = fallback.read_bytes()
+        if data is None:
+            continue
+        sample = loaded_by_entry_name.get(spec.entry_name)
+        if sample is None:
+            sample = _load_sample_from_data(state, entry_name=spec.entry_name, data=data)
+            loaded_by_entry_name[spec.entry_name] = sample
+        state.samples[sfx_id] = sample
+
     console.log.log(
         f"audio: sfx loaded {len(loaded_by_entry_name)} samples for {len(state.samples)} ids from {SFX_PAK_NAME}",
     )
@@ -190,7 +208,9 @@ def play_sfx(
     if state is None or not state.ready or not state.enabled:
         return
 
-    sample = state.sample(sfx)
+    sample = state.sample_optional(sfx) if sfx in SFX_OPTIONAL_SPECS else state.sample(sfx)
+    if sample is None:
+        return
     state.rate_scale_hz = _next_rate_scale_hz(
         current_rate_scale_hz=int(state.rate_scale_hz),
         reflex_boost_timer=float(reflex_boost_timer),

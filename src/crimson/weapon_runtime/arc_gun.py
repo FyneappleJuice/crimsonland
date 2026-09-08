@@ -17,6 +17,7 @@ for the renderer to draw for ``ARC_BOLT_LIFETIME`` seconds.
 import math
 
 from grim.geom import Vec2
+from grim.sfx_map import SfxId
 
 from ..creatures.damage_types import CreatureDamageType
 from ..math_parity import native_fire_muzzle_pos
@@ -36,6 +37,12 @@ ARC_CHAIN_GROWTH = 1.2  # damage *= this per hop (link 0 = base, link 1 = 1.2x, 
 ARC_KNOCKBACK = 0.7
 ARC_BOLT_LIFETIME = 0.10
 
+# Looping crackle while the gun is firing. The sample is ~1.77s; re-trigger a
+# touch sooner so there is no gap. Volume is scaled down (soft sfx).
+ARC_SOUND = SfxId.ARC_LIGHTNING
+ARC_SOUND_LOOP_S = 1.6
+ARC_SOUND_VOLUME = 0.6
+
 # Weapon Power Up: ~+30% DPS. The arc gun keeps the normalized fire-rate lever
 # (faster re-strike), so its WPU specials are identity - no extra chain links,
 # no damage/range multiplier.
@@ -51,6 +58,12 @@ def start_arc_strike(player: PlayerState, aim_world: Vec2, *, weapon_power_up: b
     arc.aim_y = float(aim_world.y)
     arc.weapon_power_up = bool(weapon_power_up)
     arc.seed = int(arc.seed) + 1
+
+
+def arc_sound_loop_index(elapsed: float) -> int:
+    """Which crackle repetition the firing run is on - used to re-trigger the loop."""
+
+    return int(max(0.0, float(elapsed)) / ARC_SOUND_LOOP_S)
 
 
 def _dist(ax: float, ay: float, bx: float, by: float) -> float:
@@ -99,10 +112,15 @@ def update_arc_gun(
         arc = player.arc_gun
 
         if float(arc.bolt_timer) > 0.0:
+            # Firing: keep the crackle-loop clock running.
+            arc.sound_elapsed = float(arc.sound_elapsed) + dt
             arc.bolt_timer = float(arc.bolt_timer) - dt
             if float(arc.bolt_timer) <= 0.0:
                 arc.bolt_timer = 0.0
                 arc.chain = []
+                arc.sound_elapsed = 0.0
+        elif not arc.pending:
+            arc.sound_elapsed = 0.0
 
         if not arc.pending:
             continue

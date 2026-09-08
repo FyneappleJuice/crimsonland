@@ -8,6 +8,7 @@ from grim.rand import CrandLike, RecordingCrand
 from grim.sfx_map import SfxId
 
 from ..bonuses.blade_orbit import blade_sound_loop_index
+from ..weapon_runtime.arc_gun import arc_sound_loop_index
 from ..creatures.spawn import advance_survival_spawn_stage, tick_rush_mode_spawns, tick_survival_wave_spawns
 from ..game_modes import GameMode
 from ..gameplay import survival_update_weapon_handouts
@@ -530,6 +531,7 @@ class DeterministicSession(msgspec.Struct):
                 player.weapon.reload_active,
                 player.weapon.reload_timer,
                 blade_sound_loop_index(player.blade_orbit.elapsed) if player.blade_orbit.active else -1,
+                arc_sound_loop_index(player.arc_gun.sound_elapsed) if player.arc_gun.bolt_timer > 0.0 else -1,
             )
             for player in self.world.players
         ]
