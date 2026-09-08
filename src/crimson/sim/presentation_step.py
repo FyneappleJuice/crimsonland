@@ -34,6 +34,10 @@ _BULLET_HIT_SFX = (
     SfxId.BULLET_HIT_06,
 )
 
+# Rewrite-only weapons that suppress the generic per-shot fire cue - their audio
+# is handled elsewhere (Arc Gun) or the weapon is deliberately silent (Scythe).
+_NO_FIRE_SOUND_WEAPONS = frozenset({WeaponId.RAYGUN, WeaponId.EVIL_SCYTHE})
+
 
 class DeterministicPresentationPlan(msgspec.Struct):
     """Deterministic native-parity presentation effects emitted by one sim tick."""
@@ -76,9 +80,9 @@ def plan_player_audio_sfx(
             plasma_minigun = WEAPON_BY_ID[WeaponId.PLASMA_MINIGUN]
             sfx.append(fire_bullets.fire_sound)
             sfx.append(plasma_minigun.fire_sound)
-        elif player.weapon.weapon_id == WeaponId.RAYGUN:
-            # Arc Gun has no per-shot cue - its voice is the looping crackle
-            # (ARC_SOUND) driven off the soft-sfx channel below.
+        elif player.weapon.weapon_id in _NO_FIRE_SOUND_WEAPONS:
+            # Rewrite-only weapons that own their audio elsewhere (Arc Gun: the
+            # ARC_SOUND crackle on the soft channel; Evil Scythe: silent swing).
             pass
         else:
             sfx.append(weapon.fire_sound)

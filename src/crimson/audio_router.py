@@ -80,8 +80,8 @@ class AudioRouter(msgspec.Struct):
                 plasma_minigun = WEAPON_BY_ID[WeaponId.PLASMA_MINIGUN]
                 self.play_sfx(fire_bullets.fire_sound)
                 self.play_sfx(plasma_minigun.fire_sound)
-            elif player.weapon.weapon_id == WeaponId.RAYGUN:
-                # Arc Gun has no per-shot cue - its voice is the looping crackle.
+            elif player.weapon.weapon_id in (WeaponId.RAYGUN, WeaponId.EVIL_SCYTHE):
+                # Rewrite-only weapons whose audio is handled elsewhere / silent.
                 pass
             else:
                 self.play_sfx(weapon.fire_sound)
