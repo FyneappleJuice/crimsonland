@@ -23,6 +23,7 @@ from grim.sfx_map import SfxId
 from ..creatures.damage_types import CreatureDamageType
 from ..owner_ref import OwnerRef
 from ..sim.state_types import BladeOrbitState, PlayerState
+from ..test_mode import test_mode_enabled
 from .apply_context import BonusApplyCtx
 
 BLADE_COUNT = 5
@@ -104,10 +105,20 @@ def update_blade_orbits(
     if dt <= 0.0:
         return
 
+    # Test mode: keep the Blade bonus permanently on so it can be tuned / seen
+    # without chasing pickups. Not native, not reachable outside --test-mode.
+    force_on = test_mode_enabled()
+
     for player in players:
         orbit = player.blade_orbit
         if not orbit.active:
-            continue
+            if not force_on:
+                continue
+            orbit.active = True
+            orbit.elapsed = 0.0
+            orbit.theta0 = 0.0
+            orbit.phi0 = 0.0
+            orbit.hit_cooldowns = {}
 
         orbit.elapsed = float(orbit.elapsed) + dt
         if orbit.hit_cooldowns:
@@ -116,9 +127,15 @@ def update_blade_orbits(
             }
 
         if orbit.elapsed >= BLADE_DURATION_S:
-            orbit.active = False
             orbit.hit_cooldowns = {}
-            continue
+            if force_on:
+                # OMEGA*DURATION is exactly BLADE_REVOLUTIONS full turns, so
+                # wrapping elapsed keeps the blade angles continuous and resets
+                # the render fade - a seamless infinite orbit.
+                orbit.elapsed -= BLADE_DURATION_S
+            else:
+                orbit.active = False
+                continue
 
         if creature_damage_runtime is None or not creatures:
             continue
