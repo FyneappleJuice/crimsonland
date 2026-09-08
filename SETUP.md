@@ -49,12 +49,13 @@ uv run crimson --test-mode --no-intro
 
 ### What `--test-mode` does here
 
-- No auto-spawned bonuses (the cycle is empty in this fork).
-- Drops **one Evil Scythe** weapon pickup just north of the spawn point.
-  Walk onto it to equip. Left-click swings the scythe in a wide cone,
-  alternating left→right / right→left, 2 swings per clip, ~1s reload.
+- No auto-spawned bonuses and no forced weapon drop (both `_TEST_MODE_*`
+  hooks in `bonuses/update.py` are empty).
+- Unlocks the whole fireable weapon set for drops (`weapon_runtime/availability.py`),
+  so every weapon can turn up on a Weapon bonus without grinding quest unlocks.
 
-Other useful flags: `--seed N` (deterministic), `--debug` (overlays/cheats),
+`--debug` adds gameplay cheats: `[` / `]` cycle weapons, `F2` god mode,
+`F3` grant a perk, `X` +5000 XP. Other flags: `--seed N` (deterministic),
 `--no-intro` (skip logos).
 
 ---
@@ -135,13 +136,17 @@ All parity-breaking, all in `src/crimson/`:
 | Area | What |
 |---|---|
 | **Damage types** | Added `ENERGY` (plasma) and `LIGHTNING` (arc gun) as first-class `CreatureDamageType`s with their own scaling lines (`damage_mult_energy`, `damage_mult_lightning`) alongside FIRE / ION. |
-| **Plasma** | Clip-heat identity: damage ramps 0→H as the stock clip drains, climbs past H with extra clip size. Keeps a fire-rate feel. |
-| **Fire weapons** | WPU gives +30% particle damage/emission instead of a no-op fire-rate bump. |
-| **WPU** | Normalized to ~+30% DPS across every weapon (native fire-rate ×1.3 / reload ×0.8; per-class specials for scythe & plasma). |
-| **Evil Scythe** (`WeaponId.EVIL_SCYTHE`, id 27) | Rewrite-only melee cone sweep on cut content. Heavy/slow: 91.2 dmg/swing, 0.6s cooldown, 1.0s reload, 0.56s sweep. Silent swing. Teal ghoul sprite. WPU widens arc + hardens hit. Code: `weapon_runtime/scythe_sweep.py`, `render/world/scythe.py`. |
-| **Arc Gun** (`WeaponId.RAYGUN`, id 33) | Rewrite-only chain lightning. Forms near the cursor, chains to random nearby enemies, damage builds +20% per hop. Fully procedural VFX (`render/world/arc_gun.py`). Own LIGHTNING damage type. Looping crackle sound, once per shot. Code: `weapon_runtime/arc_gun.py`. |
+| **Plasma clip-heat** | Energy damage ramps 0→+H as the stock clip drains (past +H with a wider clip). WPU raises the floor: +H→+2H over the stock clip (no fire-rate bonus for plasma). Reflex Boost pins it to a flat +H. Bolts glow from base colour at 0 heat to white-hot at +H. `weapon_runtime/plasma_heat.py`, `render/projectile_draw/primary_plasma.py`. |
+| **Fire weapons** | WPU gives +30% per-particle damage instead of a no-op fire-rate bump. |
+| **WPU** | Normalized to ~+30% DPS across every weapon (native fire-rate ×1.3 / reload ×0.8; scythe = +30% swing damage, plasma = the clip-heat floor, both in `WPU_NO_RATE_WEAPON_IDS`). |
+| **Evil Scythe** (`WeaponId.EVIL_SCYTHE`, id 27) | Rewrite-only melee cone sweep on cut content. Heavy/slow: 91.2 dmg/swing, 0.6s cooldown, 1.0s reload, 0.56s sweep. Silent swing. Teal ghoul sprite. WPU widens arc + hardens hit. In the main weapon roster. Code: `weapon_runtime/scythe_sweep.py`, `render/world/scythe.py`. |
+| **Arc Gun** (`WeaponId.RAYGUN`, id 33) | Rewrite-only chain lightning. Forms near the cursor, chains to random nearby enemies, damage builds +20% per hop. Fully procedural VFX (`render/world/arc_gun.py`). Own LIGHTNING damage type. Crackle sound once per shot. In the main weapon roster. Code: `weapon_runtime/arc_gun.py`. |
+| **Fork Shot / Blade bonuses** | Folded into the normal drop pool in every mode (`fork_bonus_in_pool` default on). Both draw their own icon on the ground and in the HUD (`render/world/bonus_icons.py`) - Fork Shot procedurally, Blade from the orbiting-blade sprite. |
+| **Energizer bonus** | Removed - never selected (`bonuses/selection.py`) and no apply handler. The inert flee/eat mechanic code stays. |
+| **Character-anchored HUD** | Health as a depleting red ring around the player, clip ammo as a number at its upper-right, active power-ups as a FIFO icon stack at its upper-left with per-icon seconds. Top-bar heart / health bar / ammo pips and the sliding bonus panel are suppressed. `render/world/player_status.py`, flags in `ui/hud.py`. |
+| **Window** | Renders to a virtual resolution that tracks the window aspect and blits full-screen - resizable / maximise / fullscreen with no bars or distortion. `grim/letterbox.py`, `grim/app.py`. |
 | **Progression** | `crimson.progression` composable stat/modifier layer (`PlayerStats`, `StatMod`, `resolve_stats`), the hook for perks / relics / affixes. |
-| **Test mode** | `bonuses/update.py`: empty bonus cycle, single Evil Scythe weapon drop. |
+| **Test / debug** | `--test-mode`: no forced spawns, unlocks every fireable weapon for drops. `--debug`: `[`/`]` cycle fireable weapons, `F2` god, `F3` +perk, `X` +5000 XP. |
 
 The "no projectile, flag on player, resolve in `WorldState.step`" pattern backs
 both new weapons (see `bonuses/blade_orbit.py` for the original precedent).

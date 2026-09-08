@@ -9,8 +9,16 @@ clip size, so a wider clip from perks / relics keeps the ramp climbing past
 ``H`` - e.g. a +20% clip peaks at ``1.2 * H``. Reloading resets it (the next
 clip starts cold).
 
-This ramp is always-on. Weapon Power Up does not touch it - plasma's WPU is just
-the normalized fire-rate lever (see weapon_runtime/power_up.py).
+The base ramp is always-on. Two power-ups reshape it for plasma instead of
+giving a fire-rate bonus:
+
+* **Weapon Power Up** raises the floor: the ramp starts at ``+H`` and climbs to
+  ``+2H`` by the stock clip's last round (still climbing past ``2H`` with a
+  wider clip).
+* **Reflex Boost** pins it to a flat ``+H`` for the whole duration - ammo is
+  not spent under Reflex Boost, so there is no clip to ramp against.
+
+Reflex Boost takes precedence when both are active.
 
 The resolved multiplier is stamped onto each plasma bolt at spawn
 (``Projectile.energy_heat_mult``) so a shot's damage reflects the clip state
@@ -33,7 +41,7 @@ PLASMA_HEAT_WEAPON_IDS: frozenset[WeaponId] = frozenset(
         WeaponId.PLASMA_SHOTGUN,
         WeaponId.SPIDER_PLASMA,
         WeaponId.PLASMA_CANNON,
-    }
+    },
 )
 
 
@@ -49,18 +57,30 @@ def plasma_heat_fraction(
     *,
     clip_size: float,
     ammo_after_shot: float,
+    weapon_power_up: bool = False,
+    reflex_boost: bool = False,
 ) -> float:
-    """Heat bonus fraction for the shot that leaves ``ammo_after_shot`` in the clip."""
+    """Heat bonus fraction for the shot that leaves ``ammo_after_shot`` in the clip.
+
+    ``reflex_boost`` pins the result to a flat ``+H``; ``weapon_power_up`` adds a
+    ``+H`` floor to the clip-drain ramp (so it runs ``+H -> +2H`` over the stock
+    clip). Reflex Boost wins when both are set.
+    """
 
     if not is_plasma_heat_weapon(weapon_id):
         return 0.0
+    if reflex_boost:
+        return PLASMA_HEAT_H
     base = float(WEAPON_BY_ID[WeaponId(int(weapon_id))].clip_size)
     if base <= 0.0:
-        return 0.0
+        return PLASMA_HEAT_H if weapon_power_up else 0.0
     shots_fired = float(clip_size) - float(ammo_after_shot)
     if shots_fired < 0.0:
         shots_fired = 0.0
-    return PLASMA_HEAT_H * shots_fired / base
+    ramp = PLASMA_HEAT_H * shots_fired / base
+    if weapon_power_up:
+        return PLASMA_HEAT_H + ramp
+    return ramp
 
 
 def plasma_energy_heat_mult(
@@ -68,6 +88,8 @@ def plasma_energy_heat_mult(
     *,
     clip_size: float,
     ammo_after_shot: float,
+    weapon_power_up: bool = False,
+    reflex_boost: bool = False,
 ) -> float:
     """Outgoing energy-damage multiplier (``1.0`` = no ramp)."""
 
@@ -75,6 +97,8 @@ def plasma_energy_heat_mult(
         weapon_id,
         clip_size=clip_size,
         ammo_after_shot=ammo_after_shot,
+        weapon_power_up=weapon_power_up,
+        reflex_boost=reflex_boost,
     )
 
 

@@ -10,7 +10,6 @@ from ..sim.state_types import GameplayState, PlayerState
 from .apply_context import BonusApplyCtx, BonusApplyHandler
 from .blade_orbit import apply_blade
 from .double_experience import apply_double_experience
-from .energizer import apply_energizer
 from .fire_bullets import apply_fire_bullets
 from .fireblast import apply_fireblast
 from .freeze import apply_freeze
@@ -31,7 +30,7 @@ if TYPE_CHECKING:
 
 _BONUS_APPLY_HANDLERS: dict[BonusId, BonusApplyHandler] = {
     BonusId.POINTS: apply_points,
-    BonusId.ENERGIZER: apply_energizer,
+    # Fork: Energizer removed - no apply handler, so it is inert even if forced.
     BonusId.WEAPON_POWER_UP: apply_weapon_power_up,
     BonusId.DOUBLE_EXPERIENCE: apply_double_experience,
     BonusId.REFLEX_BOOST: apply_reflex_boost,

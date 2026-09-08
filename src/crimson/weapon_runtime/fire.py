@@ -348,16 +348,21 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
     ammo_cost = float(recipe.ammo_cost)
 
     weapon_power_up_active = float(state.bonuses.weapon_power_up) > 0.0
+    reflex_boost_active = float(state.bonuses.reflex_boost) > 0.0
 
     # Plasma clip-heat ramp: energy damage scales up as the clip drains. Resolved
     # once here from the clip state this shot leaves behind, then stamped onto
-    # every bolt it spawns. (Always-on - WPU only touches fire rate for plasma.)
+    # every bolt it spawns. Weapon Power Up raises the floor to +H (ramping to
+    # +2H over the stock clip); Reflex Boost pins it to a flat +H. Neither gives
+    # plasma a fire-rate bonus (see weapon_runtime/power_up.py).
     energy_heat_mult = 1.0
     if is_plasma_heat_weapon(int(weapon_id)):
         energy_heat_mult = plasma_energy_heat_mult(
             int(weapon_id),
             clip_size=float(player.weapon.clip_size),
             ammo_after_shot=float(player.weapon.ammo) - float(ammo_cost),
+            weapon_power_up=weapon_power_up_active,
+            reflex_boost=reflex_boost_active,
         )
 
     match recipe.mode:

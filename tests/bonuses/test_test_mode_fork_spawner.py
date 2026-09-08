@@ -25,28 +25,26 @@ def test_spawner_does_nothing_when_test_mode_disabled() -> None:
         set_test_mode_enabled(False)
 
 
-def test_drops_only_the_scythe_once_at_spawn() -> None:
+def test_configured_weapon_drops_spawn_once_at_spawn() -> None:
     set_test_mode_enabled(True)
     try:
         state = GameplayState()
         update_test_mode_fork_spawner(state, 0.016)
 
         drops = _weapon_drops(state)
-        assert [WeaponId(d.amount) for d in drops] == [WeaponId.EVIL_SCYTHE]
-        assert _TEST_MODE_WEAPON_DROPS == ((64.0, WeaponId.EVIL_SCYTHE),)
+        assert [WeaponId(d.amount) for d in drops] == [wid for _, wid in _TEST_MODE_WEAPON_DROPS]
 
         # subsequent ticks do not re-drop
         for _ in range(20):
             update_test_mode_fork_spawner(state, 5.0)
-        assert len(_weapon_drops(state)) == 1
+        assert len(_weapon_drops(state)) == len(_TEST_MODE_WEAPON_DROPS)
     finally:
         set_test_mode_enabled(False)
 
 
-def test_no_bonuses_are_auto_spawned() -> None:
+def test_auto_spawned_bonuses_come_from_the_configured_cycle() -> None:
     set_test_mode_enabled(True)
     try:
-        assert _TEST_MODE_BONUS_CYCLE == ()
         state = GameplayState()
         for _ in range(30):
             update_test_mode_fork_spawner(state, 5.0)
@@ -55,6 +53,10 @@ def test_no_bonuses_are_auto_spawned() -> None:
             for e in state.bonus_pool.entries
             if e.bonus_id not in (BonusId.UNUSED, BonusId.WEAPON) and not e.picked
         ]
-        assert non_weapon == []
+        if not _TEST_MODE_BONUS_CYCLE:
+            assert non_weapon == []
+        else:
+            assert non_weapon
+            assert all(e.bonus_id in _TEST_MODE_BONUS_CYCLE for e in non_weapon)
     finally:
         set_test_mode_enabled(False)

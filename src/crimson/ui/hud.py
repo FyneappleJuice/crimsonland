@@ -24,6 +24,16 @@ HUD_ACCENT_COLOR = rl.Color(240, 200, 80, 255)
 HUD_BASE_WIDTH = 1024.0
 HUD_BASE_HEIGHT = 768.0
 
+# Not native (fork): health and clip ammo are drawn on the player instead of the
+# top bar - the red health ring + clip number in render/world/player_status.py.
+# When True the top-bar heart, health bar and ammo pips are skipped here.
+HUD_VITALS_ON_CHARACTER = True
+
+# Not native (fork): timed power-ups render as an upward icon stack anchored to
+# the player's upper-left (render/world/player_status.py), oldest nearest the
+# character. When True the sliding top-left bonus panel here is skipped.
+HUD_POWERUP_ON_CHARACTER = True
+
 HUD_TOP_BAR_ALPHA = 0.7
 HUD_ICON_ALPHA = 0.8
 HUD_PANEL_ALPHA = 0.9
@@ -365,7 +375,7 @@ def draw_hud_overlay(
     max_y = max(max_y, dst.y + dst.height)
 
     # Pulsing heart.
-    if show_health:
+    if show_health and not HUD_VITALS_ON_CHARACTER:
         t = max(0.0, elapsed_ms) / 1000.0
         src = rl.Rectangle(0.0, 0.0, float(life_heart.width), float(life_heart.height))
         if player_count == 1:
@@ -405,7 +415,7 @@ def draw_hud_overlay(
             max_y = max(max_y, dst.y + dst.height)
 
     # Health bar.
-    if show_health:
+    if show_health and not HUD_VITALS_ON_CHARACTER:
         bar_base_pos = Vec2(*HUD_HEALTH_BAR_POS)
         bar_size = Vec2(*HUD_HEALTH_BAR_SIZE)
         bg_src = rl.Rectangle(0.0, 0.0, float(ind_life.width), float(ind_life.height))
@@ -477,7 +487,7 @@ def draw_hud_overlay(
             max_y = max(max_y, dst.y + dst.height)
 
     # Ammo bars.
-    if show_weapon:
+    if show_weapon and not HUD_VITALS_ON_CHARACTER:
         if player_count == 1:
             ammo_base_pos = Vec2(*HUD_AMMO_BASE_POS)
             ammo_step = Vec2()
@@ -741,7 +751,7 @@ def draw_hud_overlay(
     # Bonus HUD slots (icon + timers), slide in/out from the left.
     bonus_base_y = HUD_BONUS_BASE_Y if show_xp else HUD_BONUS_BASE_Y_NO_XP
     bonus_bottom_y = float(bonus_base_y + hud_y_shift)
-    if bonus_hud is not None:
+    if bonus_hud is not None and not HUD_POWERUP_ON_CHARACTER:
         bonus_y = float(bonus_base_y + hud_y_shift)
         bonus_panel_alpha = alpha * 0.7
         bonus_text_color = _with_alpha(HUD_TEXT_COLOR, bonus_panel_alpha)

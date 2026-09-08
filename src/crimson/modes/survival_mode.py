@@ -35,7 +35,8 @@ from ..ui.cursor import draw_menu_cursor
 from ..ui.hud import HudRenderContext, draw_hud_overlay, hud_flags_for_game_mode
 from ..ui.perk_menu import PERK_MENU_TRANSITION_MS
 from ..weapon_runtime import weapon_assign_player
-from ..weapons import WEAPON_BY_ID, WeaponId
+from ..weapon_runtime.fire_recipes import fireable_weapon_ids
+from ..weapons import WeaponId
 from .base_gameplay_mode import (
     BaseGameplayMode,
     LanSession,
@@ -53,7 +54,9 @@ UI_HINT_COLOR = rl.Color(140, 140, 140, 255)
 UI_SPONSOR_COLOR = rl.Color(255, 255, 255, int(255 * 0.5))
 UI_ERROR_COLOR = rl.Color(240, 80, 80, 255)
 
-_DEBUG_WEAPON_IDS = tuple(sorted(WEAPON_BY_ID))
+# Debug weapon cycle ([ / ]) - only weapons that actually fire (excludes the
+# cut / unimplemented stubs that would crash on trigger).
+_DEBUG_WEAPON_IDS = fireable_weapon_ids()
 
 
 class SurvivalMode(BaseGameplayMode):

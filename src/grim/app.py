@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import shutil
+from collections.abc import Callable
 from pathlib import Path
 
 from grim.raylib_api import rl
@@ -61,8 +62,19 @@ def run_view(
     config_flags: int = 0,
     exit_key: int | None = None,
     hooks: RunViewHooks | None = None,
+    virtual_size: tuple[int, int] | None = None,
+    on_virtual_resize: Callable[[int, int], None] | None = None,
 ) -> None:
-    """Run a Raylib window with a pluggable debug view."""
+    """Run a Raylib window with a pluggable debug view.
+
+    ``virtual_size`` is the base logical resolution. The frame is rendered to an
+    off-screen target whose size tracks the window's aspect ratio (locked on the
+    shorter axis to the base size) and blitted to fill the whole window with a
+    uniform scale - no distortion, no bars - while the raylib screen / mouse
+    accessors are patched to virtual space. ``on_virtual_resize(vw, vh)`` is
+    called with the logical size whenever it changes (initially and on resize).
+    Omit ``virtual_size`` (the default) to draw straight to the window as before.
+    """
     if config_flags:
         rl.set_config_flags(config_flags)
     rl.init_window(width, height, title)
@@ -74,6 +86,64 @@ def run_view(
         sink=WindowSink(),
         draw_scope=RaylibDrawScope(raylib=rl),
     )
+
+    letterbox = None
+    vt_box: list = []  # single-slot cell so the nested helper can swap the texture
+    vt_size: list = []  # [(vw, vh)] currently allocated
+    base_w = base_h = 0
+
+    def _sync_virtual_target() -> tuple[int, int]:
+        """Resize the off-screen target to match the current window aspect."""
+        ww, wh = letterbox.real_window_size()
+        vw, vh = letterbox.virtual_for_window(base_w, base_h, ww, wh)
+        if vt_size != [(vw, vh)] or not vt_box:
+            if vt_box:
+                rl.unload_render_texture(vt_box[0])
+                vt_box.clear()
+            target = rl.load_render_texture(vw, vh)
+            rl.set_texture_filter(target.texture, rl.TextureFilter.TEXTURE_FILTER_BILINEAR)
+            vt_box.append(target)
+            vt_size[:] = [(vw, vh)]
+            if on_virtual_resize is not None:
+                on_virtual_resize(vw, vh)
+        return vw, vh
+
+    if virtual_size is not None:
+        from . import letterbox as _letterbox
+
+        letterbox = _letterbox
+        base_w = max(1, int(virtual_size[0]))
+        base_h = max(1, int(virtual_size[1]))
+        letterbox.install(base_w, base_h)
+        _sync_virtual_target()
+
+    def _draw_letterboxed() -> None:
+        vw, vh = _sync_virtual_target()
+        ww, wh = letterbox.real_window_size()
+        target = vt_box[0]
+        rl.begin_drawing()
+        try:
+            letterbox.begin_target()
+            rl.begin_texture_mode(target)
+            try:
+                rl.clear_background(rl.BLACK)
+                view.draw()
+            finally:
+                rl.end_texture_mode()
+                letterbox.end_target()
+            rl.clear_background(rl.BLACK)
+            src = rl.Rectangle(0.0, 0.0, float(vw), float(-vh))  # flip Y: RT origin is bottom-left
+            rl.draw_texture_pro(
+                target.texture,
+                src,
+                rl.Rectangle(0.0, 0.0, float(ww), float(wh)),
+                rl.Vector2(0.0, 0.0),
+                0.0,
+                rl.WHITE,
+            )
+        finally:
+            rl.end_drawing()
+
     try:
         view.open()
         screenshot_dir = SCREENSHOT_DIR if SCREENSHOT_DIR.is_absolute() else Path.cwd() / SCREENSHOT_DIR
@@ -84,12 +154,15 @@ def run_view(
             take_screenshot = rl.is_key_pressed(SCREENSHOT_KEY)
             if run_hooks.consume_screenshot_request():
                 take_screenshot = True
-            render_pipeline.draw(
-                draw_frame=view.draw,
-                width=rl.get_render_width(),
-                height=rl.get_render_height(),
-            )
-            render_pipeline.present()
+            if letterbox is not None:
+                _draw_letterboxed()
+            else:
+                render_pipeline.draw(
+                    draw_frame=view.draw,
+                    width=rl.get_render_width(),
+                    height=rl.get_render_height(),
+                )
+                render_pipeline.present()
             if run_hooks.should_close():
                 break
             if take_screenshot:
@@ -105,6 +178,11 @@ def run_view(
             view.close()
         finally:
             render_pipeline.close()
+            if vt_box:
+                rl.unload_render_texture(vt_box[0])
+                vt_box.clear()
+            if letterbox is not None:
+                letterbox.uninstall()
             rl.close_window()
 
 

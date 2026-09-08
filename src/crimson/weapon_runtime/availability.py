@@ -6,11 +6,19 @@ from ..quests import all_quests
 from ..quests.level import QuestLevel
 from ..rng_caller_static import RngCallerStatic
 from ..sim.state_types import GameplayState
+from ..test_mode import test_mode_enabled
 from ..weapon_usage import weapon_usage_slot_for_weapon_id
 from ..weapons import WEAPON_TABLE, WeaponId
 
 WEAPON_DROP_ID_COUNT = 0x21  # weapon ids 1..33
 WEAPON_AVAILABLE_COUNT = max(int(entry.weapon_id) for entry in WEAPON_TABLE) + 1
+
+# Fork: the two rewrite-only weapons, folded into the main roster - always
+# available in every mode so they drop from the normal Weapon bonus.
+_FORK_ROSTER_WEAPON_IDS: tuple[WeaponId, ...] = (
+    WeaponId.EVIL_SCYTHE,
+    WeaponId.RAYGUN,
+)
 
 
 def build_weapon_availability(
@@ -19,6 +27,23 @@ def build_weapon_availability(
     game_mode: GameMode,
 ) -> list[bool]:
     available = [False] * WEAPON_AVAILABLE_COUNT
+
+    for weapon_id in _FORK_ROSTER_WEAPON_IDS:
+        if 0 <= int(weapon_id) < len(available):
+            available[int(weapon_id)] = True
+
+    # Fork: --test-mode unlocks the whole droppable weapon set (ids 1..33) so
+    # every weapon can be tried without grinding quest unlocks. Skip the cut /
+    # unimplemented stubs (e.g. Flameburst) that would crash when fired.
+    if test_mode_enabled():
+        from .fire_recipes import fireable_weapon_ids
+
+        fireable = fireable_weapon_ids()
+        for weapon_id in range(1, min(WEAPON_DROP_ID_COUNT + 1, WEAPON_AVAILABLE_COUNT)):
+            if WeaponId(weapon_id) in fireable:
+                available[weapon_id] = True
+        return available
+
     unlock_index = 0
     unlock_index_full = 0
     if status is not None:

@@ -52,7 +52,8 @@ from ..ui.overlays.quest_run import (
     draw_quest_title_timer_overlay,
 )
 from ..weapon_runtime import most_used_weapon_id_for_player, weapon_assign_player
-from ..weapons import WEAPON_BY_ID, WeaponId
+from ..weapon_runtime.fire_recipes import fireable_weapon_ids
+from ..weapons import WeaponId
 from .base_gameplay_mode import (
     BaseGameplayMode,
     LanSession,
@@ -69,7 +70,9 @@ UI_TEXT_COLOR = rl.Color(220, 220, 220, 255)
 UI_HINT_COLOR = rl.Color(140, 140, 140, 255)
 UI_SPONSOR_COLOR = rl.Color(255, 255, 255, int(255 * 0.5))
 
-_DEBUG_WEAPON_IDS = tuple(sorted(WEAPON_BY_ID))
+# Debug weapon cycle ([ / ]) - only weapons that actually fire (excludes the
+# cut / unimplemented stubs that would crash on trigger).
+_DEBUG_WEAPON_IDS = fireable_weapon_ids()
 
 
 class QuestRunOutcome(msgspec.Struct, frozen=True):

@@ -38,8 +38,9 @@ def test_maps_mode_folds_fork_shot_into_the_bonus_pool(assets_dir: Path, make_mo
     survival = SurvivalMode(ctx, config=make_mode_config(game_mode=GameMode.SURVIVAL), audio_rng=Crand(0xBEEF))
     maps = MapsMode(ctx, config=make_mode_config(game_mode=GameMode.MAPS), audio_rng=Crand(0xBEEF))
 
-    # Native Survival leaves the original drop table untouched; only Maps opts in.
+    # Fork: the Fork Shot / Blade bonuses are folded into the drop pool in every
+    # mode (fork_bonus_in_pool default on).
     assert survival._sim_session is not None
-    assert survival._sim_session.world.state.fork_bonus_in_pool is False
+    assert survival._sim_session.world.state.fork_bonus_in_pool is True
     assert maps._sim_session is not None
     assert maps._sim_session.world.state.fork_bonus_in_pool is True

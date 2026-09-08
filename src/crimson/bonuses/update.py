@@ -24,8 +24,8 @@ _TEST_MODE_BONUS_SPAWN_INTERVAL = 5.0
 # tried in turn. Empty = no auto-spawned bonuses. Add / remove ids here to
 # change what --test-mode auto-spawns.
 _TEST_MODE_BONUS_CYCLE: tuple[BonusId, ...] = ()
-# Weapons dropped once near spawn on a fresh test run.
-_TEST_MODE_WEAPON_DROPS: tuple[tuple[float, WeaponId], ...] = ((64.0, WeaponId.EVIL_SCYTHE),)
+# Weapons dropped once near spawn on a fresh test run. Empty = none.
+_TEST_MODE_WEAPON_DROPS: tuple[tuple[float, WeaponId], ...] = ()
 
 
 def update_test_mode_fork_spawner(

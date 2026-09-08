@@ -29,6 +29,7 @@ from .context import WorldRenderCtx
 from .creatures import draw_creature_sprite
 from .effects import draw_effect_pool, draw_particle_pool, draw_sprite_effect_pool
 from .overlays import draw_aim_circle, draw_clock_gauge, draw_direction_arrows
+from .player_status import draw_players_status
 from .profile_hooks import profile_pass
 from .projectiles import draw_projectile, draw_secondary_projectile, draw_sharpshooter_laser_sight
 from .trooper import draw_player_trooper_sprite
@@ -102,6 +103,15 @@ def draw_world(
             draw_freeze_overlay(render_ctx, ctx=draw_ctx)
         with profile_pass("players_alive"):
             draw_players(render_ctx, ctx=draw_ctx, alive=True)
+            # Not native: red health ring + clip count anchored to the player,
+            # replacing the top-of-screen heart / health bar / ammo pips.
+            draw_players_status(
+                render_ctx,
+                camera=camera,
+                view_scale=view_scale,
+                scale=scale,
+                alpha=entity_alpha,
+            )
         with profile_pass("projectiles_effects"):
             draw_projectiles_and_effects(render_ctx, ctx=draw_ctx)
         with profile_pass("blade_orbits"):

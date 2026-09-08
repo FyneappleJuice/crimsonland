@@ -28,15 +28,17 @@ def _sustained_dps_gain(weapon: WeaponId) -> float:
 
 @pytest.mark.parametrize(
     "weapon",
-    [WeaponId.PISTOL, WeaponId.ASSAULT_RIFLE, WeaponId.GAUSS_GUN, WeaponId.PLASMA_MINIGUN, WeaponId.ION_MINIGUN, WeaponId.RAYGUN],
+    [WeaponId.PISTOL, WeaponId.ASSAULT_RIFLE, WeaponId.GAUSS_GUN, WeaponId.ION_MINIGUN, WeaponId.RAYGUN],
 )
 def test_wpu_fire_rate_lever_lands_near_plus_30_percent(weapon: WeaponId) -> None:
     gain = _sustained_dps_gain(weapon)
     assert 0.24 <= gain <= 0.36, f"{weapon.name}: {gain:.1%}"
 
 
-def test_scythe_and_stream_weapons_do_not_get_the_fire_rate_lever() -> None:
+def test_scythe_stream_and_plasma_weapons_do_not_get_the_fire_rate_lever() -> None:
     assert wpu_boosts_fire_rate(int(WeaponId.EVIL_SCYTHE)) is False
+    assert wpu_boosts_fire_rate(int(WeaponId.PLASMA_MINIGUN)) is False  # WPU is a clip-heat floor for plasma
+    assert wpu_boosts_fire_rate(int(WeaponId.PLASMA_CANNON)) is False
     assert wpu_boosts_fire_rate(int(WeaponId.PISTOL)) is True
     assert wpu_boosts_fire_rate(int(WeaponId.FLAMETHROWER)) is True  # moot - fire rate is a no-op for a stream
 

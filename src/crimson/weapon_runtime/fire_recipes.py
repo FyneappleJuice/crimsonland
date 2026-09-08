@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from functools import cache
+
 import msgspec
 
 from ..effects import ParticleStyleId
 from ..projectiles.types import ProjectileTemplateId, SecondaryProjectileTypeId
-from ..weapons import WeaponId, projectile_type_id_for_weapon_id
+from ..weapons import WEAPON_BY_ID, WeaponId, projectile_type_id_for_weapon_id
 
 
 class NoJitter(msgspec.Struct, frozen=True, tag=True):
@@ -80,14 +82,12 @@ class MeleeSweepMode(msgspec.Struct, frozen=True, tag=True):
     kicks off a cone sweep tracked on the player (weapon_runtime/scythe_sweep.py).
     Alternating clip: swing 0 sweeps left->right, swing 1 right->left."""
 
-    pass
 
 
 class ArcStrikeMode(msgspec.Struct, frozen=True, tag=True):
     """Rewrite-only: a chain-lightning strike (Arc Gun). No projectile; the shot
     flags a pending strike that the world step resolves (weapon_runtime/arc_gun.py)."""
 
-    pass
 
 
 type FireMode = (
@@ -230,15 +230,38 @@ def resolve_fire_recipe(
     )
 
 
+@cache
+def fireable_weapon_ids() -> tuple[WeaponId, ...]:
+    """Weapon ids whose trigger resolves to a valid fire recipe.
+
+    Excludes cut / unimplemented stubs that have no projectile template or
+    recipe (Flameburst, Grim Weapon, Nuke Launcher, ...) - equipping and firing
+    one of those raises. Used to bound the debug weapon-cycle and the test-mode
+    "unlock everything" so neither can hand the player a crashing weapon.
+    """
+    out: list[WeaponId] = []
+    for weapon_id, weapon in WEAPON_BY_ID.items():
+        try:
+            resolve_fire_recipe(
+                weapon_id=weapon_id,
+                pellet_count=int(weapon.pellet_count),
+                fire_bullets_active=False,
+            )
+        except (ValueError, KeyError):
+            continue
+        out.append(weapon_id)
+    return tuple(sorted(out))
+
+
 __all__ = [
     "FIRE_RECIPE_BY_WEAPON",
+    "ArcStrikeMode",
     "FireMode",
     "FireRecipe",
     "MaskCenteredJitter",
+    "MeleeSweepMode",
     "ModuloCenteredJitter",
     "ModuloSpeedScale",
-    "ArcStrikeMode",
-    "MeleeSweepMode",
     "MultiPlasmaFanMode",
     "NoJitter",
     "NoSpeedScale",
@@ -251,6 +274,7 @@ __all__ = [
     "SpeedScaleRule",
     "SwarmerDumpMode",
     "UseAimTargetHint",
+    "fireable_weapon_ids",
     "pellet_jitter_step_for_weapon",
     "resolve_fire_recipe",
 ]

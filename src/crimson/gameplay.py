@@ -175,9 +175,9 @@ class GameplayState(msgspec.Struct):
     test_mode_shotgun_dropped: bool = False
     # Not native: when set, the random bonus picker (bonuses/selection.py) spends
     # the native drop table's one dead-space slot on a rewrite-only bonus
-    # instead of rerolling. Only the rewrite-only Maps mode opts in; every native
-    # mode leaves this off and keeps the original drop table untouched.
-    fork_bonus_in_pool: bool = False
+    # (Fork Shot / Blade) instead of rerolling. Fork default: on, so both drop
+    # in every mode.
+    fork_bonus_in_pool: bool = True
 
     def __post_init__(self) -> None:
         self.particles = ParticlePool(rng=self.rng)

@@ -49,14 +49,17 @@ def test_bonus_pick_random_type_quest_suppression(
 
 
 def test_bonus_pick_random_type_tags_exact_native_callers() -> None:
-    rng = ScriptedCrand([13, 0])
+    # roll 14 + energizer sub-roll 0 lands on the native Energizer slot. The
+    # fork suppresses Energizer, so the draw sequence for that slot is still
+    # consumed byte-for-byte (ROLL, then ENERGIZER) but the pick is rerolled.
+    rng = ScriptedCrand([13, 0], fallback=ScriptedCrand.Fallback.REPEAT_LAST)
     state = GameplayState(rng=rng)
     players = [PlayerState(index=0, pos=Vec2())]
 
     bonus_id = bonus_pick_random_type(state.bonus_pool, state, players)
 
-    assert bonus_id == BonusId.ENERGIZER
-    assert [record.caller for record in rng.records_since()] == [
+    assert bonus_id != BonusId.ENERGIZER
+    assert [record.caller for record in rng.records_since()][:2] == [
         RngCallerStatic.BONUS_PICK_RANDOM_TYPE_ROLL,
         RngCallerStatic.BONUS_PICK_RANDOM_TYPE_ENERGIZER,
     ]

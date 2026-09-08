@@ -13,6 +13,13 @@ from grim.raylib_api import rd, rl
 from .geom import Vec2
 from .rand import CrtRand
 
+def _letterbox_target_open() -> bool:
+    """True while run_view is drawing into its letterbox render target."""
+    from . import letterbox
+
+    return letterbox.target_open()
+
+
 TERRAIN_TEXTURE_SIZE = 1024
 TERRAIN_PATCH_SIZE = 128.0
 TERRAIN_PATCH_OVERSCAN = 64.0
@@ -202,6 +209,12 @@ class GroundRenderer(msgspec.Struct):
     def process_pending(self) -> None:
         seed = self._scheduled_seed
         if seed is None:
+            return
+        if _letterbox_target_open():
+            # A caller in the draw path (e.g. a paused screen redrawing the
+            # world) reached us while run_view holds its letterbox render
+            # target open. Baking terrain would nest begin_texture_mode; keep
+            # the seed pending and retry on the next update tick instead.
             return
         generation_kind = self._scheduled_generation_kind
         self._scheduled_seed = None

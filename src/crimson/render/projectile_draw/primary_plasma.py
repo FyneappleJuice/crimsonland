@@ -10,6 +10,7 @@ from grim.raylib_api import rl
 
 from ...effects_atlas import EFFECT_ID_ATLAS_TABLE_BY_ID, SIZE_CODE_GRID, EffectId
 from ...sim.world_defs import PLASMA_PARTICLE_TYPES
+from ...weapon_runtime.plasma_heat import PLASMA_HEAT_H
 from ..projectile_render_registry import plasma_projectile_render_config
 from .common import RAD_TO_DEG
 from .types import ProjectileDrawCtx
@@ -89,20 +90,21 @@ def draw_plasma_particles(ctx: ProjectileDrawCtx) -> bool:
     aura_size = plasma_cfg.aura_size
     aura_alpha_mul = plasma_cfg.aura_alpha_mul
 
-    # Clip-heat tell: a hot bolt (energy_heat_mult up to ~2.0) glows brighter,
-    # bigger, and shifts toward white-hot orange.
-    heat_t = clamp((float(ctx.proj.energy_heat_mult) - 1.0), 0.0, 1.0)
+    # Clip-heat tell: the bolt colour lerps from its base colour at zero heat to
+    # white-hot once the ramp reaches +H (WPU can push past +H; the colour just
+    # stays white). It also glows a little bigger / brighter with heat.
+    heat_frac = max(0.0, float(ctx.proj.energy_heat_mult) - 1.0)
+    heat_t = clamp(heat_frac / PLASMA_HEAT_H, 0.0, 1.0) if PLASMA_HEAT_H > 0.0 else 0.0
     if heat_t > 1e-3:
-        blend = heat_t * 0.7
         rgb = (
-            rgb[0] + (1.0 - rgb[0]) * blend,
-            rgb[1] + (0.78 - rgb[1]) * blend,
-            rgb[2] + (0.42 - rgb[2]) * blend,
+            rgb[0] + (1.0 - rgb[0]) * heat_t,
+            rgb[1] + (1.0 - rgb[1]) * heat_t,
+            rgb[2] + (1.0 - rgb[2]) * heat_t,
         )
         aura_rgb = (
-            aura_rgb[0] + (1.0 - aura_rgb[0]) * blend,
-            aura_rgb[1] + (0.7 - aura_rgb[1]) * blend,
-            aura_rgb[2] + (0.35 - aura_rgb[2]) * blend,
+            aura_rgb[0] + (1.0 - aura_rgb[0]) * heat_t,
+            aura_rgb[1] + (1.0 - aura_rgb[1]) * heat_t,
+            aura_rgb[2] + (1.0 - aura_rgb[2]) * heat_t,
         )
         head_size *= 1.0 + heat_t * 0.45
         aura_size *= 1.0 + heat_t * 0.6

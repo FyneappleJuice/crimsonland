@@ -20,14 +20,24 @@ def _state(*, rng_values: list[int]) -> GameplayState:
     )
 
 
-def test_native_modes_reroll_the_dead_space_slot() -> None:
-    # fork_bonus_in_pool defaults off: the dead-space slot rerolls forever,
-    # exactly like the original, and the 101-try loop falls back to POINTS.
+def test_dead_space_slot_rerolls_to_points_when_pool_disabled() -> None:
+    # With fork_bonus_in_pool off (native behaviour) the dead-space slot rerolls
+    # forever and the 101-try loop falls back to POINTS.
     state = _state(rng_values=[_DEAD_SPACE_ROLL])
+    state.fork_bonus_in_pool = False
     state.game_mode = GameMode.SURVIVAL
     players = [PlayerState(index=0, pos=Vec2())]
 
     assert bonus_pick_random_type(state.bonus_pool, state, players) == BonusId.POINTS
+
+
+def test_fork_pool_is_on_by_default_in_every_mode() -> None:
+    # Fork default: the dead-space slot sub-rolls a Fork Shot / Blade in Survival.
+    state = _state(rng_values=[_DEAD_SPACE_ROLL, 0])
+    state.game_mode = GameMode.SURVIVAL
+    players = [PlayerState(index=0, pos=Vec2())]
+
+    assert bonus_pick_random_type(state.bonus_pool, state, players) == BonusId.PROJECTILE_FORK
 
 
 def test_maps_dead_space_slot_sub_rolls_a_rewrite_only_bonus() -> None:

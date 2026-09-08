@@ -252,8 +252,12 @@ def run_game(config: GameConfig) -> None:
     faulthandler.enable(crash_file)
     crash_file.write(f"\n[{dt.datetime.now(tz=dt.UTC).astimezone().isoformat()}] run_game start\n")
     cfg = ensure_crimson_cfg(base_dir)
-    width = cfg.display.width if config.width is None else config.width
-    height = cfg.display.height if config.height is None else config.height
+    # The world/HUD/menu UI is laid out against this logical resolution; the OS
+    # window can be any size and the frame is letterboxed to fit (see run_view).
+    virtual_width = int(cfg.display.width)
+    virtual_height = int(cfg.display.height)
+    width = virtual_width if config.width is None else config.width
+    height = virtual_height if config.height is None else config.height
     rng = Crand(config.seed)
     assets_dir = _resolve_assets_dir(config)
     console = create_console(base_dir, assets_dir=assets_dir)
@@ -308,7 +312,7 @@ def run_game(config: GameConfig) -> None:
             console.log.log(f"lan debug log: {log_path}")
             print(f"[lan-debug] role={pending.role} log={log_path}")
         register_boot_commands(console, _boot_command_handlers(state))
-        register_core_cvars(console, width, height)
+        register_core_cvars(console, virtual_width, virtual_height)
         _apply_debug_console_defaults(console, debug=config.debug)
         console.log.log("crimson: boot start")
         console.log.log(f"config: {cfg.display.width}x{cfg.display.height} windowed={cfg.display.windowed}")
@@ -324,7 +328,21 @@ def run_game(config: GameConfig) -> None:
         config_flags = 0
         if not cfg.display.windowed:
             config_flags |= rl.ConfigFlags.FLAG_FULLSCREEN_MODE
+        else:
+            # Let the OS window be resized / maximised. The frame is rendered at
+            # the logical resolution and letterboxed to the window (run_view's
+            # virtual_size), so any window size / aspect stays correct.
+            config_flags |= rl.ConfigFlags.FLAG_WINDOW_RESIZABLE
         view: View = GameLoopView(state)
+
+        def _on_virtual_resize(vw: int, vh: int) -> None:
+            # The logical resolution tracks the window aspect; keep the config
+            # the HUD / menus lay out against in step with it.
+            cfg.display.width = int(vw)
+            cfg.display.height = int(vh)
+            console.register_cvar("v_width", str(int(vw)))
+            console.register_cvar("v_height", str(int(vh)))
+
         run_view(
             view,
             width=width,
@@ -332,6 +350,8 @@ def run_game(config: GameConfig) -> None:
             title="Crimsonland",
             fps=config.fps,
             config_flags=config_flags,
+            virtual_size=(virtual_width, virtual_height),
+            on_virtual_resize=_on_virtual_resize,
             exit_key=rl.KeyboardKey.KEY_NULL,
             hooks=ViewRunHooks(view),
         )

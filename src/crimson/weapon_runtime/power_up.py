@@ -9,17 +9,20 @@ some weapons past +100%. Now it is one lever per weapon, all tuned to ~+30%:
     most weapons  -> fire rate x1.30, reload x0.80          (gameplay.py / assign.py)
     fire (stream) -> +30% per-particle damage; fire rate is a no-op for a stream
     scythe        -> swing damage x1.30 (no fire-rate; in WPU_NO_RATE)
+    plasma        -> clip-heat floor raised +0->+H, ramping to +2H by the stock
+                     clip's last round (no fire-rate; in WPU_NO_RATE). See
+                     weapon_runtime/plasma_heat.py.
 
-Plasma / ion / kinetic bullet keep only the normalized fire-rate lever - their
-identity mechanics (clip-heat ramp, lingering cloud, pierce weapons) are
-always-on, not WPU riders.
+Ion / kinetic bullet keep only the normalized fire-rate lever - their identity
+mechanics (lingering cloud, pierce weapons) are always-on, not WPU riders.
 """
 
 from ..weapons import WeaponId
+from .plasma_heat import PLASMA_HEAT_WEAPON_IDS
 
 # Weapons whose WPU bonus is a damage buff, so the fire-rate/reload speed-up is
 # suppressed to avoid double-dipping past +30%.
-WPU_NO_RATE_WEAPON_IDS: frozenset[WeaponId] = frozenset({WeaponId.EVIL_SCYTHE})
+WPU_NO_RATE_WEAPON_IDS: frozenset[WeaponId] = frozenset({WeaponId.EVIL_SCYTHE}) | PLASMA_HEAT_WEAPON_IDS
 
 # fire: per-flame-particle damage multiplier while WPU is active. Fire weapons
 # get nothing from the fire-rate lever (the stream already emits every frame),

@@ -41,10 +41,33 @@ def test_extra_clip_size_pushes_the_ramp_past_H() -> None:
     assert last > PLASMA_HEAT_H
 
 
-def test_the_heat_ramp_is_always_on_and_unaffected_by_wpu() -> None:
-    # WPU no longer touches the clip-heat ramp - plasma's WPU is just fire rate.
+def test_base_ramp_runs_zero_to_H_with_no_power_ups() -> None:
     m = plasma_energy_heat_mult(int(WeaponId.PLASMA_MINIGUN), clip_size=_PLASMA_MINIGUN_CLIP, ammo_after_shot=0.0)
     assert m == pytest.approx(1.0 + PLASMA_HEAT_H)
+
+
+def test_weapon_power_up_raises_the_floor_to_H_and_ramps_to_2H() -> None:
+    clip = _PLASMA_MINIGUN_CLIP
+    fresh = plasma_heat_fraction(int(WeaponId.PLASMA_MINIGUN), clip_size=clip, ammo_after_shot=clip, weapon_power_up=True)
+    last = plasma_heat_fraction(int(WeaponId.PLASMA_MINIGUN), clip_size=clip, ammo_after_shot=0.0, weapon_power_up=True)
+    assert fresh == pytest.approx(PLASMA_HEAT_H)  # starts hot
+    assert last == pytest.approx(2.0 * PLASMA_HEAT_H)  # peaks at 2H by the stock clip's last round
+    # a wider clip keeps climbing past 2H
+    wide = round(clip * 1.2)
+    wide_last = plasma_heat_fraction(int(WeaponId.PLASMA_MINIGUN), clip_size=wide, ammo_after_shot=0.0, weapon_power_up=True)
+    assert wide_last == pytest.approx(PLASMA_HEAT_H + PLASMA_HEAT_H * wide / clip)
+
+
+def test_reflex_boost_pins_heat_to_flat_H() -> None:
+    clip = _PLASMA_MINIGUN_CLIP
+    for ammo_after in (clip, clip / 2.0, 0.0):
+        assert plasma_heat_fraction(
+            int(WeaponId.PLASMA_MINIGUN), clip_size=clip, ammo_after_shot=ammo_after, reflex_boost=True
+        ) == pytest.approx(PLASMA_HEAT_H)
+    # Reflex Boost wins when both power-ups are active.
+    assert plasma_heat_fraction(
+        int(WeaponId.PLASMA_MINIGUN), clip_size=clip, ammo_after_shot=0.0, weapon_power_up=True, reflex_boost=True
+    ) == pytest.approx(PLASMA_HEAT_H)
 
 
 def test_non_plasma_weapons_get_no_heat() -> None:

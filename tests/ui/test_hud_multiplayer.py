@@ -37,6 +37,9 @@ def test_draw_hud_overlay_stacks_player_bars_for_multiplayer(mocker) -> None:
     # Force HUD scale = 1.0 for easy coordinate assertions.
     mocker.patch.object(hud_module.rl, "get_screen_width", side_effect=lambda: 1024)
     mocker.patch.object(hud_module.rl, "get_screen_height", side_effect=lambda: 768)
+    # This asserts the native top-bar heart/health/ammo layout, which the fork
+    # moves onto the player by default (HUD_VITALS_ON_CHARACTER).
+    mocker.patch.object(hud_module, "HUD_VITALS_ON_CHARACTER", False)
 
     textures: dict[TextureId, rl.Texture] = {
         TextureId.UI_GAME_TOP: _texture(512, 64),
@@ -116,6 +119,8 @@ def test_draw_hud_overlay_preserve_bugs_shares_player1_heart_pulse_speed(mocker)
     mocker.patch.object(hud_module.rl, "get_screen_width", side_effect=lambda: 1024)
     mocker.patch.object(hud_module.rl, "get_screen_height", side_effect=lambda: 768)
     mocker.patch.object(hud_module.rl, "draw_text", side_effect=lambda *args, **kwargs: None)
+    # Native top-bar hearts; the fork moves vitals onto the player by default.
+    mocker.patch.object(hud_module, "HUD_VITALS_ON_CHARACTER", False)
 
     life_heart = _texture(32, 32)
     resources = _resources(

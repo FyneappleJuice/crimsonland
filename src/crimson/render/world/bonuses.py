@@ -11,6 +11,7 @@ from grim.raylib_api import rl
 from ...bonuses import BONUS_BY_ID, BonusId
 from ...bonuses.pool import bonus_find_aim_hover_entry, bonus_label_for_entry
 from ...weapons import WEAPON_BY_ID, WeaponId
+from .bonus_icons import draw_blade_icon, draw_fork_icon
 from .constants import _RAD_TO_DEG
 from .context import WorldRenderCtx
 
@@ -127,9 +128,11 @@ def draw_bonus_pickups(
 
         meta = BONUS_BY_ID.get(bonus_id)
         icon_id = int(meta.icon_id) if meta is not None and meta.icon_id is not None else None
-        if icon_id is None or icon_id < 0:
+        # Fork Shot / Blade draw their own art (no usable bonus-sheet frame).
+        has_own_icon = bonus_id in (BonusId.PROJECTILE_FORK, BonusId.BLADE)
+        if not has_own_icon and (icon_id is None or icon_id < 0):
             continue
-        if bonus_id == BonusId.POINTS and int(bonus.amount) == 1000:
+        if bonus_id == BonusId.POINTS and int(bonus.amount) == 1000 and icon_id is not None:
             icon_id += 1
 
         pulse = bonus_icon_pulse(float(idx) + float(frame.bonus_anim_phase))
@@ -137,9 +140,17 @@ def draw_bonus_pickups(
         if icon_scale <= 1e-3:
             continue
 
-        src = bonus_icon_src(bonuses_texture, icon_id)
         size = 32.0 * icon_scale * scale
         rotation_rad = math.sin(float(idx) - float(frame.elapsed_ms) * 0.003) * 0.2
+        # Fork Shot / Blade draw their own art, upright (no wobble / spin).
+        if bonus_id == BonusId.PROJECTILE_FORK:
+            draw_fork_icon(screen.x, screen.y, size, alpha)
+            continue
+        if bonus_id == BonusId.BLADE:
+            draw_blade_icon(render_ctx, screen.x, screen.y, size, alpha)
+            continue
+
+        src = bonus_icon_src(bonuses_texture, int(icon_id))
         dst = rl.Rectangle(screen.x, screen.y, size, size)
         origin = rl.Vector2(size * 0.5, size * 0.5)
         icon_tint = rl.Color(255, 255, 255, int(alpha * 255.0 + 0.5))

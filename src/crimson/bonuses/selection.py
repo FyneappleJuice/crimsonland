@@ -30,6 +30,11 @@ def _bonus_pick_suppressed(
 ) -> bool:
     if not _bonus_enabled(bonus_id):
         return True
+    # Fork: Energizer is removed from the game. The native roll that would pick
+    # it still runs (its RNG draw is consumed) so the pick sequence stays
+    # deterministic; the result is just rerolled to another bonus.
+    if bonus_id == BonusId.ENERGIZER:
+        return True
     if state.shock_chain_links_left > 0 and bonus_id == BonusId.SHOCK_CHAIN:
         return True
     if bonus_id == BonusId.FREEZE and state.bonuses.freeze > 0.0:
