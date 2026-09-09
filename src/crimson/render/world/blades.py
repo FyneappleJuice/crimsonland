@@ -18,11 +18,7 @@ from ...bonuses.blade_orbit import (
 from ...debug import debug_enabled
 from ...projectiles.types import ProjectileTemplateId
 from ...sim.world_defs import KNOWN_PROJ_FRAMES
-from ...test_mode import test_mode_enabled
 from .context import WorldRenderCtx
-
-# Green debug overlay (matches the Evil Scythe debug palette).
-_DEBUG_GREEN = (60, 235, 90)
 
 
 def draw_blade_orbits(
@@ -49,8 +45,7 @@ def draw_blade_orbits(
 
     spin = float(frame.elapsed_ms) * 0.02
 
-    debug = debug_enabled() or test_mode_enabled()
-    gr, gg, gb = _DEBUG_GREEN
+    debug = debug_enabled()
 
     for player in players:
         orbit = player.blade_orbit
@@ -69,7 +64,7 @@ def draw_blade_orbits(
                 int(player_screen.x),
                 int(player_screen.y),
                 BLADE_RADIUS * float(scale),
-                rl.Color(gr, gg, gb, int(90 * alpha)),
+                rl.Color(80, 200, 255, int(140 * alpha)),
             )
 
         for offset in blade_orbit_offsets(orbit):
@@ -79,9 +74,9 @@ def draw_blade_orbits(
                 # Blade contact hitbox (BLADE_HIT_RADIUS, before the per-creature
                 # size term); centre dot marks the blade's exact position.
                 rl.draw_circle_lines(
-                    int(screen.x), int(screen.y), BLADE_HIT_RADIUS * float(scale), rl.Color(gr, gg, gb, int(230 * alpha)),
+                    int(screen.x), int(screen.y), BLADE_HIT_RADIUS * float(scale), rl.Color(255, 90, 90, int(220 * alpha)),
                 )
-                rl.draw_circle(int(screen.x), int(screen.y), max(1.5, 2.0 * float(scale)), rl.Color(gr, gg, gb, int(255 * alpha)))
+                rl.draw_circle(int(screen.x), int(screen.y), max(1.5, 2.0 * float(scale)), rl.Color(255, 240, 120, int(230 * alpha)))
             render_ctx._draw_atlas_sprite(
                 texture,
                 grid=grid,

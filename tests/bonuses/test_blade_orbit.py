@@ -78,29 +78,6 @@ def test_effect_makes_the_configured_revolutions_over_the_duration_then_ends() -
     assert round((BLADE_OMEGA * BLADE_DURATION_S) / math.tau, 6) == BLADE_REVOLUTIONS
 
 
-def test_test_mode_keeps_the_orbit_permanently_on() -> None:
-    from crimson.test_mode import set_test_mode_enabled
-
-    set_test_mode_enabled(True)
-    try:
-        player = PlayerState(index=0, pos=Vec2())
-        assert not player.blade_orbit.active
-
-        # first tick activates it; it never deactivates and elapsed wraps
-        for _ in range(int(BLADE_DURATION_S * 3 / 0.1) + 5):
-            update_blade_orbits([player], [], 0.1, creature_damage_runtime=None)
-            assert player.blade_orbit.active
-        assert player.blade_orbit.elapsed < BLADE_DURATION_S
-    finally:
-        set_test_mode_enabled(None)
-
-
-def test_orbit_is_not_forced_on_outside_test_mode() -> None:
-    player = PlayerState(index=0, pos=Vec2())
-    update_blade_orbits([player], [], 0.1, creature_damage_runtime=None)
-    assert not player.blade_orbit.active
-
-
 def test_a_blade_hitting_a_parked_target_starts_its_per_creature_cooldown() -> None:
     assert BLADE_HIT_COOLDOWN_S > 0.0
     player = PlayerState(index=0, pos=Vec2(0.0, 0.0))

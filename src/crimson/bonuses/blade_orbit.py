@@ -23,12 +23,9 @@ from grim.sfx_map import SfxId
 from ..creatures.damage_types import CreatureDamageType
 from ..owner_ref import OwnerRef
 from ..sim.state_types import BladeOrbitState, PlayerState
-from ..test_mode import test_mode_enabled
 from .apply_context import BonusApplyCtx
 
 BLADE_COUNT = 5
-# Whole number: the test-mode infinite orbit wraps `elapsed` by BLADE_DURATION_S
-# and relies on OMEGA*DURATION being an exact multiple of a full turn.
 BLADE_REVOLUTIONS = 6.0
 BLADE_DURATION_S = 5.0
 BLADE_RADIUS = 50.0
@@ -114,41 +111,21 @@ def update_blade_orbits(
     if dt <= 0.0:
         return
 
-    # Test mode: keep the Blade bonus permanently on so it can be tuned / seen
-    # without chasing pickups. Not native, not reachable outside --test-mode.
-    force_on = test_mode_enabled()
-
     for player in players:
         orbit = player.blade_orbit
         if not orbit.active:
-            if not force_on:
-                continue
-            orbit.active = True
-            orbit.elapsed = 0.0
-            orbit.theta0 = 0.0
-            orbit.phi0 = 0.0
-            orbit.hit_cooldowns = {}
-
-        track_cooldown = BLADE_HIT_COOLDOWN_S > 0.0
+            continue
 
         orbit.elapsed = float(orbit.elapsed) + dt
-        if track_cooldown and orbit.hit_cooldowns:
+        if orbit.hit_cooldowns:
             orbit.hit_cooldowns = {
                 idx: remaining - dt for idx, remaining in orbit.hit_cooldowns.items() if remaining - dt > 0.0
             }
-        elif not track_cooldown and orbit.hit_cooldowns:
-            orbit.hit_cooldowns = {}
 
         if orbit.elapsed >= BLADE_DURATION_S:
+            orbit.active = False
             orbit.hit_cooldowns = {}
-            if force_on:
-                # OMEGA*DURATION is exactly BLADE_REVOLUTIONS full turns, so
-                # wrapping elapsed keeps the blade angles continuous and resets
-                # the render fade - a seamless infinite orbit.
-                orbit.elapsed -= BLADE_DURATION_S
-            else:
-                orbit.active = False
-                continue
+            continue
 
         if creature_damage_runtime is None or not creatures:
             continue
@@ -160,7 +137,7 @@ def update_blade_orbits(
             for idx, creature in enumerate(creatures):
                 if not creature.active or float(creature.hp) <= 0.0:
                     continue
-                if track_cooldown and idx in orbit.hit_cooldowns:
+                if idx in orbit.hit_cooldowns:
                     continue
                 reach = BLADE_HIT_RADIUS + float(creature.size) * BLADE_CREATURE_RADIUS_FACTOR
                 cdx = float(creature.pos.x) - bx
@@ -168,8 +145,7 @@ def update_blade_orbits(
                 dist_sq = cdx * cdx + cdy * cdy
                 if dist_sq > reach * reach:
                     continue
-                if track_cooldown:
-                    orbit.hit_cooldowns[idx] = BLADE_HIT_COOLDOWN_S
+                orbit.hit_cooldowns[idx] = BLADE_HIT_COOLDOWN_S
                 inv = 1.0 / math.sqrt(dist_sq) if dist_sq > 0.0 else 0.0
                 impulse = Vec2(-cdx * inv * _BLADE_KNOCKBACK, -cdy * inv * _BLADE_KNOCKBACK)
                 creature_damage_runtime.apply_creature_damage(

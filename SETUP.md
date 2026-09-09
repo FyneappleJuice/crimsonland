@@ -5,8 +5,8 @@ This is the **`FyneappleJuice/crimsonland`** fork of `banteg/crimson` — a Crim
 is the starting point for a fresh session on another machine: install, run, test,
 and stay in sync with the other checkout.
 
-Canonical branch: **`feat/roguelite-weapons`** (identical to `master` right now).
-Latest commit as of writing: `1257383c2` — "tune(evil scythe): heavier, slower swings".
+Single branch: **`master`**. That's the whole project — there is no separate
+feature branch, no PR flow. `git clone` gets it; commit and push straight to it.
 
 ---
 
@@ -111,14 +111,7 @@ git pull
 # after making changes
 git add -A
 git commit -m "..."
-git push
-```
-
-Both `master` and `feat/roguelite-weapons` are kept pointing at the same commit;
-push both if you move one:
-
-```bash
-git branch -f master HEAD && git push origin feat/roguelite-weapons master
+git push            # straight to master
 ```
 
 Commit trailer used in this project:
@@ -129,7 +122,7 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
 
 ---
 
-## 6. What's in this branch (mod content so far)
+## 6. What's in the mod so far
 
 All parity-breaking, all in `src/crimson/`:
 
