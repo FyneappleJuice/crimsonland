@@ -101,23 +101,23 @@ def test_orbit_is_not_forced_on_outside_test_mode() -> None:
     assert not player.blade_orbit.active
 
 
-def test_a_blade_over_a_creature_deals_contact_damage_every_tick() -> None:
-    assert BLADE_HIT_COOLDOWN_S == 0.0  # no per-hit throttle
+def test_a_blade_hitting_a_parked_target_starts_its_per_creature_cooldown() -> None:
+    assert BLADE_HIT_COOLDOWN_S > 0.0
     player = PlayerState(index=0, pos=Vec2(0.0, 0.0))
     player.blade_orbit = _active_orbit()
     # blade 0 at t=0 sits at (+R, 0); park a creature right on it
     creature = make_creature_state(pos=Vec2(BLADE_RADIUS, 0.0), hp=100000.0, size=10.0)
     runtime = DirectCreatureDamageRuntime(creatures=[creature])
 
-    update_blade_orbits([player], [creature], 0.001, creature_damage_runtime=runtime)
+    update_blade_orbits([player], [creature], 0.016, creature_damage_runtime=runtime)
     assert creature.hp == 100000.0 - BLADE_HIT_DAMAGE
-    assert not player.blade_orbit.hit_cooldowns  # nothing tracked
+    assert 0 in player.blade_orbit.hit_cooldowns
 
-    update_blade_orbits([player], [creature], 0.001, creature_damage_runtime=runtime)
-    assert creature.hp == 100000.0 - 2 * BLADE_HIT_DAMAGE  # hit again immediately
+    update_blade_orbits([player], [creature], 0.016, creature_damage_runtime=runtime)
+    assert creature.hp == 100000.0 - BLADE_HIT_DAMAGE  # still on cooldown
 
 
-def test_multiple_blades_over_one_target_all_land_in_the_same_tick() -> None:
+def test_at_most_one_blade_lands_per_tick_even_when_several_overlap() -> None:
     player = PlayerState(index=0, pos=Vec2(0.0, 0.0))
     player.blade_orbit = _active_orbit()
     # a creature huge enough that every blade overlaps it
@@ -125,7 +125,43 @@ def test_multiple_blades_over_one_target_all_land_in_the_same_tick() -> None:
     runtime = DirectCreatureDamageRuntime(creatures=[creature])
 
     update_blade_orbits([player], [creature], 0.001, creature_damage_runtime=runtime)
-    assert round((100000.0 - creature.hp) / BLADE_HIT_DAMAGE) == BLADE_COUNT
+    assert round((100000.0 - creature.hp) / BLADE_HIT_DAMAGE) == 1
+
+
+def test_a_still_target_is_struck_by_only_every_other_blade() -> None:
+    # Cooldown is 1.5x the blade-pass interval: the blade immediately behind the
+    # one that just hit is still cooling down, the next one lands.
+    from crimson.bonuses.blade_orbit import _BLADE_PASS_INTERVAL_S
+
+    assert 1.0 < BLADE_HIT_COOLDOWN_S / _BLADE_PASS_INTERVAL_S < 2.0
+
+    player = PlayerState(index=0, pos=Vec2(0.0, 0.0))
+    player.blade_orbit = _active_orbit()
+    creature = make_creature_state(pos=Vec2(BLADE_RADIUS, 0.0), hp=1e12, size=30.0)
+    runtime = DirectCreatureDamageRuntime(creatures=[creature])
+
+    dt = 1.0 / 60.0
+    for _ in range(round(BLADE_DURATION_S / dt)):
+        update_blade_orbits([player], [creature], dt, creature_damage_runtime=runtime)
+
+    hits = round((1e12 - creature.hp) / BLADE_HIT_DAMAGE)
+    passes = BLADE_COUNT * BLADE_REVOLUTIONS  # blades crossing the target's bearing in one duration
+    assert passes * 0.45 <= hits <= passes * 0.75  # roughly half - "every other blade"
+
+
+@pytest.mark.parametrize("fps", [60.0, 120.0, 144.0])
+def test_parked_target_damage_is_framerate_independent(fps: float) -> None:
+    player = PlayerState(index=0, pos=Vec2(0.0, 0.0))
+    player.blade_orbit = _active_orbit()
+    creature = make_creature_state(pos=Vec2(BLADE_RADIUS, 0.0), hp=1e12, size=50.0)
+    runtime = DirectCreatureDamageRuntime(creatures=[creature])
+
+    dt = 1.0 / fps
+    for _ in range(round(BLADE_DURATION_S / dt)):
+        update_blade_orbits([player], [creature], dt, creature_damage_runtime=runtime)
+
+    dps = (1e12 - creature.hp) / BLADE_DURATION_S
+    assert 35.0 <= dps <= 50.0  # ~42 dps at every framerate, not scaling with it
 
 
 @pytest.mark.parametrize("creature_size", [32.0, 45.0, 55.0, 65.0, 80.0])

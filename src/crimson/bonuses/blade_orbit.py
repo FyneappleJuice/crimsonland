@@ -36,17 +36,21 @@ BLADE_RADIUS = 50.0
 # Full orbital sweep is BLADE_REVOLUTIONS turns over BLADE_DURATION_S.
 BLADE_OMEGA = BLADE_REVOLUTIONS * math.tau / BLADE_DURATION_S
 
+# Seconds between successive blades crossing a fixed bearing (one full turn is
+# BLADE_DURATION_S / BLADE_REVOLUTIONS, split into BLADE_COUNT gaps).
+_BLADE_PASS_INTERVAL_S = BLADE_DURATION_S / (BLADE_REVOLUTIONS * BLADE_COUNT)
+
 # Contact reach = BLADE_HIT_RADIUS (the blade's own body, sprite ~20 px) plus a
 # fraction of the creature's own footprint, so bigger aliens/spiders connect
 # from further out - closer to what the sprites look like they should do than
 # the very tight native `size/7 + 3` margin.
 BLADE_HIT_RADIUS = 15.0
 BLADE_CREATURE_RADIUS_FACTOR = 0.45
-# 0.0 = no per-creature cooldown: a blade damages whatever it overlaps every
-# tick. >0.0 re-enables the throttle (seconds before the same target can be
-# struck again).
-BLADE_HIT_COOLDOWN_S = 0.0
-BLADE_HIT_DAMAGE = 22.0
+# Per-creature hit throttle. Set to 1.5x the blade-pass interval so a stationary
+# target is struck by every *other* blade sweeping past it (the blade right
+# behind is still on cooldown; the one after that lands). 0.0 disables it.
+BLADE_HIT_COOLDOWN_S = 1.5 * _BLADE_PASS_INTERVAL_S
+BLADE_HIT_DAMAGE = 11.0
 _BLADE_KNOCKBACK = 2.0
 
 # Looping whir: re-trigger the blade-gun launch sample this often while active.
