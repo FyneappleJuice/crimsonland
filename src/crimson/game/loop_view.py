@@ -37,6 +37,7 @@ from ..screens.panels.options import OptionsMenuView
 from ..screens.panels.play_game import PlayGameMenuView
 from ..screens.panels.stats import StatisticsMenuView
 from ..screens.pause_menu import PauseMenuView
+from ..screens.relic_inventory import RelicInventoryView
 from ..screens.quest_views import EndNoteView, QuestFailedView, QuestResultsView, QuestsMenuView
 from ..screens.transitions import _update_screen_fade
 from ..ui.demo_trial_overlay import DEMO_PURCHASE_URL, DemoTrialOverlayInfo, DemoTrialOverlayUi
@@ -169,6 +170,7 @@ class GameLoopView:
             "quest_failed": QuestFailedView(state),
             "end_note": EndNoteView(state),
             "open_high_scores": HighScoresView(state),
+            "open_relic_inventory": RelicInventoryView(state),
             "start_survival": SurvivalMode(
                 _mode_view_context(state),
                 config=state.config,
@@ -269,6 +271,9 @@ class GameLoopView:
 
     def open(self) -> None:
         rl.hide_cursor()
+        from ..meta.relics import init_relics
+
+        init_relics(self.state.base_dir)
         self._boot.open()
 
     def should_close(self) -> bool:
@@ -585,6 +590,9 @@ class GameLoopView:
                 if action is None:
                     return
             if action == "back_to_menu":
+                from ..meta.relics import end_run as _relics_end_run
+
+                _relics_end_run()
                 self._capture_gameplay_ground_for_menu()
                 self.state.pause_background = None
                 self._front_active.close()

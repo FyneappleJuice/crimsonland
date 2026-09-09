@@ -287,7 +287,8 @@ class PlayGameMenuView(PanelMenuView):
                     key="survival",
                     label="Survival",
                     tooltip="Gain perks and weapons and fight back.",
-                    action="start_survival",
+                    # Not native: route through the relic inventory screen first.
+                    action="open_relic_inventory",
                     game_mode=GameMode.SURVIVAL,
                     show_count=True,
                 ),
