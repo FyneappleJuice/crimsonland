@@ -161,7 +161,7 @@ def test_parked_target_damage_is_framerate_independent(fps: float) -> None:
         update_blade_orbits([player], [creature], dt, creature_damage_runtime=runtime)
 
     dps = (1e12 - creature.hp) / BLADE_DURATION_S
-    assert 35.0 <= dps <= 50.0  # ~42 dps at every framerate, not scaling with it
+    assert 70.0 <= dps <= 88.0  # ~76 dps at every framerate, not scaling with it
 
 
 @pytest.mark.parametrize("creature_size", [32.0, 45.0, 55.0, 65.0, 80.0])

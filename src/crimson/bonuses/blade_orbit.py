@@ -50,7 +50,7 @@ BLADE_CREATURE_RADIUS_FACTOR = 0.45
 # target is struck by every *other* blade sweeping past it (the blade right
 # behind is still on cooldown; the one after that lands). 0.0 disables it.
 BLADE_HIT_COOLDOWN_S = 1.5 * _BLADE_PASS_INTERVAL_S
-BLADE_HIT_DAMAGE = 11.0
+BLADE_HIT_DAMAGE = 20.0
 _BLADE_KNOCKBACK = 2.0
 
 # Looping whir: re-trigger the blade-gun launch sample this often while active.
