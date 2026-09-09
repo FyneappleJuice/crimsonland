@@ -15,6 +15,13 @@ from grim.rand import Crand
 from tests.support.helpers import ScriptedCrand, assert_float_close
 
 
+@pytest.fixture(autouse=True)
+def _native_rare_variants(monkeypatch: pytest.MonkeyPatch) -> None:
+    # These assert native colour-variant stats; the rewrite-only rarity/affix
+    # system (creatures/rarity.py) replaces that path when enabled.
+    monkeypatch.setattr("crimson.creatures.rarity.MONSTER_RARITY_ENABLED", False)
+
+
 @pytest.mark.parametrize(
     ("callers", "edge_draw", "coord_draw", "expected_pos", "expected_callers"),
     [

@@ -13,6 +13,7 @@ from grim.math import clamp
 from grim.raylib_api import rl
 from grim.terrain_render import _maybe_alpha_test
 
+from ...creatures.rarity import RARITY_COLOR
 from ...creatures.spawn import CreatureFlags, CreatureTypeId
 from ...effects_atlas import EFFECT_ID_ATLAS_TABLE_BY_ID, SIZE_CODE_GRID, EffectId
 from ...perks import PerkId
@@ -418,6 +419,17 @@ def draw_creatures(render_ctx: WorldRenderCtx, *, ctx: WorldDrawContext) -> None
             tint=tint,
             shadow=shadow,
         )
+
+        # Not native: rarity outline ring for affixed monsters.
+        if creature.rarity and lifecycle_stage >= 16.0:
+            rc = RARITY_COLOR.get(int(creature.rarity))
+            if rc is not None:
+                ring_r = max(6.0, float(creature.size) * 0.62 * ctx.scale)
+                col = rl.Color(rc[0], rc[1], rc[2], int(210 * ctx.entity_alpha + 0.5))
+                rl.draw_circle_lines(int(screen.x), int(screen.y), ring_r, col)
+                rl.draw_circle_lines(int(screen.x), int(screen.y), ring_r + 2.0, col)
+                if int(creature.rarity) >= 3:
+                    rl.draw_circle_lines(int(screen.x), int(screen.y), ring_r + 5.0, col)
 
 
 def draw_freeze_overlay(render_ctx: WorldRenderCtx, *, ctx: WorldDrawContext) -> None:

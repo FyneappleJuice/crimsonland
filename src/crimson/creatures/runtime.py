@@ -289,6 +289,14 @@ class CreatureState(msgspec.Struct):
     ignite_heat: float = 0.0
     ignite_timer: float = 0.0
 
+    # Rewrite-only: monster rarity & affixes (creatures/rarity.py). 0 = normal.
+    rarity: int = 0
+    affixes: tuple[int, ...] = ()
+    damage_taken_mult_by_type: dict[int, float] = msgspec.field(default_factory=dict)
+    affix_base_move_speed: float = 0.0
+    affix_base_contact_damage: float = 0.0
+    affix_regen_pause: float = 0.0
+
 
 class CreatureDeath(msgspec.Struct, frozen=True):
     index: int
@@ -1621,6 +1629,15 @@ class CreaturePool:
         entry.spawn_slot_index = None
         entry.attack_cooldown = 0.0
 
+        # Rewrite-only: monster rarity & affixes.
+        entry.rarity = int(getattr(init, "rarity", 0) or 0)
+        entry.affixes = tuple(getattr(init, "affixes", ()) or ())
+        _dtm = getattr(init, "damage_taken_mult_by_type", None)
+        entry.damage_taken_mult_by_type = dict(_dtm) if _dtm else {}
+        entry.affix_base_move_speed = 0.0
+        entry.affix_base_contact_damage = 0.0
+        entry.affix_regen_pause = 0.0
+
         entry.bonus_id = init.bonus_id
         entry.bonus_duration_override = (
             int(init.bonus_duration_override) if init.bonus_duration_override is not None else None
@@ -1799,6 +1816,21 @@ class CreaturePool:
     ) -> CreatureDeath:
         if creature.spawn_slot_index is not None:
             self._disable_spawn_slot(int(creature.spawn_slot_index))
+
+        if creature.rarity and creature.affixes:
+            from .rarity import apply_monster_death_affixes
+
+            apply_monster_death_affixes(
+                self,
+                int(idx),
+                creature,
+                state=state,
+                players=players,
+                rng=rng,
+                detail_preset=int(detail_preset),
+                world_width=float(world_width),
+                world_height=float(world_height),
+            )
 
         if (creature.flags & CreatureFlags.SPLIT_ON_DEATH) and float(creature.size) > 35.0:
             for heading_offset, phase_seed_caller in (
