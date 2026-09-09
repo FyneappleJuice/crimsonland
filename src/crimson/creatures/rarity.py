@@ -165,6 +165,42 @@ def monster_display_name(type_name: str, affixes: tuple[int, ...]) -> str:
     return " ".join(parts)
 
 
+# Short effect text for the hover tooltip (creatures/render).
+AFFIX_BLURB: dict[int, str] = {
+    AffixId.OVERGROWN: "+60% max health",
+    AffixId.HASTED: "+40% move speed",
+    AffixId.COLOSSAL: "+40% size, +60% contact damage",
+    AffixId.RUNTISH: "small, +70% speed, -25% health",
+    AffixId.GORGED: "+120% health, -25% speed",
+    AffixId.ARMORED: "-40% bullet & melee damage taken",
+    AffixId.FLAME_WARDED: "-60% fire damage taken",
+    AffixId.INSULATED: "-60% lightning & energy damage taken",
+    AffixId.BLAST_PROOF: "-50% explosion damage taken",
+    AffixId.SHELLED: "-45% damage taken from every type",
+    AffixId.REGENERATING: "regenerates when not hit",
+    AffixId.FROTHING: "speeds up as its health drops",
+    AffixId.SWIFT_AURA: "aura: nearby allies +30% speed",
+    AffixId.DETONATING: "explodes on death",
+    AffixId.HATCHING: "hatches 3 crawlers on death",
+    AffixId.GOLDEN: "5x experience",
+    AffixId.BOUNTIFUL: "always drops a power-up",
+}
+
+
+def monster_tooltip_lines(type_name: str, rarity: int, affixes: tuple[int, ...]) -> list[str]:
+    if not rarity:
+        return []
+    head = f"{RARITY_LABEL.get(int(rarity), '?')}:  {monster_display_name(type_name, affixes)}"
+    lines = [head]
+    for a in affixes:
+        spec = AFFIXES.get(a)
+        if spec is None:
+            continue
+        blurb = AFFIX_BLURB.get(a, "")
+        lines.append(f"{spec.word} - {blurb}" if blurb else spec.word)
+    return lines
+
+
 # --- spawn-time application (operates on a CreatureInit) ----------------
 
 

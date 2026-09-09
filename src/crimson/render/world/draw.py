@@ -28,6 +28,7 @@ from .bonuses import draw_bonus_hover_labels, draw_bonus_pickups
 from .constants import _RAD_TO_DEG, monster_vision_fade_alpha
 from .context import WorldRenderCtx
 from .creatures import draw_creature_sprite
+from .monster_tooltip import draw_monster_rarity_tooltip
 from .effects import draw_effect_pool, draw_particle_pool, draw_sprite_effect_pool
 from .overlays import draw_aim_circle, draw_clock_gauge, draw_direction_arrows
 from .player_status import draw_players_status
@@ -141,6 +142,8 @@ def draw_world(
             )
         with profile_pass("bonus_ui"):
             draw_bonus_and_ui(render_ctx, ctx=draw_ctx, draw_aim_indicators_enabled=draw_aim_indicators)
+        # Not native: hover tooltip for rare monsters (top-centre, one mod per line).
+        draw_monster_rarity_tooltip(render_ctx, out_size=out_size)
 
 
 def compute_view_transform(render_ctx: WorldRenderCtx) -> tuple[Vec2, Vec2, float, Vec2, Vec2]:
