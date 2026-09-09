@@ -66,6 +66,14 @@ def test_display_name_uses_prefix_and_suffix() -> None:
     assert name == "Brood-Fed Alien of Plating"
 
 
+def test_tooltip_lines_are_rarity_then_modifier_names() -> None:
+    lines = R.monster_tooltip_lines("alien", 3, (R.AffixId.COLOSSAL, R.AffixId.ARMORED))
+    assert lines[0] == "Apex"
+    assert lines[1].startswith("Oversized - ")
+    assert lines[2].startswith("Armored - ")
+    assert "alien" not in " ".join(lines).lower()  # no monster name
+
+
 def test_resist_affix_reduces_incoming_damage_of_that_type() -> None:
     creature = CreatureState(
         active=True, hp=1000.0, max_hp=1000.0, rarity=1,

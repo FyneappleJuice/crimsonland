@@ -93,7 +93,8 @@ class AffixId(IntEnum):
 
 class AffixSpec(msgspec.Struct, frozen=True):
     id: int
-    word: str          # display word: a prefix, or "of X" for suffixes
+    word: str          # flavour word for the generated name: a prefix, or "of X"
+    label: str         # mechanical modifier name (shown in the hover tooltip)
     suffix: bool
     threat: int
     min_xp: int
@@ -101,23 +102,23 @@ class AffixSpec(msgspec.Struct, frozen=True):
 
 
 _SPECS = (
-    AffixSpec(AffixId.OVERGROWN, "Brood-Fed", False, 1, 0),
-    AffixSpec(AffixId.HASTED, "Rampant", False, 1, 0),
-    AffixSpec(AffixId.COLOSSAL, "Colossal", False, 2, 3000),
-    AffixSpec(AffixId.RUNTISH, "Runtish", False, 1, 3000),
-    AffixSpec(AffixId.GORGED, "Gorged", False, 2, 6000),
-    AffixSpec(AffixId.ARMORED, "of Plating", True, 2, 0),
-    AffixSpec(AffixId.FLAME_WARDED, "of Warding", True, 2, 0),
-    AffixSpec(AffixId.INSULATED, "of Grounding", True, 2, 0),
-    AffixSpec(AffixId.BLAST_PROOF, "of Absorption", True, 2, 0),
-    AffixSpec(AffixId.SHELLED, "of the Turtle", True, 3, 9000),
-    AffixSpec(AffixId.REGENERATING, "of Recovery", True, 2, 9000),
-    AffixSpec(AffixId.FROTHING, "Frothing", False, 3, 9000),
-    AffixSpec(AffixId.SWIFT_AURA, "of Swiftness", True, 3, 12000, aura=True),
-    AffixSpec(AffixId.DETONATING, "of Detonation", True, 3, 9000),
-    AffixSpec(AffixId.HATCHING, "of the Swarm", True, 3, 12000),
-    AffixSpec(AffixId.GOLDEN, "of Riches", True, 0, 0),
-    AffixSpec(AffixId.BOUNTIFUL, "of Plenty", True, 0, 0),
+    AffixSpec(AffixId.OVERGROWN, "Brood-Fed", "Overgrown", False, 1, 0),
+    AffixSpec(AffixId.HASTED, "Rampant", "Hasted", False, 1, 0),
+    AffixSpec(AffixId.COLOSSAL, "Colossal", "Oversized", False, 2, 3000),
+    AffixSpec(AffixId.RUNTISH, "Runtish", "Undersized", False, 1, 3000),
+    AffixSpec(AffixId.GORGED, "Gorged", "Heavy", False, 2, 6000),
+    AffixSpec(AffixId.ARMORED, "of Plating", "Armored", True, 2, 0),
+    AffixSpec(AffixId.FLAME_WARDED, "of Warding", "Flame-Warded", True, 2, 0),
+    AffixSpec(AffixId.INSULATED, "of Grounding", "Insulated", True, 2, 0),
+    AffixSpec(AffixId.BLAST_PROOF, "of Absorption", "Blast-Proof", True, 2, 0),
+    AffixSpec(AffixId.SHELLED, "of the Turtle", "Shelled", True, 3, 9000),
+    AffixSpec(AffixId.REGENERATING, "of Recovery", "Regenerating", True, 2, 9000),
+    AffixSpec(AffixId.FROTHING, "Frothing", "Berserker", False, 3, 9000),
+    AffixSpec(AffixId.SWIFT_AURA, "of Swiftness", "Haste Aura", True, 3, 12000, aura=True),
+    AffixSpec(AffixId.DETONATING, "of Detonation", "Bomber", True, 3, 9000),
+    AffixSpec(AffixId.HATCHING, "of the Swarm", "Hatch Death", True, 3, 12000),
+    AffixSpec(AffixId.GOLDEN, "of Riches", "Golden", True, 0, 0),
+    AffixSpec(AffixId.BOUNTIFUL, "of Plenty", "Bountiful", True, 0, 0),
 )
 
 AFFIXES: dict[int, AffixSpec] = {s.id: s for s in _SPECS}
@@ -190,14 +191,13 @@ AFFIX_BLURB: dict[int, str] = {
 def monster_tooltip_lines(type_name: str, rarity: int, affixes: tuple[int, ...]) -> list[str]:
     if not rarity:
         return []
-    head = f"{RARITY_LABEL.get(int(rarity), '?')}:  {monster_display_name(type_name, affixes)}"
-    lines = [head]
+    lines = [RARITY_LABEL.get(int(rarity), "?")]
     for a in affixes:
         spec = AFFIXES.get(a)
         if spec is None:
             continue
         blurb = AFFIX_BLURB.get(a, "")
-        lines.append(f"{spec.word} - {blurb}" if blurb else spec.word)
+        lines.append(f"{spec.label} - {blurb}" if blurb else spec.label)
     return lines
 
 
