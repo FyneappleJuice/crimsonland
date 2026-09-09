@@ -5,7 +5,7 @@ This is the **`FyneappleJuice/crimsonland`** fork of `banteg/crimson` — a Crim
 is the starting point for a fresh session on another machine: install, run, test,
 and stay in sync with the other checkout.
 
-Single branch: **`master`**. That's the whole project — there is no separate
+Single branch: **`main`**. That's the whole project — there is no separate
 feature branch, no PR flow. `git clone` gets it; commit and push straight to it.
 
 ---
@@ -111,7 +111,7 @@ git pull
 # after making changes
 git add -A
 git commit -m "..."
-git push            # straight to master
+git push            # straight to main
 ```
 
 Commit trailer used in this project:
