@@ -84,6 +84,10 @@ class Projectile(msgspec.Struct):
     # Rewrite-only: extra full-damage targets this bolt punches through before it
     # stops (Weapon Power Up for kinetic lead). 0 = native stop-on-first-hit.
     pierce_left: float = 0.0
+    # Rewrite-only: this pellet is flagged to detonate on impact (the
+    # "Explosive Payload" bonus - bonuses/explosive_payload.py). Consumed
+    # (cleared) on its first hit so a piercing round only explodes once.
+    is_rocket: bool = False
     speed_scale: float = 1.0
     damage_pool: float = 1.0
     hit_radius: float = 1.0

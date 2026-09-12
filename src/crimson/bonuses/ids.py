@@ -29,6 +29,7 @@ class BonusId(IntEnum):
     # values past the real native table (0-14).
     PROJECTILE_FORK = 15
     BLADE = 16
+    EXPLOSIVE_PAYLOAD = 17
 
 
 class BonusMeta(msgspec.Struct, frozen=True):
@@ -197,6 +198,23 @@ BONUS_TABLE = [
             "precessing centred ellipse (bonuses/blade_orbit.py): 10 revolutions "
             "= 2 precessions over ~8s, contact damage with a per-creature hit "
             "cooldown."
+        ),
+    ),
+    BonusMeta(
+        bonus_id=BonusId.EXPLOSIVE_PAYLOAD,
+        name="Explosive Payload",
+        description="Every bullet you fire becomes a rocket for a while.",
+        # Placeholder: borrows the Nuke icon (an explosion) until real art is
+        # authored, same as Fork Shot / Blade started on borrowed frames.
+        icon_id=1,
+        native_amount=8,
+        apply_seconds=8.0,
+        notes=(
+            "Not a native bonus - project addition. While active, every fired "
+            "primary pellet is flagged to detonate on impact (shotgun-style "
+            "multi-pellet weapons only flag their single centre-most pellet); "
+            "see weapon_runtime/fire.py::PrimaryPelletsMode and "
+            "bonuses/explosive_payload.py."
         ),
     ),
 ]

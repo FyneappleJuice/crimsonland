@@ -10,6 +10,7 @@ from ..sim.state_types import GameplayState, PlayerState
 from .apply_context import BonusApplyCtx, BonusApplyHandler
 from .blade_orbit import apply_blade
 from .double_experience import apply_double_experience
+from .explosive_payload import apply_explosive_payload
 from .fire_bullets import apply_fire_bullets
 from .fireblast import apply_fireblast
 from .freeze import apply_freeze
@@ -45,6 +46,7 @@ _BONUS_APPLY_HANDLERS: dict[BonusId, BonusApplyHandler] = {
     BonusId.NUKE: apply_nuke,
     BonusId.PROJECTILE_FORK: apply_projectile_fork,
     BonusId.BLADE: apply_blade,
+    BonusId.EXPLOSIVE_PAYLOAD: apply_explosive_payload,
 }
 
 

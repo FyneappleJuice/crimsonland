@@ -37,3 +37,11 @@ def update_player_bonus_timers(ctx: PerksUpdateEffectsCtx) -> None:
                 f32(float(player.projectile_fork_timer)),
                 dt,
             )
+
+        if player.explosive_payload_timer <= 0.0:
+            player.explosive_payload_timer = 0.0
+        else:
+            player.explosive_payload_timer = x87_pc24_sub(
+                f32(float(player.explosive_payload_timer)),
+                dt,
+            )

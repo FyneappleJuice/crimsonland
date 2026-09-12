@@ -67,7 +67,7 @@ def _bonus_pick_suppressed(
 
 
 # Rewrite-only bonuses folded into the Maps drop table's dead-space slot.
-_NONNATIVE_BONUS_POOL: tuple[BonusId, ...] = (BonusId.PROJECTILE_FORK, BonusId.BLADE)
+_NONNATIVE_BONUS_POOL: tuple[BonusId, ...] = (BonusId.PROJECTILE_FORK, BonusId.BLADE, BonusId.EXPLOSIVE_PAYLOAD)
 
 
 def bonus_pick_random_type(pool: BonusPool, state: GameplayState, players: list[PlayerState]) -> BonusId:

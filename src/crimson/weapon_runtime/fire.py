@@ -380,7 +380,12 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
             pellet_speed_caller = _PELLET_SPEED_SCALE_CALLER_BY_WEAPON.get(WeaponId(weapon_id))
             if not isinstance(speed_rule, NoSpeedScale) and pellet_speed_caller is None:
                 raise ValueError(f"missing pellet speed caller for weapon {int(weapon_id)}")
-            for _ in range(pellets):
+            # Explosive Payload bonus (not native): every bullet becomes a rocket.
+            # Multi-pellet (shotgun-style) weapons only flag their single
+            # centre-most pellet - the rest of the spread stays normal.
+            explosive_payload_active = float(player.explosive_payload_timer) > 0.0
+            explosive_pellet_index = pellets // 2
+            for pellet_index in range(pellets):
                 match jitter_rule:
                     case NoJitter():
                         angle = float(shot_angle)
@@ -403,6 +408,8 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
                 )
                 if energy_heat_mult != 1.0:
                     state.projectiles.entries[int(proj_id)].energy_heat_mult = float(energy_heat_mult)
+                if explosive_payload_active and pellet_index == explosive_pellet_index:
+                    state.projectiles.entries[int(proj_id)].is_rocket = True
                 if isinstance(speed_rule, ModuloSpeedScale):
                     assert pellet_speed_caller is not None
                     _apply_speed_scale_rule(

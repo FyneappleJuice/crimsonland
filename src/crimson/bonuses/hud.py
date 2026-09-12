@@ -87,6 +87,7 @@ def bonus_hud_update(state: GameplayState, players: list[PlayerState], *, dt: fl
             "shield_timer": float(player.shield_timer),
             "speed_bonus_timer": float(player.speed_bonus_timer),
             "projectile_fork_timer": float(player.projectile_fork_timer),
+            "explosive_payload_timer": float(player.explosive_payload_timer),
             "blade_orbit": max(0.0, BLADE_DURATION_S - float(blade.elapsed)) if blade.active else 0.0,
         }
         try:

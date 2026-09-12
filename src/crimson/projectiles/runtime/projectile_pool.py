@@ -104,6 +104,16 @@ _FORK_RESERVED_FORKED = 1.0
 _FORK_RESERVED_SHOTGUN_CHILD = 2.0
 _SHOTGUN_WEAPON_IDS = frozenset({WeaponId.SHOTGUN})
 
+# Explosive Payload bonus (not native): "scale" fed into the shared
+# secondary-projectile DETONATION state (secondary_pool.py) that a flagged
+# pellet spawns on impact - radius grows to `scale * 80` px over ~1/3s,
+# dealing `dt * scale * 700` damage per tick to everything caught inside, on
+# top of the pellet's own regular hit damage. For reference the Rocket
+# Launcher's own on-hit scale is 1.0 (80px / ~233 total damage); this stays
+# deliberately modest so a high-fire-rate weapon doesn't become a free
+# splash-nuke.
+_EXPLOSIVE_PAYLOAD_DETONATION_SCALE = 0.3
+
 _PROJECTILE_COLLISION_PROFILE_BY_TYPE_ID: dict[ProjectileTemplateId, ProjectileCollisionProfile] = {
     ProjectileTemplateId.ION_MINIGUN: ProjectileCollisionProfile(hit_radius=3.0, initial_damage_pool=1.0),
     ProjectileTemplateId.ION_RIFLE: ProjectileCollisionProfile(hit_radius=5.0, initial_damage_pool=1.0),
@@ -310,6 +320,42 @@ class ProjectilePool:
                 )
                 self._entries[child_index].reserved = child_reserved
 
+        def _maybe_explosive_payload_on_hit(proj: Projectile) -> None:
+            """Explosive Payload bonus (not native): detonate a flagged pellet.
+
+            Reuses the exact secondary-projectile DETONATION state the Rocket
+            Launcher itself uses on impact (see
+            `secondary_pool.py::DetonationRule`) - an expanding-radius pulse
+            that deals its own damage over ~1/3s to everything it catches, on
+            top of whatever direct damage this hit already dealt. Consumed
+            (`is_rocket = False`) so a piercing round only explodes once.
+            """
+
+            if not proj.is_rocket:
+                return
+            proj.is_rocket = False
+            from ..types import SecondaryProjectileTypeId
+            from .secondary_pool import SecondarySpawnSpec
+
+            runtime_state.secondary_projectiles.spawn_from_spec(
+                SecondarySpawnSpec(
+                    pos=proj.pos,
+                    angle=0.0,
+                    type_id=SecondaryProjectileTypeId.DETONATION,
+                    owner=proj.owner,
+                    time_to_live=_EXPLOSIVE_PAYLOAD_DETONATION_SCALE,
+                ),
+            )
+            if effects is not None:
+                effects.spawn_explosion_burst(
+                    pos=proj.pos,
+                    scale=0.5,
+                    rng=rng,
+                    detail_preset=int(detail_preset),
+                )
+            if sfx_queue is not None:
+                sfx_queue.append(SfxId.EXPLOSION_MEDIUM)
+
         def _damage_type_for(type_id: int) -> int:
             if ProjectileTemplateId(type_id) in ENERGY_PROJECTILE_TEMPLATE_IDS:
                 return int(CreatureDamageType.ENERGY)
@@ -485,6 +531,7 @@ class ProjectilePool:
 
                     rule.pre_hit(update_ctx, proj, int(hit_idx))
                     _maybe_fork_shot_on_hit(proj, int(hit_idx))
+                    _maybe_explosive_payload_on_hit(proj)
 
                     # Native increments the global shots-hit counter for any
                     # owner (creature-owned splitter children included) when the
