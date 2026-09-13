@@ -112,14 +112,19 @@ _SHOTGUN_WEAPON_IDS = frozenset({WeaponId.SHOTGUN})
 # Launcher's own on-hit scale is 1.0 (80px / ~233 total damage).
 #
 # The blast scales with the firing weapon's own `damage_scale`, anchored so
-# the Pistol (damage_scale 4.1) gets exactly the reference scale below, but
-# damped by a square root so the ~112x spread in weapon damage_scale (0.25
-# Fire Bullets .. 28.0 Plasma Cannon) only becomes a ~10x spread in blast
-# size/damage - a big gun's bullets should explode harder, just not as
-# many times harder as they already hit harder.
+# the Pistol (damage_scale 4.1) gets exactly the reference scale below. The
+# raw curve is damped by a square root so the ~112x spread in weapon
+# damage_scale (0.25 Fire Bullets .. 28.0 Plasma Cannon) only becomes a ~10x
+# spread in blast size/damage - then that result is blended only halfway back
+# toward the flat reference (_SCALE_STRENGTH) so the many weapons sitting at
+# the common damage_scale of 1.0 (Assault Rifle, SMG, Gauss Gun, Mean
+# Minigun, ...) aren't docked much of their blast just for not being the
+# Pistol - a big gun's bullets should explode harder, a small one only a
+# little softer, never punished hard for being "merely" 1.0x.
 _EXPLOSIVE_PAYLOAD_PISTOL_DAMAGE_SCALE = 4.1
 _EXPLOSIVE_PAYLOAD_DETONATION_SCALE = 0.3  # what the Pistol's blast should be
 _EXPLOSIVE_PAYLOAD_SCALE_EXPONENT = 0.5  # sqrt - "scales, but not as much"
+_EXPLOSIVE_PAYLOAD_SCALE_STRENGTH = 0.5  # 0 = flat for every weapon, 1 = full damped curve
 # Weapons with damage_scale <= 0 (Shrinkifier 5k, Plague Spreader Gun - pure
 # utility, no direct damage) don't get an explosion at all.
 
@@ -129,7 +134,10 @@ def _explosive_payload_blast_scale(weapon_damage_scale: float) -> float:
     if weapon_damage_scale <= 0.0:
         return 0.0
     ratio = weapon_damage_scale / _EXPLOSIVE_PAYLOAD_PISTOL_DAMAGE_SCALE
-    return _EXPLOSIVE_PAYLOAD_DETONATION_SCALE * (ratio**_EXPLOSIVE_PAYLOAD_SCALE_EXPONENT)
+    full_scale = _EXPLOSIVE_PAYLOAD_DETONATION_SCALE * (ratio**_EXPLOSIVE_PAYLOAD_SCALE_EXPONENT)
+    return _EXPLOSIVE_PAYLOAD_DETONATION_SCALE + _EXPLOSIVE_PAYLOAD_SCALE_STRENGTH * (
+        full_scale - _EXPLOSIVE_PAYLOAD_DETONATION_SCALE
+    )
 
 _PROJECTILE_COLLISION_PROFILE_BY_TYPE_ID: dict[ProjectileTemplateId, ProjectileCollisionProfile] = {
     ProjectileTemplateId.ION_MINIGUN: ProjectileCollisionProfile(hit_radius=3.0, initial_damage_pool=1.0),

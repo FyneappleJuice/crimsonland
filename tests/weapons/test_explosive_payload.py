@@ -143,3 +143,11 @@ def test_scale_is_monotonic_but_damped_relative_to_damage_scale() -> None:
 def test_non_positive_damage_scale_disables_the_blast() -> None:
     assert _explosive_payload_blast_scale(0.0) == 0.0
     assert _explosive_payload_blast_scale(-1.0) == 0.0
+
+
+def test_the_common_1x_damage_scale_stays_close_to_the_anchor() -> None:
+    # The vast majority of weapons (Assault Rifle, SMG, Gauss Gun, Mean
+    # Minigun, ...) sit at damage_scale 1.0 - they shouldn't be docked much of
+    # the Pistol's blast just for not being the anchor weapon.
+    scale = _explosive_payload_blast_scale(1.0)
+    assert scale > 0.7 * _EXPLOSIVE_PAYLOAD_DETONATION_SCALE
