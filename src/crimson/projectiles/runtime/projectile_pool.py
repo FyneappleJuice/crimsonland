@@ -109,10 +109,27 @@ _SHOTGUN_WEAPON_IDS = frozenset({WeaponId.SHOTGUN})
 # pellet spawns on impact - radius grows to `scale * 80` px over ~1/3s,
 # dealing `dt * scale * 700` damage per tick to everything caught inside, on
 # top of the pellet's own regular hit damage. For reference the Rocket
-# Launcher's own on-hit scale is 1.0 (80px / ~233 total damage); this stays
-# deliberately modest so a high-fire-rate weapon doesn't become a free
-# splash-nuke.
-_EXPLOSIVE_PAYLOAD_DETONATION_SCALE = 0.3
+# Launcher's own on-hit scale is 1.0 (80px / ~233 total damage).
+#
+# The blast scales with the firing weapon's own `damage_scale`, anchored so
+# the Pistol (damage_scale 4.1) gets exactly the reference scale below, but
+# damped by a square root so the ~112x spread in weapon damage_scale (0.25
+# Fire Bullets .. 28.0 Plasma Cannon) only becomes a ~10x spread in blast
+# size/damage - a big gun's bullets should explode harder, just not as
+# many times harder as they already hit harder.
+_EXPLOSIVE_PAYLOAD_PISTOL_DAMAGE_SCALE = 4.1
+_EXPLOSIVE_PAYLOAD_DETONATION_SCALE = 0.3  # what the Pistol's blast should be
+_EXPLOSIVE_PAYLOAD_SCALE_EXPONENT = 0.5  # sqrt - "scales, but not as much"
+# Weapons with damage_scale <= 0 (Shrinkifier 5k, Plague Spreader Gun - pure
+# utility, no direct damage) don't get an explosion at all.
+
+
+def _explosive_payload_blast_scale(weapon_damage_scale: float) -> float:
+    weapon_damage_scale = float(weapon_damage_scale)
+    if weapon_damage_scale <= 0.0:
+        return 0.0
+    ratio = weapon_damage_scale / _EXPLOSIVE_PAYLOAD_PISTOL_DAMAGE_SCALE
+    return _EXPLOSIVE_PAYLOAD_DETONATION_SCALE * (ratio**_EXPLOSIVE_PAYLOAD_SCALE_EXPONENT)
 
 _PROJECTILE_COLLISION_PROFILE_BY_TYPE_ID: dict[ProjectileTemplateId, ProjectileCollisionProfile] = {
     ProjectileTemplateId.ION_MINIGUN: ProjectileCollisionProfile(hit_radius=3.0, initial_damage_pool=1.0),
@@ -329,11 +346,17 @@ class ProjectilePool:
             that deals its own damage over ~1/3s to everything it catches, on
             top of whatever direct damage this hit already dealt. Consumed
             (`is_rocket = False`) so a piercing round only explodes once.
+
+            Blast size/damage scales (damped) with the firing weapon's own
+            effective damage_scale - see `_explosive_payload_blast_scale`.
             """
 
             if not proj.is_rocket:
                 return
             proj.is_rocket = False
+            blast_scale = _explosive_payload_blast_scale(_damage_scale(int(proj.type_id)))
+            if blast_scale <= 0.0:
+                return  # utility weapons (0 damage_scale) don't get a blast
             from ..types import SecondaryProjectileTypeId
             from .secondary_pool import SecondarySpawnSpec
 
@@ -343,7 +366,7 @@ class ProjectilePool:
                     angle=0.0,
                     type_id=SecondaryProjectileTypeId.DETONATION,
                     owner=proj.owner,
-                    time_to_live=_EXPLOSIVE_PAYLOAD_DETONATION_SCALE,
+                    time_to_live=blast_scale,
                 ),
             )
             if effects is not None:

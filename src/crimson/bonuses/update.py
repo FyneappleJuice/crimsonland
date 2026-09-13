@@ -25,7 +25,7 @@ _TEST_MODE_BONUS_SPAWN_INTERVAL = 5.0
 # change what --test-mode auto-spawns.
 _TEST_MODE_BONUS_CYCLE: tuple[BonusId, ...] = (BonusId.EXPLOSIVE_PAYLOAD,)
 # Weapons dropped once near spawn on a fresh test run. Empty = none.
-_TEST_MODE_WEAPON_DROPS: tuple[tuple[float, WeaponId], ...] = ()
+_TEST_MODE_WEAPON_DROPS: tuple[tuple[float, WeaponId], ...] = ((64.0, WeaponId.ASSAULT_RIFLE),)
 
 
 def update_test_mode_fork_spawner(

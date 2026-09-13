@@ -1,9 +1,15 @@
 from __future__ import annotations
 
+import pytest
+
 from crimson.gameplay import GameplayState
 from crimson.owner_ref import OwnerRef
 from crimson.projectiles.runtime import PrimaryStepCtx, ProjectilePool
-from crimson.projectiles.runtime.projectile_pool import _EXPLOSIVE_PAYLOAD_DETONATION_SCALE
+from crimson.projectiles.runtime.projectile_pool import (
+    _EXPLOSIVE_PAYLOAD_DETONATION_SCALE,
+    _EXPLOSIVE_PAYLOAD_PISTOL_DAMAGE_SCALE,
+    _explosive_payload_blast_scale,
+)
 from crimson.projectiles.types import ProjectileTemplateId, SecondaryProjectileTypeId
 from crimson.sim.input import PlayerInput
 from crimson.sim.state_types import PlayerState
@@ -54,7 +60,9 @@ def test_shotgun_pellets_are_untouched_when_inactive() -> None:
     assert not any(p.is_rocket for p in live)
 
 
-def _step_and_hit(*, is_rocket: bool) -> tuple[ProjectilePool, GameplayState, int]:
+def _step_and_hit(
+    *, is_rocket: bool, type_id: ProjectileTemplateId = ProjectileTemplateId.PISTOL,
+) -> tuple[ProjectilePool, GameplayState, int]:
     pool = ProjectilePool(size=4)
     creature = _creature(pos=Vec2(100.0, 100.0))
     player = PlayerState(index=0, pos=Vec2(0.0, 0.0))
@@ -63,7 +71,7 @@ def _step_and_hit(*, is_rocket: bool) -> tuple[ProjectilePool, GameplayState, in
     idx = pool.spawn(
         pos=Vec2(99.0, 100.0),
         angle=0.0,
-        type_id=ProjectileTemplateId.PISTOL,
+        type_id=type_id,
         owner=OwnerRef.from_local_player(0),
         travel_budget=100.0,
     )
@@ -86,9 +94,52 @@ def test_flagged_pellet_detonates_on_hit_and_consumes_the_flag() -> None:
     detonations = [s for s in state.secondary_projectiles.entries if s.active]
     assert len(detonations) == 1
     assert detonations[0].type_id == SecondaryProjectileTypeId.DETONATION
-    assert detonations[0].detonation_scale == _EXPLOSIVE_PAYLOAD_DETONATION_SCALE
+    # Pistol IS the anchor weapon, so its blast is (within f32 rounding) the
+    # reference scale.
+    assert detonations[0].detonation_scale == pytest.approx(_EXPLOSIVE_PAYLOAD_DETONATION_SCALE, abs=1e-6)
 
 
 def test_unflagged_pellet_does_not_detonate() -> None:
     _pool, state, _idx = _step_and_hit(is_rocket=False)
     assert not any(s.active for s in state.secondary_projectiles.entries)
+
+
+def test_weaker_weapon_gets_a_smaller_blast_on_hit() -> None:
+    # Assault Rifle's damage_scale (1.0) is a quarter of the Pistol's (4.1).
+    _pool, state, _idx = _step_and_hit(is_rocket=True, type_id=ProjectileTemplateId.ASSAULT_RIFLE)
+    detonations = [s for s in state.secondary_projectiles.entries if s.active]
+    assert len(detonations) == 1
+    assert 0.0 < detonations[0].detonation_scale < _EXPLOSIVE_PAYLOAD_DETONATION_SCALE
+
+
+def test_zero_damage_scale_weapon_gets_no_blast() -> None:
+    _pool, state, _idx = _step_and_hit(is_rocket=True, type_id=ProjectileTemplateId.SHRINKIFIER)
+    assert not any(s.active for s in state.secondary_projectiles.entries)
+
+
+# --- _explosive_payload_blast_scale: the damped scaling curve itself -------
+
+
+def test_pistol_is_the_anchor() -> None:
+    assert _explosive_payload_blast_scale(_EXPLOSIVE_PAYLOAD_PISTOL_DAMAGE_SCALE) == pytest.approx(
+        _EXPLOSIVE_PAYLOAD_DETONATION_SCALE,
+    )
+
+
+def test_scale_is_monotonic_but_damped_relative_to_damage_scale() -> None:
+    # Plasma Cannon (28.0) hits ~6.8x harder than Pistol (4.1), but its blast
+    # should come out well under 6.8x bigger - damped ("scales, but not as
+    # much"), not linear.
+    weak = _explosive_payload_blast_scale(1.0)  # most guns
+    pistol = _explosive_payload_blast_scale(4.1)
+    strong = _explosive_payload_blast_scale(28.0)  # Plasma Cannon
+
+    assert weak < pistol < strong
+    damage_ratio = 28.0 / 4.1
+    blast_ratio = strong / pistol
+    assert blast_ratio < damage_ratio
+
+
+def test_non_positive_damage_scale_disables_the_blast() -> None:
+    assert _explosive_payload_blast_scale(0.0) == 0.0
+    assert _explosive_payload_blast_scale(-1.0) == 0.0
