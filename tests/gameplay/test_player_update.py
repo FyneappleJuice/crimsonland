@@ -130,7 +130,7 @@ def test_player_update_plasma_overload_scales_shot_cooldown_decay() -> None:
     player.plasma_overload_timer = 5.0
     player_update(player, PlayerInput(aim=Vec2(101.0, 100.0)), 0.5, state)
 
-    decay = float(f32(0.5 * 1.5))
+    decay = float(f32(0.5 * 1.25))
     assert float(player.weapon.shot_cooldown) == pytest.approx(float(f32(1.0 - decay)), abs=1e-6)
 
 
@@ -145,8 +145,52 @@ def test_player_update_wpu_and_plasma_overload_stack_multiplicatively() -> None:
     player.plasma_overload_timer = 5.0
     player_update(player, PlayerInput(aim=Vec2(101.0, 100.0)), 0.5, state)
 
-    decay = float(f32(0.5 * (1.3 * 1.5)))
+    decay = float(f32(0.5 * (1.3 * 1.25)))
     assert float(player.weapon.shot_cooldown) == pytest.approx(float(f32(1.0 - decay)), abs=1e-6)
+
+
+def test_player_update_plasma_overload_refills_reload_to_200_rounds() -> None:
+    state = GameplayState()
+    player = PlayerState(
+        index=0,
+        pos=Vec2(50.0, 50.0),
+        weapon=WeaponSlot(
+            weapon_id=WeaponId.ION_CANNON,
+            clip_size=6,
+            ammo=-1.0,
+            reload_active=True,
+            reload_timer=0.01,
+            reload_timer_max=3.0,
+            shot_cooldown=0.5,
+        ),
+    )
+    player.plasma_overload_timer = 5.0
+
+    player_update(player, PlayerInput(aim=Vec2(51.0, 50.0)), 0.016, state)
+
+    assert_float_close(player.weapon.ammo, 200.0)
+
+
+def test_player_update_plasma_overload_never_shrinks_a_bigger_clip() -> None:
+    state = GameplayState()
+    player = PlayerState(
+        index=0,
+        pos=Vec2(50.0, 50.0),
+        weapon=WeaponSlot(
+            weapon_id=WeaponId.ROCKET_MINIGUN,
+            clip_size=500,
+            ammo=-1.0,
+            reload_active=True,
+            reload_timer=0.01,
+            reload_timer_max=3.0,
+            shot_cooldown=0.5,
+        ),
+    )
+    player.plasma_overload_timer = 5.0
+
+    player_update(player, PlayerInput(aim=Vec2(51.0, 50.0)), 0.016, state)
+
+    assert_float_close(player.weapon.ammo, 500.0)
 
 
 def test_player_update_shot_cooldown_decay_keeps_tiny_positive_residual() -> None:

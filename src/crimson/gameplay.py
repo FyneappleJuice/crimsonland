@@ -113,6 +113,12 @@ _RELATIVE_MOVE_TURN_ALIGN_SCALE = float(f32(7.957747))
 _AIM_POINT_RADIUS = 60.0
 _LOW_HEALTH_BLOODSPILL_SFX: tuple[SfxId, SfxId] = (SfxId.BLOODSPILL_01, SfxId.BLOODSPILL_02)
 
+# Not native: Plasma Overload bonus (bonuses/plasma_overload.py).
+_PLASMA_OVERLOAD_COOLDOWN_RATE_MULT = 1.25
+# Reload refill only (see player_update below) - doesn't touch the weapon's
+# own stored clip_size, so it reverts to normal the moment the timer expires.
+_PLASMA_OVERLOAD_CLIP_SIZE = 200
+
 
 class GameplayState(msgspec.Struct):
     rng: CrandLike = msgspec.field(default_factory=lambda: Crand(0xBEEF))
@@ -735,9 +741,11 @@ def player_update(
     # is a damage/area buff instead sit in power_up.WPU_NO_RATE_WEAPON_IDS.
     cooldown_rate_mult = 1.3 if wpu_rate else 1.0
     # Not native: Plasma Overload bonus (bonuses/plasma_overload.py) - stacks
-    # multiplicatively with WPU if both happen to be active.
+    # multiplicatively with WPU if both happen to be active. Tuned down from
+    # an original x1.5 - the bonus's Multi-Plasma fan already multiplies
+    # damage output on its own, so the fire-rate half was overtuned on top.
     if float(player.plasma_overload_timer) > 0.0:
-        cooldown_rate_mult *= 1.5
+        cooldown_rate_mult *= _PLASMA_OVERLOAD_COOLDOWN_RATE_MULT
     cooldown_decay = float(f32(float(dt) * cooldown_rate_mult))
     next_shot_cooldown = float(f32(float(player.weapon.shot_cooldown) - float(cooldown_decay)))
     player.weapon.shot_cooldown = max(0.0, float(next_shot_cooldown))
@@ -1018,7 +1026,12 @@ def player_update(
 
     reload_preload_underflow = x87_pc24_sub(reload_timer_now, preload_dt)
     if reload_timer_now > 0.0 and reload_preload_underflow < 0.0:
-        player.weapon.ammo = float(player.weapon.clip_size)
+        refill_clip_size = int(player.weapon.clip_size)
+        # Not native: Plasma Overload bonus - bumps the refilled clip up to a
+        # flat 200 rounds while active (never shrinks an already-bigger clip).
+        if float(player.plasma_overload_timer) > 0.0:
+            refill_clip_size = max(refill_clip_size, _PLASMA_OVERLOAD_CLIP_SIZE)
+        player.weapon.ammo = float(refill_clip_size)
 
     if player.weapon.reload_timer > 0.0:
         if (

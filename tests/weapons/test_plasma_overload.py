@@ -27,8 +27,28 @@ def _fire(weapon_id: WeaponId, *, plasma_overload_timer: float = 0.0, fire_bulle
 def test_pistol_fires_the_multiplasma_fan_when_active() -> None:
     state, _ = _fire(WeaponId.PISTOL, plasma_overload_timer=5.0)
     live = [p for p in state.projectiles.entries if p.active]
-    assert len(live) == 5  # Multi-Plasma's fixed fan size
+    assert len(live) == 15  # 3x the real Multi-Plasma weapon's own 5-bolt fan
     assert {p.type_id for p in live} == {ProjectileTemplateId.PLASMA_RIFLE, ProjectileTemplateId.PLASMA_MINIGUN}
+
+
+def test_the_fan_is_tighter_than_the_real_multiplasma_weapons_own_fan() -> None:
+    state, _ = _fire(WeaponId.PISTOL, plasma_overload_timer=5.0)
+    live = [p for p in state.projectiles.entries if p.active]
+    angles = sorted(float(p.angle) for p in live)
+    overload_spread = angles[-1] - angles[0]
+
+    native_state, _ = _fire(WeaponId.MULTI_PLASMA)
+    native_live = [p for p in native_state.projectiles.entries if p.active]
+    native_angles = sorted(float(p.angle) for p in native_live)
+    native_spread = native_angles[-1] - native_angles[0]
+
+    assert overload_spread < native_spread
+
+
+def test_real_multiplasma_weapon_fan_is_unaffected() -> None:
+    state, _ = _fire(WeaponId.MULTI_PLASMA)
+    live = [p for p in state.projectiles.entries if p.active]
+    assert len(live) == 5  # native fan size stays untouched
 
 
 def test_pistol_fires_normally_when_inactive() -> None:
@@ -41,7 +61,7 @@ def test_pistol_fires_normally_when_inactive() -> None:
 def test_every_fan_bolt_carries_a_flat_plus_h_heat_bonus() -> None:
     state, _ = _fire(WeaponId.PISTOL, plasma_overload_timer=5.0)
     live = [p for p in state.projectiles.entries if p.active]
-    assert len(live) == 5
+    assert len(live) == 15
     for p in live:
         assert p.energy_heat_mult == pytest.approx(1.0 + PLASMA_HEAT_H)
 

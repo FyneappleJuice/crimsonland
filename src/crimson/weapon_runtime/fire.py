@@ -54,6 +54,13 @@ if TYPE_CHECKING:
 
 WEAPON_COUNT_SIZE = max(int(entry.weapon_id) for entry in WEAPON_TABLE) + 1
 
+# Not native: Plasma Overload bonus (bonuses/plasma_overload.py) fan tuning.
+# Triples the real Multi-Plasma weapon's own 5-bolt fan (see
+# `MultiPlasmaFanMode` below) but pulls the spread in tighter (0.6x the
+# native fan's own +-30deg half-spread) so the extra bolts stay dense.
+_PLASMA_OVERLOAD_FAN_BOLT_MULTIPLIER = 3
+_PLASMA_OVERLOAD_FAN_SPREAD_SCALE = 0.6
+
 _NATIVE_FIRE_MUZZLE_SPRITES: dict[int, tuple[tuple[float, float, float], ...]] = {
     WeaponId.PISTOL: ((25.0, 1.0, 0.23), (15.0, 2.0, 0.213)),
     WeaponId.ASSAULT_RIFLE: ((25.0, 1.0, 0.23), (15.0, 2.0, 0.213)),
@@ -470,17 +477,34 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
                 if style is not None:
                     state.particles.entries[particle_id].style_id = style
         case MultiPlasmaFanMode():
-            # Multi-Plasma: 5-shot fixed spread using type 0x09 and 0x0B.
-            shot_count = 5
-            spread_small = f32(0.31415927)
-            spread_large = f32(0.5235988)
-            patterns: tuple[tuple[float, ProjectileTemplateId], ...] = (
-                (x87_pc24_sub(shot_angle, spread_small), ProjectileTemplateId.PLASMA_RIFLE),
-                (x87_pc24_sub(shot_angle, spread_large), ProjectileTemplateId.PLASMA_MINIGUN),
-                (shot_angle, ProjectileTemplateId.PLASMA_RIFLE),
-                (x87_pc24_add(shot_angle, spread_large), ProjectileTemplateId.PLASMA_MINIGUN),
-                (x87_pc24_add(shot_angle, spread_small), ProjectileTemplateId.PLASMA_RIFLE),
-            )
+            if is_plasma_overload:
+                # Not native: Plasma Overload bonus fan - 3x the real Multi-Plasma
+                # weapon's own bolt count (see below), fanned out over a tighter
+                # arc than native's +-30deg edge so the extra bolts stay dense
+                # instead of spraying wide. The real weapon's own fan (the
+                # `else` branch) is untouched.
+                shot_count = 5 * _PLASMA_OVERLOAD_FAN_BOLT_MULTIPLIER
+                half_spread = f32(0.5235988) * _PLASMA_OVERLOAD_FAN_SPREAD_SCALE
+                step = (2.0 * half_spread) / float(shot_count - 1) if shot_count > 1 else 0.0
+                patterns = tuple(
+                    (
+                        float(f32(shot_angle - half_spread + step * i)),
+                        ProjectileTemplateId.PLASMA_RIFLE if i % 2 == 0 else ProjectileTemplateId.PLASMA_MINIGUN,
+                    )
+                    for i in range(shot_count)
+                )
+            else:
+                # Multi-Plasma: 5-shot fixed spread using type 0x09 and 0x0B.
+                shot_count = 5
+                spread_small = f32(0.31415927)
+                spread_large = f32(0.5235988)
+                patterns = (
+                    (x87_pc24_sub(shot_angle, spread_small), ProjectileTemplateId.PLASMA_RIFLE),
+                    (x87_pc24_sub(shot_angle, spread_large), ProjectileTemplateId.PLASMA_MINIGUN),
+                    (shot_angle, ProjectileTemplateId.PLASMA_RIFLE),
+                    (x87_pc24_add(shot_angle, spread_large), ProjectileTemplateId.PLASMA_MINIGUN),
+                    (x87_pc24_add(shot_angle, spread_small), ProjectileTemplateId.PLASMA_RIFLE),
+                )
             for angle, type_id in patterns:
                 fan_proj_id = state.projectiles.spawn(
                     pos=muzzle,

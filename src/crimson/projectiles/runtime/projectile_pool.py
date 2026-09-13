@@ -28,6 +28,7 @@ from ...perks import PerkId
 from ...progression import resolve_team_stats
 from ...rng_caller_static import RngCallerStatic
 from ...weapons import WeaponId, weapon_entry_for_projectile_type_id
+from ..effects import _spawn_ion_hit_effects
 from ..types import (
     ENERGY_PROJECTILE_TEMPLATE_IDS,
     MAIN_PROJECTILE_POOL_SIZE,
@@ -404,15 +405,17 @@ class ProjectilePool:
             cloud = self._entries[cloud_idx]
             cloud.vel = Vec2()  # stationary - the cloud sits where the bullet landed
             cloud.life_timer = 0.35  # < 0.4 -> linger (ion AoE) starts ticking immediately
-            if effects is not None:
-                effects.spawn_explosion_burst(
-                    pos=proj.pos,
-                    scale=0.5,
-                    rng=rng,
-                    detail_preset=int(detail_preset),
-                )
-            if sfx_queue is not None:
-                sfx_queue.append(SfxId.EXPLOSION_MEDIUM)
+            # Same visual real Ion weapons use on hit (light-blue ring + spark
+            # burst) - not an explosion. Keyed to ION_MINIGUN's own scale since
+            # that's the template the cloud itself spawns as.
+            _spawn_ion_hit_effects(
+                effects,
+                sfx_queue,
+                type_id=ProjectileTemplateId.ION_MINIGUN,
+                pos=proj.pos,
+                rng=rng,
+                detail_preset=detail_preset,
+            )
 
         def _damage_type_for(type_id: int) -> int:
             if ProjectileTemplateId(type_id) in ENERGY_PROJECTILE_TEMPLATE_IDS:
