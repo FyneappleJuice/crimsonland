@@ -192,6 +192,7 @@ def resolve_fire_recipe(
     *,
     pellet_count: int,
     fire_bullets_active: bool,
+    plasma_overload_active: bool = False,
 ) -> FireRecipe:
     if fire_bullets_active:
         return FireRecipe(
@@ -202,6 +203,12 @@ def resolve_fire_recipe(
                 speed_scale=NoSpeedScale(),
             ),
         )
+
+    # Not native: Plasma Overload bonus (bonuses/plasma_overload.py) - every
+    # weapon fires the Multi-Plasma fan while it's active. Fire Bullets wins
+    # if both happen to be active (checked above).
+    if plasma_overload_active:
+        return FireRecipe(mode=MultiPlasmaFanMode())
 
     recipe = FIRE_RECIPE_BY_WEAPON.get(WeaponId(weapon_id))
     if recipe is not None:

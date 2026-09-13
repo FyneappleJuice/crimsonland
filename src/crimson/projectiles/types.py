@@ -88,6 +88,10 @@ class Projectile(msgspec.Struct):
     # "Explosive Payload" bonus - bonuses/explosive_payload.py). Consumed
     # (cleared) on its first hit so a piercing round only explodes once.
     is_rocket: bool = False
+    # Rewrite-only: this pellet is flagged to bloom into a lingering ion cloud
+    # on impact (the "Ion Payload" bonus - bonuses/ion_payload.py). Consumed
+    # (cleared) on its first hit, same as `is_rocket`.
+    is_ion_payload: bool = False
     speed_scale: float = 1.0
     damage_pool: float = 1.0
     hit_radius: float = 1.0

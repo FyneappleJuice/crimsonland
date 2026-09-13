@@ -733,7 +733,12 @@ def player_update(
     # Normalized: WPU is tuned to ~+30% sustained DPS across weapons. The
     # fire-rate half is x1.3 (with reload x0.8 in assign.py); classes whose WPU
     # is a damage/area buff instead sit in power_up.WPU_NO_RATE_WEAPON_IDS.
-    cooldown_decay = float(f32(float(dt) * (1.3 if wpu_rate else 1.0)))
+    cooldown_rate_mult = 1.3 if wpu_rate else 1.0
+    # Not native: Plasma Overload bonus (bonuses/plasma_overload.py) - stacks
+    # multiplicatively with WPU if both happen to be active.
+    if float(player.plasma_overload_timer) > 0.0:
+        cooldown_rate_mult *= 1.5
+    cooldown_decay = float(f32(float(dt) * cooldown_rate_mult))
     next_shot_cooldown = float(f32(float(player.weapon.shot_cooldown) - float(cooldown_decay)))
     player.weapon.shot_cooldown = max(0.0, float(next_shot_cooldown))
 

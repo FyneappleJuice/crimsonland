@@ -120,6 +120,35 @@ def test_player_update_weapon_power_up_scales_shot_cooldown_decay() -> None:
     assert float(player.weapon.shot_cooldown) == pytest.approx(float(f32(1.0 - decay)), abs=1e-6)
 
 
+def test_player_update_plasma_overload_scales_shot_cooldown_decay() -> None:
+    state = GameplayState()
+    player = PlayerState(
+        index=0,
+        pos=Vec2(100.0, 100.0),
+        weapon=WeaponSlot(weapon_id=WeaponId.PISTOL, shot_cooldown=1.0),
+    )
+    player.plasma_overload_timer = 5.0
+    player_update(player, PlayerInput(aim=Vec2(101.0, 100.0)), 0.5, state)
+
+    decay = float(f32(0.5 * 1.5))
+    assert float(player.weapon.shot_cooldown) == pytest.approx(float(f32(1.0 - decay)), abs=1e-6)
+
+
+def test_player_update_wpu_and_plasma_overload_stack_multiplicatively() -> None:
+    state = GameplayState()
+    state.bonuses.weapon_power_up = 1.0
+    player = PlayerState(
+        index=0,
+        pos=Vec2(100.0, 100.0),
+        weapon=WeaponSlot(weapon_id=WeaponId.PISTOL, shot_cooldown=1.0),
+    )
+    player.plasma_overload_timer = 5.0
+    player_update(player, PlayerInput(aim=Vec2(101.0, 100.0)), 0.5, state)
+
+    decay = float(f32(0.5 * (1.3 * 1.5)))
+    assert float(player.weapon.shot_cooldown) == pytest.approx(float(f32(1.0 - decay)), abs=1e-6)
+
+
 def test_player_update_shot_cooldown_decay_keeps_tiny_positive_residual() -> None:
     state = GameplayState()
     player = PlayerState(

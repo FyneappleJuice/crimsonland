@@ -30,6 +30,8 @@ class BonusId(IntEnum):
     PROJECTILE_FORK = 15
     BLADE = 16
     EXPLOSIVE_PAYLOAD = 17
+    PLASMA_OVERLOAD = 18
+    ION_PAYLOAD = 19
 
 
 class BonusMeta(msgspec.Struct, frozen=True):
@@ -215,6 +217,45 @@ BONUS_TABLE = [
             "multi-pellet weapons only flag their single centre-most pellet); "
             "see weapon_runtime/fire.py::PrimaryPelletsMode and "
             "bonuses/explosive_payload.py."
+        ),
+    ),
+    BonusMeta(
+        bonus_id=BonusId.PLASMA_OVERLOAD,
+        name="Plasma Overload",
+        description="Every weapon fires a Multi-Plasma fan, faster, running hot.",
+        # Placeholder: borrows the Weapon Power Up icon until real art is
+        # authored, same as the other rewrite-only bonuses started on
+        # borrowed frames.
+        icon_id=7,
+        native_amount=8,
+        apply_seconds=8.0,
+        notes=(
+            "Not a native bonus - project addition. While active, every shot "
+            "fires like Multi-Plasma (fixed 5-bolt fan) at a faster cadence, "
+            "with every bolt carrying a flat +H clip-heat bonus regardless of "
+            "the underlying weapon's own clip state; see "
+            "weapon_runtime/fire_recipes.py::resolve_fire_recipe, "
+            "weapon_runtime/fire.py, gameplay.py (cooldown decay), and "
+            "bonuses/plasma_overload.py."
+        ),
+    ),
+    BonusMeta(
+        bonus_id=BonusId.ION_PAYLOAD,
+        name="Ion Payload",
+        description="Every bullet leaves a small ion cloud where it lands.",
+        # Placeholder: borrows the Shock Chain icon (electric theme) until
+        # real art is authored.
+        icon_id=9,
+        native_amount=8,
+        apply_seconds=8.0,
+        notes=(
+            "Not a native bonus - project addition. While active, every fired "
+            "primary pellet is flagged to bloom into a brief ION_MINIGUN-style "
+            "lingering AoE cloud on impact (shotgun-style multi-pellet weapons "
+            "only flag their single centre-most pellet); see "
+            "weapon_runtime/fire.py::PrimaryPelletsMode, "
+            "projectiles/runtime/projectile_pool.py, and "
+            "bonuses/ion_payload.py."
         ),
     ),
 ]

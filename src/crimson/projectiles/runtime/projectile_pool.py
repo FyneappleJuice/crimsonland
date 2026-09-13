@@ -377,6 +377,33 @@ class ProjectilePool:
                     time_to_live=blast_scale,
                 ),
             )
+
+        def _maybe_ion_payload_on_hit(proj: Projectile) -> None:
+            """Ion Payload bonus (not native): bloom a flagged pellet into an ion cloud.
+
+            Spawns a stationary ION_MINIGUN pellet at the impact point with its
+            `life_timer` already inside the native "linger" window (< 0.4s -
+            see `primary_rules.py` / `behaviors.py::_linger_ion_aoe`), so it
+            immediately starts ticking the exact same lingering-AoE damage a
+            real Ion Minigun bolt deals as it expires, for its own ~0.35s.
+            Consumed (`is_ion_payload = False`) so a piercing round only
+            blooms once.
+            """
+
+            if not proj.is_ion_payload:
+                return
+            proj.is_ion_payload = False
+            cloud_idx = self.spawn(
+                pos=proj.pos,
+                angle=0.0,
+                type_id=ProjectileTemplateId.ION_MINIGUN,
+                owner=proj.owner,
+                travel_budget=0.0,
+                hits_players=False,
+            )
+            cloud = self._entries[cloud_idx]
+            cloud.vel = Vec2()  # stationary - the cloud sits where the bullet landed
+            cloud.life_timer = 0.35  # < 0.4 -> linger (ion AoE) starts ticking immediately
             if effects is not None:
                 effects.spawn_explosion_burst(
                     pos=proj.pos,
@@ -563,6 +590,7 @@ class ProjectilePool:
                     rule.pre_hit(update_ctx, proj, int(hit_idx))
                     _maybe_fork_shot_on_hit(proj, int(hit_idx))
                     _maybe_explosive_payload_on_hit(proj)
+                    _maybe_ion_payload_on_hit(proj)
 
                     # Native increments the global shots-hit counter for any
                     # owner (creature-owned splitter children included) when the

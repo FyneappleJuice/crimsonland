@@ -46,7 +46,7 @@ from .fire_recipes import (
     UseAimTargetHint,
     resolve_fire_recipe,
 )
-from .plasma_heat import is_plasma_heat_weapon, plasma_energy_heat_mult
+from .plasma_heat import PLASMA_HEAT_H, is_plasma_heat_weapon, plasma_energy_heat_mult
 from .spawn import owner_ref_for_player, owner_ref_for_player_projectiles, travel_budget_for_type_id
 
 if TYPE_CHECKING:
@@ -218,6 +218,7 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
 
     ammo_cost = 1.0
     is_fire_bullets = float(player.fire_bullets_timer) > 0.0
+    is_plasma_overload = float(player.plasma_overload_timer) > 0.0
     perk_fire_ready = (not force_pre_swap_fire_gate) and player.weapon.reload_timer > 0.0
     use_regression_bullets = False
     use_ammunition_within = False
@@ -344,6 +345,7 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
         weapon_id=weapon_id,
         pellet_count=pellet_count,
         fire_bullets_active=is_fire_bullets,
+        plasma_overload_active=is_plasma_overload,
     )
     ammo_cost = float(recipe.ammo_cost)
 
@@ -364,6 +366,11 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
             weapon_power_up=weapon_power_up_active,
             reflex_boost=reflex_boost_active,
         )
+    elif is_plasma_overload:
+        # Not native: Plasma Overload bonus. The weapon has no clip-heat ramp
+        # of its own (it isn't a plasma weapon), so pin a flat +H "running hot"
+        # bonus instead, same as Reflex Boost pins real plasma weapons.
+        energy_heat_mult = 1.0 + PLASMA_HEAT_H
 
     match recipe.mode:
         case PrimaryPelletsMode(type_id=type_id, count=count, jitter=jitter_rule, speed_scale=speed_rule):
@@ -380,10 +387,12 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
             pellet_speed_caller = _PELLET_SPEED_SCALE_CALLER_BY_WEAPON.get(WeaponId(weapon_id))
             if not isinstance(speed_rule, NoSpeedScale) and pellet_speed_caller is None:
                 raise ValueError(f"missing pellet speed caller for weapon {int(weapon_id)}")
-            # Explosive Payload bonus (not native): every bullet becomes a rocket.
-            # Multi-pellet (shotgun-style) weapons only flag their single
-            # centre-most pellet - the rest of the spread stays normal.
+            # Explosive Payload / Ion Payload bonuses (not native): every bullet
+            # becomes a rocket / leaves an ion cloud. Multi-pellet (shotgun-style)
+            # weapons only flag their single centre-most pellet - the rest of the
+            # spread stays normal. Both can flag the very same pellet.
             explosive_payload_active = float(player.explosive_payload_timer) > 0.0
+            ion_payload_active = float(player.ion_payload_timer) > 0.0
             explosive_pellet_index = pellets // 2
             for pellet_index in range(pellets):
                 match jitter_rule:
@@ -408,8 +417,11 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
                 )
                 if energy_heat_mult != 1.0:
                     state.projectiles.entries[int(proj_id)].energy_heat_mult = float(energy_heat_mult)
-                if explosive_payload_active and pellet_index == explosive_pellet_index:
-                    state.projectiles.entries[int(proj_id)].is_rocket = True
+                if pellet_index == explosive_pellet_index:
+                    if explosive_payload_active:
+                        state.projectiles.entries[int(proj_id)].is_rocket = True
+                    if ion_payload_active:
+                        state.projectiles.entries[int(proj_id)].is_ion_payload = True
                 if isinstance(speed_rule, ModuloSpeedScale):
                     assert pellet_speed_caller is not None
                     _apply_speed_scale_rule(

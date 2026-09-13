@@ -232,11 +232,13 @@ def test_zig_weapon_ids_match_python_port() -> None:
 
 
 def test_zig_bonus_ids_match_python_port() -> None:
-    # "projectile_fork", "blade", and "explosive_payload" are Python-rewrite-only
-    # bonuses with no native reference and no Zig port counterpart, same reason
-    # "maps" is excluded from the game-mode-ids guard above.
+    # "projectile_fork", "blade", "explosive_payload", "plasma_overload", and
+    # "ion_payload" are Python-rewrite-only bonuses with no native reference
+    # and no Zig port counterpart, same reason "maps" is excluded from the
+    # game-mode-ids guard above.
     assert _zig_enum_values("BonusId") == _python_enum_values(
-        BonusId, exclude={"projectile_fork", "blade", "explosive_payload"},
+        BonusId,
+        exclude={"projectile_fork", "blade", "explosive_payload", "plasma_overload", "ion_payload"},
     )
 
 
