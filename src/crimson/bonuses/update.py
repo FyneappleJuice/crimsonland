@@ -19,20 +19,11 @@ from .pool import BONUS_PICKUP_LINGER, BONUS_SPAWN_MARGIN, BONUS_SPAWN_MIN_DISTA
 if TYPE_CHECKING:
     from ..creatures.runtime import CreatureState
 
-# Kept >= the payload bonuses' own 8s `apply_seconds` (explosive_payload,
-# plasma_overload, ion_payload) so the test cycle doesn't hand out the next
-# one while the previous is still active - stacking two payload flags on the
-# same pellet made hits look wrong (e.g. Ion Payload appearing to trigger an
-# explosion instead of its own ion visual).
-_TEST_MODE_BONUS_SPAWN_INTERVAL = 9.0
+_TEST_MODE_BONUS_SPAWN_INTERVAL = 5.0
 # Rewrite-only bonuses under active test, spawned round-robin so each can be
 # tried in turn. Empty = no auto-spawned bonuses. Add / remove ids here to
 # change what --test-mode auto-spawns.
-_TEST_MODE_BONUS_CYCLE: tuple[BonusId, ...] = (
-    BonusId.EXPLOSIVE_PAYLOAD,
-    BonusId.PLASMA_OVERLOAD,
-    BonusId.ION_PAYLOAD,
-)
+_TEST_MODE_BONUS_CYCLE: tuple[BonusId, ...] = (BonusId.EXPLOSIVE_PAYLOAD,)
 # Weapons dropped once near spawn on a fresh test run. Empty = none.
 _TEST_MODE_WEAPON_DROPS: tuple[tuple[float, WeaponId], ...] = ((64.0, WeaponId.ASSAULT_RIFLE),)
 

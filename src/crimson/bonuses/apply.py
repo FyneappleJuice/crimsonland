@@ -11,8 +11,6 @@ from .apply_context import BonusApplyCtx, BonusApplyHandler
 from .blade_orbit import apply_blade
 from .double_experience import apply_double_experience
 from .explosive_payload import apply_explosive_payload
-from .ion_payload import apply_ion_payload
-from .plasma_overload import apply_plasma_overload
 from .fire_bullets import apply_fire_bullets
 from .fireblast import apply_fireblast
 from .freeze import apply_freeze
@@ -49,8 +47,6 @@ _BONUS_APPLY_HANDLERS: dict[BonusId, BonusApplyHandler] = {
     BonusId.PROJECTILE_FORK: apply_projectile_fork,
     BonusId.BLADE: apply_blade,
     BonusId.EXPLOSIVE_PAYLOAD: apply_explosive_payload,
-    BonusId.PLASMA_OVERLOAD: apply_plasma_overload,
-    BonusId.ION_PAYLOAD: apply_ion_payload,
 }
 
 

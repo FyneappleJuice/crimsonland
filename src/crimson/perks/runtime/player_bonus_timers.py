@@ -45,19 +45,3 @@ def update_player_bonus_timers(ctx: PerksUpdateEffectsCtx) -> None:
                 f32(float(player.explosive_payload_timer)),
                 dt,
             )
-
-        if player.plasma_overload_timer <= 0.0:
-            player.plasma_overload_timer = 0.0
-        else:
-            player.plasma_overload_timer = x87_pc24_sub(
-                f32(float(player.plasma_overload_timer)),
-                dt,
-            )
-
-        if player.ion_payload_timer <= 0.0:
-            player.ion_payload_timer = 0.0
-        else:
-            player.ion_payload_timer = x87_pc24_sub(
-                f32(float(player.ion_payload_timer)),
-                dt,
-            )

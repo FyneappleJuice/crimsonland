@@ -28,7 +28,6 @@ from ...perks import PerkId
 from ...progression import resolve_team_stats
 from ...rng_caller_static import RngCallerStatic
 from ...weapons import WeaponId, weapon_entry_for_projectile_type_id
-from ..effects import _spawn_ion_hit_effects
 from ..types import (
     ENERGY_PROJECTILE_TEMPLATE_IDS,
     MAIN_PROJECTILE_POOL_SIZE,
@@ -378,44 +377,15 @@ class ProjectilePool:
                     time_to_live=blast_scale,
                 ),
             )
-
-        def _maybe_ion_payload_on_hit(proj: Projectile) -> None:
-            """Ion Payload bonus (not native): bloom a flagged pellet into an ion cloud.
-
-            Spawns a stationary ION_MINIGUN pellet at the impact point with its
-            `life_timer` already inside the native "linger" window (< 0.4s -
-            see `primary_rules.py` / `behaviors.py::_linger_ion_aoe`), so it
-            immediately starts ticking the exact same lingering-AoE damage a
-            real Ion Minigun bolt deals as it expires, for its own ~0.35s.
-            Consumed (`is_ion_payload = False`) so a piercing round only
-            blooms once.
-            """
-
-            if not proj.is_ion_payload:
-                return
-            proj.is_ion_payload = False
-            cloud_idx = self.spawn(
-                pos=proj.pos,
-                angle=0.0,
-                type_id=ProjectileTemplateId.ION_MINIGUN,
-                owner=proj.owner,
-                travel_budget=0.0,
-                hits_players=False,
-            )
-            cloud = self._entries[cloud_idx]
-            cloud.vel = Vec2()  # stationary - the cloud sits where the bullet landed
-            cloud.life_timer = 0.35  # < 0.4 -> linger (ion AoE) starts ticking immediately
-            # Same visual real Ion weapons use on hit (light-blue ring + spark
-            # burst) - not an explosion. Keyed to ION_MINIGUN's own scale since
-            # that's the template the cloud itself spawns as.
-            _spawn_ion_hit_effects(
-                effects,
-                sfx_queue,
-                type_id=ProjectileTemplateId.ION_MINIGUN,
-                pos=proj.pos,
-                rng=rng,
-                detail_preset=detail_preset,
-            )
+            if effects is not None:
+                effects.spawn_explosion_burst(
+                    pos=proj.pos,
+                    scale=0.5,
+                    rng=rng,
+                    detail_preset=int(detail_preset),
+                )
+            if sfx_queue is not None:
+                sfx_queue.append(SfxId.EXPLOSION_MEDIUM)
 
         def _damage_type_for(type_id: int) -> int:
             if ProjectileTemplateId(type_id) in ENERGY_PROJECTILE_TEMPLATE_IDS:
@@ -593,7 +563,6 @@ class ProjectilePool:
                     rule.pre_hit(update_ctx, proj, int(hit_idx))
                     _maybe_fork_shot_on_hit(proj, int(hit_idx))
                     _maybe_explosive_payload_on_hit(proj)
-                    _maybe_ion_payload_on_hit(proj)
 
                     # Native increments the global shots-hit counter for any
                     # owner (creature-owned splitter children included) when the
