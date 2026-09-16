@@ -114,6 +114,46 @@ def test_fire_bullets_suppresses_weapon_fire_sfx(mocker) -> None:
     assert {call.args[1] for call in play_sfx.call_args_list} == {SfxId.AUTORIFLE_FIRE, SfxId.PLASMAMINIGUN_FIRE}
 
 
+def test_plasma_overload_swaps_weapon_fire_sfx_for_plasma_rifle(mocker) -> None:
+    repo_root = Path(__file__).resolve().parents[1]
+    world = WorldRuntimeHost(assets_dir=repo_root / "artifacts" / "assets")
+    play_sfx = mocker.patch.object(audio_router_module, "play_sfx")
+    world.audio = _audio_state_stub()
+    world.audio_rng = Crand(0)
+    world.sync_audio_bridge_state()
+
+    player = world.sim_world.players[0]
+
+    player.weapon.weapon_id = WeaponId.SHOTGUN
+    player.weapon.clip_size = 12
+    player.weapon.ammo = 12
+    player.weapon.reload_active = False
+    player.weapon.reload_timer = 0.0
+    player.weapon.reload_timer_max = 1.0
+    player.weapon.shot_cooldown = 0.0
+    player.plasma_overload_timer = 1.0
+
+    prev_shot_seq = int(player.shot_seq)
+    prev_reload_active = bool(player.weapon.reload_active)
+    prev_reload_timer = float(player.weapon.reload_timer)
+
+    input_state = PlayerInput(
+        fire_down=True,
+        aim=Vec2(player.pos.x + 10.0, player.pos.y),
+    )
+    player_update(player, input_state, 0.05, world.sim_world.state, world_size=float(world.world_size))
+
+    world.audio_bridge.router.handle_player_audio(
+        player,
+        prev_shot_seq=prev_shot_seq,
+        prev_reload_active=prev_reload_active,
+        prev_reload_timer=prev_reload_timer,
+    )
+
+    assert play_sfx.call_count == 1
+    assert play_sfx.call_args_list[0].args[1] == SfxId.SHOCK_FIRE
+
+
 def test_pending_perk_increase_plays_levelup_sfx(mocker) -> None:
     repo_root = Path(__file__).resolve().parents[1]
     world = WorldRuntimeHost(assets_dir=repo_root / "artifacts" / "assets")

@@ -30,6 +30,7 @@ class BonusId(IntEnum):
     PROJECTILE_FORK = 15
     BLADE = 16
     EXPLOSIVE_PAYLOAD = 17
+    PLASMA_OVERLOAD = 18
 
 
 class BonusMeta(msgspec.Struct, frozen=True):
@@ -215,6 +216,25 @@ BONUS_TABLE = [
             "multi-pellet weapons only flag their single centre-most pellet); "
             "see weapon_runtime/fire.py::PrimaryPelletsMode and "
             "bonuses/explosive_payload.py."
+        ),
+    ),
+    BonusMeta(
+        bonus_id=BonusId.PLASMA_OVERLOAD,
+        name="Plasma Overload",
+        description="Every weapon fires twin Plasma Rifle bolts for a while.",
+        # Placeholder: borrows the Weapon Power Up icon until real art is
+        # authored, same as the other rewrite-only bonuses started on
+        # borrowed frames.
+        icon_id=7,
+        native_amount=8,
+        apply_seconds=8.0,
+        notes=(
+            "Not a native bonus - project addition. While active, every "
+            "weapon's fire recipe is overridden: it fires two Plasma Rifle "
+            "bolts side-by-side on the same heading (no angle spread), at a "
+            "fixed Assault Rifle cooldown, for no ammo cost (never triggers a "
+            "reload); see weapon_runtime/fire_recipes.py::PlasmaOverloadMode "
+            "and weapon_runtime/fire.py."
         ),
     ),
 ]

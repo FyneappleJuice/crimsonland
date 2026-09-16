@@ -80,6 +80,10 @@ def plan_player_audio_sfx(
             plasma_minigun = WEAPON_BY_ID[WeaponId.PLASMA_MINIGUN]
             sfx.append(fire_bullets.fire_sound)
             sfx.append(plasma_minigun.fire_sound)
+        elif float(player.plasma_overload_timer) > 0.0:
+            # Not native: Plasma Overload bonus - swap the regular per-weapon
+            # shot sfx for the Plasma Rifle's own fire sound.
+            sfx.append(WEAPON_BY_ID[WeaponId.PLASMA_RIFLE].fire_sound)
         elif player.weapon.weapon_id in _NO_FIRE_SOUND_WEAPONS:
             # Rewrite-only weapons that own their audio elsewhere (Arc Gun: the
             # ARC_SOUND crackle on the soft channel; Evil Scythe: silent swing).

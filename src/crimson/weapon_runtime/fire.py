@@ -11,6 +11,7 @@ from grim.geom import Vec2
 from grim.rand import CrandLike
 
 from ..math_parity import (
+    NATIVE_HALF_PI,
     NATIVE_PI,
     f32,
     native_fire_muzzle_pos,
@@ -40,6 +41,7 @@ from .fire_recipes import (
     NoJitter,
     NoSpeedScale,
     ParticleStreamMode,
+    PlasmaOverloadMode,
     PrimaryPelletsMode,
     SecondaryShotMode,
     SwarmerDumpMode,
@@ -53,6 +55,18 @@ if TYPE_CHECKING:
     from ..creatures.runtime import CreatureState
 
 WEAPON_COUNT_SIZE = max(int(entry.weapon_id) for entry in WEAPON_TABLE) + 1
+
+# Not native: Plasma Overload bonus (bonuses/plasma_overload.py) - twin bolts
+# fired side-by-side on the same heading, `_PLASMA_OVERLOAD_LATERAL_SPACING`
+# px apart, instead of a fan.
+_PLASMA_OVERLOAD_BOLT_COUNT = 2
+_PLASMA_OVERLOAD_LATERAL_SPACING = 10.0
+# A bit faster than the Assault Rifle's own 0.117s this was originally pinned
+# to.
+_PLASMA_OVERLOAD_COOLDOWN = 0.1
+# Tighter than any real weapon's own spread_heat_inc (Assault Rifle's 0.09 is
+# among the lowest) so sustained fire stays accurate instead of drifting wide.
+_PLASMA_OVERLOAD_SPREAD_HEAT = 0.05
 
 _NATIVE_FIRE_MUZZLE_SPRITES: dict[int, tuple[tuple[float, float, float], ...]] = {
     WeaponId.PISTOL: ((25.0, 1.0, 0.23), (15.0, 2.0, 0.213)),
@@ -218,6 +232,7 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
 
     ammo_cost = 1.0
     is_fire_bullets = float(player.fire_bullets_timer) > 0.0
+    is_plasma_overload = float(player.plasma_overload_timer) > 0.0
     perk_fire_ready = (not force_pre_swap_fire_gate) and player.weapon.reload_timer > 0.0
     use_regression_bullets = False
     use_ammunition_within = False
@@ -269,8 +284,18 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
 
     if is_fire_bullets and pellet_count == 1:
         shot_cooldown = float(f32(float(fire_bullets_weapon.shot_cooldown)))
+    elif is_plasma_overload:
+        # Not native: Plasma Overload bonus - every weapon fires at a fixed
+        # cooldown while active, regardless of its own rate or pellet count
+        # (it always converts to the fixed twin-bolt mode).
+        shot_cooldown = float(f32(_PLASMA_OVERLOAD_COOLDOWN))
 
-    spread_heat_base = fire_bullets_spread_heat if is_fire_bullets else weapon_spread_heat
+    if is_fire_bullets:
+        spread_heat_base = fire_bullets_spread_heat
+    elif is_plasma_overload:
+        spread_heat_base = _PLASMA_OVERLOAD_SPREAD_HEAT
+    else:
+        spread_heat_base = weapon_spread_heat
     spread_inc = x87_pc24_mul(spread_heat_base, f32(1.3))
 
     # Fastshot (x0.88), Sharpshooter (x1.05) and any new fire-rate content are
@@ -344,6 +369,7 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
         weapon_id=weapon_id,
         pellet_count=pellet_count,
         fire_bullets_active=is_fire_bullets,
+        plasma_overload_active=is_plasma_overload,
     )
     ammo_cost = float(recipe.ammo_cost)
 
@@ -480,6 +506,28 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
                 )
                 if energy_heat_mult != 1.0:
                     state.projectiles.entries[int(fan_proj_id)].energy_heat_mult = float(energy_heat_mult)
+        case PlasmaOverloadMode():
+            # Not native: Plasma Overload bonus - two Plasma Rifle bolts fired
+            # side-by-side on the same heading (not a fan - no angle spread).
+            # Damage is flat PLASMA_RIFLE.damage_scale (resolved normally from
+            # the projectile's own type at hit time); cooldown/ammo are
+            # overridden above/below.
+            shot_count = _PLASMA_OVERLOAD_BOLT_COUNT
+            perpendicular = Vec2.from_heading(float(shot_angle) + NATIVE_HALF_PI)
+            half_spacing = _PLASMA_OVERLOAD_LATERAL_SPACING * 0.5
+            for bolt_index in range(_PLASMA_OVERLOAD_BOLT_COUNT):
+                lateral = f32(-half_spacing + _PLASMA_OVERLOAD_LATERAL_SPACING * bolt_index)
+                bolt_pos = muzzle + perpendicular * float(lateral)
+                bolt_proj_id = state.projectiles.spawn(
+                    pos=bolt_pos,
+                    angle=shot_angle,
+                    type_id=ProjectileTemplateId.PLASMA_RIFLE,
+                    owner=projectile_owner,
+                    travel_budget=travel_budget_for_type_id(ProjectileTemplateId.PLASMA_RIFLE),
+                    hits_players=projectile_hits_players,
+                )
+                if energy_heat_mult != 1.0:
+                    state.projectiles.entries[int(bolt_proj_id)].energy_heat_mult = float(energy_heat_mult)
         case SwarmerDumpMode():
             # Mini-Rocket Swarmers -> secondary type 2 (fires the full clip in a spread).
             # Native spawns one rocket per integer counter step below the float ammo
@@ -564,9 +612,12 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
     player.muzzle_flash_alpha = min(0.8, player.muzzle_flash_alpha)
 
     player.shot_seq += 1
-    if state.bonuses.reflex_boost <= 0.0 and not is_fire_bullets:
+    if state.bonuses.reflex_boost <= 0.0 and not is_fire_bullets and not is_plasma_overload:
         # Native allows ammo to cross below zero for reload-time firing paths
         # (for example Regression Bullets), and replay checkpoints rely on that.
+        # Not native: Plasma Overload bonus also gets the free-ammo treatment,
+        # same as Fire Bullets/Reflex Boost - no ammo cost, so it can never
+        # trigger a reload either.
         player.weapon.ammo = float(player.weapon.ammo) - float(ammo_cost)
     reload_start_gate_open = bool(player.weapon.reload_timer <= 0.0)
     if force_pre_swap_fire_gate:

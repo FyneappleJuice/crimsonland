@@ -134,6 +134,8 @@ class PlayerState(msgspec.Struct):
     projectile_fork_timer: float = 0.0
     # Not native: backs the "Explosive Payload" bonus (bonuses/explosive_payload.py).
     explosive_payload_timer: float = 0.0
+    # Not native: backs the "Plasma Overload" bonus (bonuses/plasma_overload.py).
+    plasma_overload_timer: float = 0.0
     # Not native: backs the "Blade" bonus (bonuses/blade_orbit.py).
     blade_orbit: BladeOrbitState = msgspec.field(default_factory=BladeOrbitState)
     # Not native: backs the Evil Scythe melee sweep (weapon_runtime/scythe_sweep.py).

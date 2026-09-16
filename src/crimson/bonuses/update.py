@@ -23,7 +23,7 @@ _TEST_MODE_BONUS_SPAWN_INTERVAL = 5.0
 # Rewrite-only bonuses under active test, spawned round-robin so each can be
 # tried in turn. Empty = no auto-spawned bonuses. Add / remove ids here to
 # change what --test-mode auto-spawns.
-_TEST_MODE_BONUS_CYCLE: tuple[BonusId, ...] = (BonusId.EXPLOSIVE_PAYLOAD,)
+_TEST_MODE_BONUS_CYCLE: tuple[BonusId, ...] = (BonusId.EXPLOSIVE_PAYLOAD, BonusId.PLASMA_OVERLOAD)
 # Weapons dropped once near spawn on a fresh test run. Empty = none.
 _TEST_MODE_WEAPON_DROPS: tuple[tuple[float, WeaponId], ...] = ((64.0, WeaponId.ASSAULT_RIFLE),)
 
