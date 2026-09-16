@@ -72,6 +72,7 @@ _NONNATIVE_BONUS_POOL: tuple[BonusId, ...] = (
     BonusId.BLADE,
     BonusId.EXPLOSIVE_PAYLOAD,
     BonusId.PLASMA_OVERLOAD,
+    BonusId.ION_OVERLOAD,
 )
 
 

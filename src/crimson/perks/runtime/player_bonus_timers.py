@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from ...bonuses.ion_overload import fire_ion_overload_bolt
 from ...math_parity import f32, x87_pc24_sub
 from .effects_context import PerksUpdateEffectsCtx
 
@@ -53,3 +54,14 @@ def update_player_bonus_timers(ctx: PerksUpdateEffectsCtx) -> None:
                 f32(float(player.plasma_overload_timer)),
                 dt,
             )
+
+        overload = player.ion_overload
+        was_charging = overload.charge_timer > 0.0
+        if not was_charging:
+            overload.charge_timer = 0.0
+        else:
+            overload.charge_timer = x87_pc24_sub(f32(float(overload.charge_timer)), dt)
+            if overload.charge_timer <= 0.0:
+                # Not native: Ion Overload bonus - the charge just ran out,
+                # fire the payload bolt now (bonuses/ion_overload.py).
+                fire_ion_overload_bolt(ctx.state, player)

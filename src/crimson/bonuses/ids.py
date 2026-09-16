@@ -31,6 +31,7 @@ class BonusId(IntEnum):
     BLADE = 16
     EXPLOSIVE_PAYLOAD = 17
     PLASMA_OVERLOAD = 18
+    ION_OVERLOAD = 19
 
 
 class BonusMeta(msgspec.Struct, frozen=True):
@@ -216,6 +217,29 @@ BONUS_TABLE = [
             "multi-pellet weapons only flag their single centre-most pellet); "
             "see weapon_runtime/fire.py::PrimaryPelletsMode and "
             "bonuses/explosive_payload.py."
+        ),
+    ),
+    BonusMeta(
+        bonus_id=BonusId.ION_OVERLOAD,
+        name="Ion Overload",
+        description="Charges up, then fires a huge ion bolt that blooms into a nova.",
+        # Placeholder: borrows Shock Chain's icon (electric-themed) until real
+        # art is authored, same as the other rewrite-only bonuses started on
+        # borrowed frames.
+        icon_id=3,
+        native_amount=5,
+        apply_seconds=5.0,
+        notes=(
+            "Not a native bonus - project addition. Picking it up starts a "
+            "5-second charge that does not change the player's own shooting "
+            "at all; picking up another while charging extends the timer and "
+            "increases the eventual payoff. When the charge reaches zero, a "
+            "real ION_CANNON-type bolt fires at the player's current aim; on "
+            "hit it blooms into a stationary ion nova at the impact point, "
+            "with radius/dps/duration all scaling linearly with the total "
+            "charge time (350px / 1500dps / 1s at the 5s baseline - see "
+            "bonuses/ion_overload.py); CreatureDamageType.ION tick damage, "
+            "not the rocket/explosion DETONATION path."
         ),
     ),
     BonusMeta(

@@ -9,6 +9,7 @@ from grim.geom import Vec2
 from grim.sfx_map import SfxId
 
 from ..bonuses.blade_orbit import update_blade_orbits
+from ..bonuses.ion_overload import update_ion_overload_clouds
 from ..weapon_runtime.arc_gun import update_arc_gun
 from ..weapon_runtime.power_up import WPU_FLAME_DAMAGE_MULT
 from ..weapon_runtime.scythe_sweep import update_scythe_swings
@@ -475,6 +476,13 @@ class WorldState(msgspec.Struct):
             )
         # Not native: advance orbiting-blade bonuses and apply their contact hits.
         update_blade_orbits(
+            self.players,
+            self.creatures.entries,
+            dt,
+            creature_damage_runtime=step_runtime,
+        )
+        # Not native: advance active Ion Overload novas and apply their tick damage.
+        update_ion_overload_clouds(
             self.players,
             self.creatures.entries,
             dt,

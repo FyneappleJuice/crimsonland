@@ -39,6 +39,26 @@ class BladeOrbitState(msgspec.Struct):
     hit_cooldowns: dict[int, float] = msgspec.field(default_factory=dict)
 
 
+class IonOverloadState(msgspec.Struct):
+    """Not native: backs the "Ion Overload" bonus (bonuses/ion_overload.py).
+
+    `charge_timer` counts down from each pickup's contribution (repeat
+    pickups while charging extend it, same stacking as the other timers);
+    `charge_seconds` only ever accumulates and is read once `charge_timer`
+    reaches zero, at which point a stationary ion nova is dropped at
+    `cloud_pos` sized from the total charge (`cloud_radius`/`cloud_dps`/
+    `cloud_timer`), then `charge_seconds` resets to 0.0 for the next charge
+    cycle.
+    """
+
+    charge_timer: float = 0.0
+    charge_seconds: float = 0.0
+    cloud_timer: float = 0.0
+    cloud_radius: float = 0.0
+    cloud_dps: float = 0.0
+    cloud_pos: Vec2 = Vec2()
+
+
 class ScytheSwingState(msgspec.Struct):
     """Not native: backs the Evil Scythe melee sweep (weapon_runtime/scythe_sweep.py).
 
@@ -138,6 +158,8 @@ class PlayerState(msgspec.Struct):
     plasma_overload_timer: float = 0.0
     # Not native: backs the "Blade" bonus (bonuses/blade_orbit.py).
     blade_orbit: BladeOrbitState = msgspec.field(default_factory=BladeOrbitState)
+    # Not native: backs the "Ion Overload" bonus (bonuses/ion_overload.py).
+    ion_overload: IonOverloadState = msgspec.field(default_factory=IonOverloadState)
     # Not native: backs the Evil Scythe melee sweep (weapon_runtime/scythe_sweep.py).
     scythe_swing: ScytheSwingState = msgspec.field(default_factory=ScytheSwingState)
     # Not native: backs the Arc Gun chain lightning (weapon_runtime/arc_gun.py).

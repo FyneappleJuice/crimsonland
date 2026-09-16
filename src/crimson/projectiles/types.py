@@ -88,6 +88,12 @@ class Projectile(msgspec.Struct):
     # "Explosive Payload" bonus - bonuses/explosive_payload.py). Consumed
     # (cleared) on its first hit so a piercing round only explodes once.
     is_rocket: bool = False
+    # Rewrite-only: this bolt carries an Ion Overload payload (bonuses/
+    # ion_overload.py) - the total charge time (seconds) that led to it.
+    # 0.0 = not an Overload bolt. Consumed (cleared) on its first hit, which
+    # blooms the scaled nova at the hit position instead of the real Ion
+    # Cannon's own fixed-size linger.
+    ion_overload_charge: float = 0.0
     speed_scale: float = 1.0
     damage_pool: float = 1.0
     hit_radius: float = 1.0

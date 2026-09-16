@@ -387,6 +387,34 @@ class ProjectilePool:
             if sfx_queue is not None:
                 sfx_queue.append(SfxId.EXPLOSION_MEDIUM)
 
+        def _maybe_ion_overload_on_hit(proj: Projectile) -> None:
+            """Ion Overload bonus (not native): bloom the charged bolt on hit.
+
+            The bolt is a real ION_CANNON-type projectile carrying the total
+            charge time it was fired with (`Projectile.ion_overload_charge`).
+            Consumed on its first hit, at which point it drops a much bigger
+            (logarithmically-scaled) stationary ion nova at the hit position
+            instead of falling through to the real Ion Cannon's own fixed
+            128px/300dps linger - see bonuses/ion_overload.py.
+            """
+
+            charge = float(proj.ion_overload_charge)
+            if charge <= 0.0:
+                return
+            proj.ion_overload_charge = 0.0
+            owner_player_index = proj.owner.player_index_in_bounds(len(players))
+            if owner_player_index is None:
+                return
+            from ...bonuses.ion_overload import bloom_ion_overload_nova
+
+            bloom_ion_overload_nova(
+                players[owner_player_index],
+                proj.pos,
+                charge,
+                effects=effects,
+                detail_preset=int(detail_preset),
+            )
+
         def _damage_type_for(type_id: int) -> int:
             if ProjectileTemplateId(type_id) in ENERGY_PROJECTILE_TEMPLATE_IDS:
                 return int(CreatureDamageType.ENERGY)
@@ -563,6 +591,7 @@ class ProjectilePool:
                     rule.pre_hit(update_ctx, proj, int(hit_idx))
                     _maybe_fork_shot_on_hit(proj, int(hit_idx))
                     _maybe_explosive_payload_on_hit(proj)
+                    _maybe_ion_overload_on_hit(proj)
 
                     # Native increments the global shots-hit counter for any
                     # owner (creature-owned splitter children included) when the

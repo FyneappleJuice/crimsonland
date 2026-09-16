@@ -15,6 +15,7 @@ from .fire_bullets import apply_fire_bullets
 from .fireblast import apply_fireblast
 from .freeze import apply_freeze
 from .ids import BONUS_BY_ID, BonusId
+from .ion_overload import apply_ion_overload
 from .medikit import apply_medikit
 from .nuke import apply_nuke
 from .plasma_overload import apply_plasma_overload
@@ -49,6 +50,7 @@ _BONUS_APPLY_HANDLERS: dict[BonusId, BonusApplyHandler] = {
     BonusId.BLADE: apply_blade,
     BonusId.EXPLOSIVE_PAYLOAD: apply_explosive_payload,
     BonusId.PLASMA_OVERLOAD: apply_plasma_overload,
+    BonusId.ION_OVERLOAD: apply_ion_overload,
 }
 
 
