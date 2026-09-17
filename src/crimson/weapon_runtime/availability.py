@@ -2,11 +2,9 @@ from __future__ import annotations
 
 from ..game_modes import GameMode
 from ..persistence.save_status import GameStatus
-from ..quests import all_quests
 from ..quests.level import QuestLevel
 from ..rng_caller_static import RngCallerStatic
 from ..sim.state_types import GameplayState
-from ..test_mode import test_mode_enabled
 from ..weapon_usage import weapon_usage_slot_for_weapon_id
 from ..weapons import WEAPON_TABLE, WeaponId
 
@@ -26,51 +24,26 @@ def build_weapon_availability(
     status: GameStatus | None,
     game_mode: GameMode,
 ) -> list[bool]:
+    """Every droppable weapon is unlocked, regardless of quest progress or mode.
+
+    Not native: the mod's roguelite direction drops native quest-gated weapon
+    unlocks entirely - `status`/`game_mode` are kept in the signature for
+    existing callers but no longer gate anything here.
+    """
+    _ = status, game_mode
     available = [False] * WEAPON_AVAILABLE_COUNT
 
     for weapon_id in _FORK_ROSTER_WEAPON_IDS:
         if 0 <= int(weapon_id) < len(available):
             available[int(weapon_id)] = True
 
-    # Fork: --test-mode unlocks the whole droppable weapon set (ids 1..33) so
-    # every weapon can be tried without grinding quest unlocks. Skip the cut /
-    # unimplemented stubs (e.g. Flameburst) that would crash when fired.
-    if test_mode_enabled():
-        from .fire_recipes import fireable_weapon_ids
+    # Skip the cut / unimplemented stubs (e.g. Flameburst) that would crash when fired.
+    from .fire_recipes import fireable_weapon_ids
 
-        fireable = fireable_weapon_ids()
-        for weapon_id in range(1, min(WEAPON_DROP_ID_COUNT + 1, WEAPON_AVAILABLE_COUNT)):
-            if WeaponId(weapon_id) in fireable:
-                available[weapon_id] = True
-        return available
-
-    unlock_index = 0
-    unlock_index_full = 0
-    if status is not None:
-        unlock_index = status.quest_unlock_index
-        unlock_index_full = status.quest_unlock_index_full
-
-    pistol_id = WeaponId.PISTOL
-    if 0 <= pistol_id < len(available):
-        available[pistol_id] = True
-
-    if unlock_index > 0:
-        quests = all_quests()
-        for quest in quests[:unlock_index]:
-            weapon_id = quest.unlock_weapon_id
-            if weapon_id is not None and 0 < weapon_id < len(available):
-                available[weapon_id] = True
-
-    if game_mode == GameMode.SURVIVAL:
-        for weapon_id in (WeaponId.ASSAULT_RIFLE, WeaponId.SHOTGUN, WeaponId.SUBMACHINE_GUN):
-            if 0 <= weapon_id < len(available):
-                available[weapon_id] = True
-
-    if unlock_index_full >= 0x28:
-        splitter_id = WeaponId.SPLITTER_GUN
-        if 0 <= splitter_id < len(available):
-            available[splitter_id] = True
-
+    fireable = fireable_weapon_ids()
+    for weapon_id in range(1, min(WEAPON_DROP_ID_COUNT + 1, WEAPON_AVAILABLE_COUNT)):
+        if WeaponId(weapon_id) in fireable:
+            available[weapon_id] = True
     return available
 
 

@@ -47,7 +47,9 @@ def _status_default() -> save_status.GameStatus:
     )
 
 
-def test_prepare_perk_availability_unlocks_base_and_quest_perks() -> None:
+def test_prepare_perk_availability_ignores_quest_progress() -> None:
+    # Not native: the mod drops quest-gated perk unlocks entirely - even with
+    # zero quest progress, every perk (except the hidden ANTIPERK) is unlocked.
     status = _status_default()
     status.quest_unlock_index = 0
     state = GameplayState()
@@ -55,10 +57,6 @@ def test_prepare_perk_availability_unlocks_base_and_quest_perks() -> None:
     prepare_perk_availability(state)
 
     assert state.perk_available[int(PerkId.BONUS_MAGNET)]
-    assert not state.perk_available[int(PerkId.URANIUM_FILLED_BULLETS)]
-
-    status.quest_unlock_index = 3  # includes quest 1.3 unlock_perk_id=URANIUM_FILLED_BULLETS
-    prepare_perk_availability(state)
     assert state.perk_available[int(PerkId.URANIUM_FILLED_BULLETS)]
 
 
@@ -272,8 +270,8 @@ def test_perk_generate_choices_degenerate_all_owned_matches_reference_stream() -
         rng,
         before_calls=before_calls,
         before_state=before_state,
-        expected_draws=65860,
-        expected_after_state=790131735,
+        expected_draws=57126,
+        expected_after_state=1125552909,
     )
 
 

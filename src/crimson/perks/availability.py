@@ -2,42 +2,24 @@ from __future__ import annotations
 
 from ..game_modes import GameMode
 from ..persistence.save_status import GameStatus
-from ..quests import all_quests
 from ..quests.level import QuestLevel
 from ..sim.state_types import PERK_COUNT_SIZE, GameplayState, PlayerState
 from .helpers import perk_count_get
 from .ids import PERK_BY_ID, PerkFlags, PerkId
 
-_PERK_BASE_AVAILABLE_MAX_ID = int(PerkId.BONUS_MAGNET)
-_PERK_ALWAYS_AVAILABLE: tuple[PerkId, ...] = (
-    PerkId.MAN_BOMB,
-    PerkId.LIVING_FORTRESS,
-    PerkId.FIRE_CAUGH,
-    PerkId.TOUGH_RELOADER,
-)
-
 
 def build_perk_availability(*, status: GameStatus | None) -> list[bool]:
+    """Every perk is unlocked, regardless of quest progress.
+
+    Not native: the mod's roguelite direction drops native quest-gated perk
+    unlocks entirely - `status` is kept in the signature for existing callers
+    but no longer gates anything here. `ANTIPERK` stays excluded - it's a
+    hidden placeholder, not real content.
+    """
+    _ = status
     available = [False] * PERK_COUNT_SIZE
-    unlock_index = 0
-    if status is not None:
-        unlock_index = status.quest_unlock_index
-
-    for perk_id in range(1, _PERK_BASE_AVAILABLE_MAX_ID + 1):
-        if 0 <= perk_id < len(available):
-            available[perk_id] = True
-
-    for perk_id in _PERK_ALWAYS_AVAILABLE:
-        if 0 <= perk_id < len(available):
-            available[perk_id] = True
-
-    if unlock_index > 0:
-        quests = all_quests()
-        for quest in quests[:unlock_index]:
-            perk_id = quest.unlock_perk_id
-            if perk_id is not None and 0 < perk_id < len(available):
-                available[perk_id] = True
-
+    for perk_id in PERK_BY_ID:
+        available[int(perk_id)] = True
     available[int(PerkId.ANTIPERK)] = False
     return available
 

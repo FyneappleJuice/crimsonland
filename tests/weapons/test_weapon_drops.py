@@ -59,12 +59,15 @@ def test_prepare_weapon_availability_includes_survival_defaults() -> None:
     assert state.weapon_available[WeaponId.ASSAULT_RIFLE]
     assert state.weapon_available[WeaponId.SHOTGUN]
     assert state.weapon_available[WeaponId.SUBMACHINE_GUN]
-    assert not state.weapon_available[WeaponId.FLAMETHROWER]
+    # Not native: every fireable weapon is unlocked regardless of mode.
+    assert state.weapon_available[WeaponId.FLAMETHROWER]
 
 
-def test_prepare_weapon_availability_unlocks_quest_weapon_ids() -> None:
+def test_prepare_weapon_availability_ignores_quest_progress() -> None:
+    # Not native: the mod drops quest-gated weapon unlocks entirely - even
+    # with zero quest progress, everything droppable is already unlocked.
     status = _status_default()
-    status.quest_unlock_index = 1
+    status.quest_unlock_index = 0
 
     state = GameplayState()
     state.status = status
@@ -74,7 +77,7 @@ def test_prepare_weapon_availability_unlocks_quest_weapon_ids() -> None:
 
     assert state.weapon_available[WeaponId.PISTOL]
     assert state.weapon_available[WeaponId.ASSAULT_RIFLE]
-    assert not state.weapon_available[WeaponId.SHOTGUN]
+    assert state.weapon_available[WeaponId.SHOTGUN]
 
 
 def test_prepare_weapon_availability_keeps_full_version_unlocks_in_demo_mode() -> None:
@@ -88,13 +91,13 @@ def test_prepare_weapon_availability_keeps_full_version_unlocks_in_demo_mode() -
 
 
 def test_weapon_pick_random_available_enforces_unlocked() -> None:
-    status = _status_default()
-    status.quest_unlock_index = 0
-
     state = GameplayState(rng=_as_rng(_SeqRng([1, 0])))
-    state.status = status
     state.game_mode = GameMode.QUESTS
     prepare_weapon_availability(state)
+    # Force everything but Pistol locked, to prove the picker still respects
+    # per-weapon availability rather than just always succeeding on the first draw.
+    for weapon_id in range(1, len(state.weapon_available)):
+        state.weapon_available[weapon_id] = weapon_id == WeaponId.PISTOL
 
     picked = weapon_pick_random_available(state)
 
