@@ -70,6 +70,13 @@ _DEFAULT_CELL_GAP = 0.0  # cells are neighbors - no gap between them
 _DEFAULT_GRID_TOP = 54.0
 _DEFAULT_HEADER_PAD = 38.0
 
+# Panel-open slide-in, same 300ms native timing/easing the other classic-
+# menu-panel screens use (see MenuView._ui_element_anim, reused below via
+# screens/panels/base.py's PanelMenuView pattern) - left panel slides in
+# from off-screen left, right panel from off-screen right, both settling
+# into place together. Clicks are held off until it finishes.
+_PANEL_SLIDE_MS = 300
+
 # Panel geometry - each panel is defined directly by its own x, y, w, h
 # (independent left/right corner control, no derived centering/gap math to
 # fight with) - live-tunable in --debug via the on-screen sliders (see
@@ -138,6 +145,9 @@ class RelicInventoryView:
         self._cursor_pulse = 0.0
         self._ground: GroundRenderer | None = None
 
+        self._timeline_ms: int = 0  # panel slide progress, see _PANEL_SLIDE_MS
+        self._closing = False  # True = timeline is counting back down to 0 before _close_action fires
+        self._close_action: str | None = None
         self._held: int = 0  # relic id currently on the cursor (0 = none)
         self._inv_rects: list[tuple[Rect, int]] = []  # (icon rect, relic id)
         # Grid geometry from the last draw() call, so update() can map a mouse
@@ -168,6 +178,9 @@ class RelicInventoryView:
         self._is_open = True
         self._pending_action = None
         self._cursor_pulse = 0.0
+        self._timeline_ms = 0
+        self._closing = False
+        self._close_action = None
         self._held = 0
         self._play_btn = UiButtonState("Play", force_wide=True)
         self._back_btn = UiButtonState("Back", force_wide=True)
@@ -193,28 +206,53 @@ class RelicInventoryView:
         if self._update_debug_tuner(mp):
             return
 
+        if self._closing:
+            # Panels/buttons are sliding back out - let the animation finish,
+            # then hand the action to take_action() (no input while closing).
+            self._timeline_ms = max(0, self._timeline_ms - int(dt_ms))
+            if self._timeline_ms <= 0:
+                self._pending_action = self._close_action
+            return
+
+        self._timeline_ms = min(_PANEL_SLIDE_MS, self._timeline_ms + int(dt_ms))
+        if self._timeline_ms < _PANEL_SLIDE_MS:
+            # Panels are still sliding in - hold off on clicks/hotkeys until
+            # they settle, matching PanelMenuView._entry_enabled's gate on
+            # the other classic-menu-panel screens.
+            return
+
         if rl.is_key_pressed(rl.KeyboardKey.KEY_ESCAPE):
             if self._held:
                 self._return_held()
             else:
-                self._pending_action = "back_to_menu"
+                self._begin_close_transition("back_to_menu")
             return
 
-        if rl.is_mouse_button_pressed(rl.MouseButton.MOUSE_BUTTON_RIGHT) and self._held:
-            self._return_held()
-            return
+        if rl.is_mouse_button_pressed(rl.MouseButton.MOUSE_BUTTON_RIGHT):
+            if self._held:
+                self._return_held()
+                return
+            # Right-click a placed relic to unequip it straight back to the
+            # inventory list, no need to pick it up onto the cursor first.
+            cell = self._grid_cell_at(mp)
+            if cell is not None:
+                found = relics.placement_at(*cell)
+                if found is not None:
+                    idx, _placement = found
+                    self._unequip_to_inventory(idx)
+                return
 
         scale = self._scale()
         play_w = button_width(require_runtime_resources(self.state), "Play", scale=scale, force_wide=True)
         back_w = button_width(require_runtime_resources(self.state), "Back", scale=scale, force_wide=True)
         if button_update(self._back_btn, pos=self._back_pos(back_w), width=back_w, dt_ms=dt_ms, mouse=m, click=click):
             self._return_held()
-            self._pending_action = "back_to_menu"
+            self._begin_close_transition("back_to_menu")
             return
         if button_update(self._play_btn, pos=self._play_pos(play_w), width=play_w, dt_ms=dt_ms, mouse=m, click=click):
             self._return_held()
             relics.begin_run()
-            self._pending_action = "start_survival"
+            self._begin_close_transition("start_survival")
             return
 
         if not click:
@@ -275,6 +313,19 @@ class RelicInventoryView:
         right_x, right_y, right_w, right_h = (
             self._dbg_right_x, self._dbg_right_y, self._dbg_right_w, self._dbg_right_h,
         )
+        if not debug:
+            # Slide both panels in from off-screen on open (left panel from
+            # the left, right panel from the right), settling into place
+            # over _PANEL_SLIDE_MS - skipped in --debug so the sliders stay
+            # WYSIWYG accurate to the tuned rect.
+            _, slide_l = MenuView._ui_element_anim(
+                self, index=1, start_ms=_PANEL_SLIDE_MS, end_ms=0, width=left_w, direction_flag=0,
+            )
+            _, slide_r = MenuView._ui_element_anim(
+                self, index=1, start_ms=_PANEL_SLIDE_MS, end_ms=0, width=right_w, direction_flag=1,
+            )
+            left_x += slide_l
+            right_x += slide_r
         self._left_panel = Rect.from_pos_size(Vec2(left_x, left_y), Vec2(left_w, left_h))
         self._right_panel = Rect.from_pos_size(Vec2(right_x, right_y), Vec2(right_w, right_h))
 
@@ -313,7 +364,7 @@ class RelicInventoryView:
         title_y = min(left_y, right_y) - 46.0
         title = "RELICS"
         draw_ui_text(res, title, Vec2(sw * 0.5 - self._w(res, title, scale) * 0.5, title_y), scale=scale, color=_BLUE)
-        hint = "click a relic to pick it up, click a grid cell to place it"
+        hint = "click a relic to pick it up, click a grid cell to place it, right-click to unequip"
         draw_ui_text(res, hint, Vec2(sw * 0.5 - self._w(res, hint, scale) * 0.5, title_y + 20.0), scale=scale, color=_DIM)
 
         # While tuning panel geometry, keep the two panels blank (no relic
@@ -331,10 +382,25 @@ class RelicInventoryView:
             self._inv_rects = []
 
         # --- buttons -------------------------------------------------
+        # Slide with the panels they sit nearest to - Back (left side of the
+        # screen) with the left panel, Play (right side) with the right
+        # panel - same _timeline_ms drives both the entrance (counting up in
+        # update()) and, while _closing, the exit (counting back down).
         play_w = button_width(res, "Play", scale=scale, force_wide=True)
         back_w = button_width(res, "Back", scale=scale, force_wide=True)
-        button_draw(res, self._back_btn, pos=self._back_pos(back_w), width=back_w, scale=scale)
-        button_draw(res, self._play_btn, pos=self._play_pos(play_w), width=play_w, scale=scale)
+        back_pos = self._back_pos(back_w)
+        play_pos = self._play_pos(play_w)
+        if not debug:
+            _, slide_back = MenuView._ui_element_anim(
+                self, index=1, start_ms=_PANEL_SLIDE_MS, end_ms=0, width=back_w, direction_flag=0,
+            )
+            _, slide_play = MenuView._ui_element_anim(
+                self, index=1, start_ms=_PANEL_SLIDE_MS, end_ms=0, width=play_w, direction_flag=1,
+            )
+            back_pos = Vec2(back_pos.x + slide_back, back_pos.y)
+            play_pos = Vec2(play_pos.x + slide_play, play_pos.y)
+        button_draw(res, self._back_btn, pos=back_pos, width=back_w, scale=scale)
+        button_draw(res, self._play_btn, pos=play_pos, width=play_w, scale=scale)
 
         self._draw_sign(res)
 
@@ -570,9 +636,24 @@ class RelicInventoryView:
         self._held = 0
         relics.save_relics()
 
+    def _unequip_to_inventory(self, index: int) -> None:
+        relic_id = relics.remove_placement_to_held(index)
+        if not relic_id:
+            return
+        relics.relic_state().owned.append(relic_id)
+        relics.save_relics()
+        self._sfx()
+
     def _sfx(self) -> None:
         if self.state.audio is not None:
             play_sfx(self.state.audio, SfxId.UI_BUTTONCLICK)
+
+    def _begin_close_transition(self, action: str) -> None:
+        if self._closing:
+            return
+        self._sfx()
+        self._closing = True
+        self._close_action = action
 
     # --- debug panel-sizing tuner (--debug only) --------------------
 
