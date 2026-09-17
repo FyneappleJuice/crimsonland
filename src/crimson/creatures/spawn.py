@@ -738,6 +738,11 @@ class CreatureInit(msgspec.Struct):
     bonus_id: BonusId | None = None
     bonus_duration_override: int | None = None
 
+    # Rewrite-only: monster rarity & affixes (creatures/rarity.py). 0 = normal.
+    rarity: int = 0
+    affixes: tuple[int, ...] = ()
+    damage_taken_mult_by_type: dict[int, float] | None = None
+
 
 class SpawnSlotInit(msgspec.Struct):
     owner_creature: int
@@ -1302,44 +1307,87 @@ def build_survival_spawn_creature(pos: Vec2, rng: CrandLike, *, player_experienc
         x87_pc24_mul(float(c.health or 0.0), f32(0.4)),
     )
 
-    # Rare stat overrides (color-coded variants).
-    r = rng.rand_tagged(RngCallerStatic.SURVIVAL_SPAWN_CREATURE_RARE_RED)
-    if r % 180 < 2:
-        apply_tint(c, (f32(0.9), f32(0.4), f32(0.4), f32(1.0)))
-        c.health = 65.0
-        c.reward_value = 320.0
-    else:
-        r = rng.rand_tagged(RngCallerStatic.SURVIVAL_SPAWN_CREATURE_RARE_GREEN)
-        if r % 240 < 2:
-            apply_tint(c, (f32(0.4), f32(0.9), f32(0.4), f32(1.0)))
-            c.health = 85.0
-            c.reward_value = 420.0
+    # Rare variant rolls. The five native draws below are kept exactly (identical
+    # caller ids + modulo) whichever branch runs, so the RNG stream is unchanged
+    # until one hits.
+    from . import rarity as _rarity
+
+    if not _rarity.MONSTER_RARITY_ENABLED:
+        # --- native colour-variant stat overrides -------------------------
+        r = rng.rand_tagged(RngCallerStatic.SURVIVAL_SPAWN_CREATURE_RARE_RED)
+        if r % 180 < 2:
+            apply_tint(c, (f32(0.9), f32(0.4), f32(0.4), f32(1.0)))
+            c.health = 65.0
+            c.reward_value = 320.0
         else:
-            r = rng.rand_tagged(RngCallerStatic.SURVIVAL_SPAWN_CREATURE_RARE_BLUE)
-            if r % 360 < 2:
-                apply_tint(c, (f32(0.4), f32(0.4), f32(0.9), f32(1.0)))
-                c.health = 125.0
-                c.reward_value = 520.0
+            r = rng.rand_tagged(RngCallerStatic.SURVIVAL_SPAWN_CREATURE_RARE_GREEN)
+            if r % 240 < 2:
+                apply_tint(c, (f32(0.4), f32(0.9), f32(0.4), f32(1.0)))
+                c.health = 85.0
+                c.reward_value = 420.0
+            else:
+                r = rng.rand_tagged(RngCallerStatic.SURVIVAL_SPAWN_CREATURE_RARE_BLUE)
+                if r % 360 < 2:
+                    apply_tint(c, (f32(0.4), f32(0.4), f32(0.9), f32(1.0)))
+                    c.health = 125.0
+                    c.reward_value = 520.0
 
-    # Rare health/size boosts (do not recompute contact_damage).
-    r = rng.rand_tagged(RngCallerStatic.SURVIVAL_SPAWN_CREATURE_RARE_PURPLE)
-    if r % 1320 < 4:
-        apply_tint(c, (f32(0.84), f32(0.24), f32(0.89), f32(1.0)))
-        c.size = 80.0
-        c.reward_value = 600.0
-        c.health = x87_pc24_add(float(c.health or 0.0), f32(230.0))
+        r = rng.rand_tagged(RngCallerStatic.SURVIVAL_SPAWN_CREATURE_RARE_PURPLE)
+        if r % 1320 < 4:
+            apply_tint(c, (f32(0.84), f32(0.24), f32(0.89), f32(1.0)))
+            c.size = 80.0
+            c.reward_value = 600.0
+            c.health = x87_pc24_add(float(c.health or 0.0), f32(230.0))
+        else:
+            r = rng.rand_tagged(RngCallerStatic.SURVIVAL_SPAWN_CREATURE_RARE_YELLOW)
+            if r % 1620 < 4:
+                apply_tint(c, (f32(0.94), f32(0.84), f32(0.29), f32(1.0)))
+                c.size = 85.0
+                c.reward_value = 900.0
+                c.health = x87_pc24_add(float(c.health or 0.0), f32(2230.0))
+
+        if c.health is not None:
+            c.max_health = c.health
+        if c.reward_value is not None:
+            c.reward_value = x87_pc24_mul(c.reward_value, f32(0.8))
     else:
-        r = rng.rand_tagged(RngCallerStatic.SURVIVAL_SPAWN_CREATURE_RARE_YELLOW)
-        if r % 1620 < 4:
-            apply_tint(c, (f32(0.94), f32(0.84), f32(0.29), f32(1.0)))
-            c.size = 85.0
-            c.reward_value = 900.0
-            c.health = x87_pc24_add(float(c.health or 0.0), f32(2230.0))
+        # --- rarity & affix system (creatures/rarity.py) ------------------
+        tier = 0
+        r = rng.rand_tagged(RngCallerStatic.SURVIVAL_SPAWN_CREATURE_RARE_RED)
+        if r % 180 < 2:
+            tier = 1
+        else:
+            r = rng.rand_tagged(RngCallerStatic.SURVIVAL_SPAWN_CREATURE_RARE_GREEN)
+            if r % 240 < 2:
+                tier = 1
+            else:
+                r = rng.rand_tagged(RngCallerStatic.SURVIVAL_SPAWN_CREATURE_RARE_BLUE)
+                if r % 360 < 2:
+                    tier = 1
+        r = rng.rand_tagged(RngCallerStatic.SURVIVAL_SPAWN_CREATURE_RARE_PURPLE)
+        if r % 1320 < 4:
+            tier = 2
+        else:
+            r = rng.rand_tagged(RngCallerStatic.SURVIVAL_SPAWN_CREATURE_RARE_YELLOW)
+            if r % 1620 < 4:
+                tier = 3
 
-    if c.health is not None:
-        c.max_health = c.health
-    if c.reward_value is not None:
-        c.reward_value = x87_pc24_mul(c.reward_value, f32(0.8))
+        if _rarity.rarity_test_bias_enabled():
+            # --test-mode: make rare tiers common so affixes can be inspected.
+            tr = int(rng.rand_tagged(RngCallerStatic.REWRITE_MONSTER_AFFIX_PICK)) % 100
+            if tr < 12:
+                tier = max(tier, 3)
+            elif tr < 38:
+                tier = max(tier, 2)
+            elif tr < 78:
+                tier = max(tier, 1)
+
+        if c.reward_value is not None:
+            c.reward_value = x87_pc24_mul(c.reward_value, f32(0.8))
+        if c.health is not None:
+            c.max_health = c.health
+        if tier > 0:
+            _rarity.apply_rarity(c, tier=tier, player_experience=xp, rng=rng)
 
     if c.tint is not None:
         tint_r, tint_g, tint_b, tint_a = c.tint

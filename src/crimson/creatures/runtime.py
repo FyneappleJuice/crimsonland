@@ -10,6 +10,7 @@ not to perfectly match every edge case in `creature_update_all`.
 See: `docs/creatures/update.md`.
 """
 
+import random as _random
 from collections.abc import Callable, Sequence
 
 import msgspec
@@ -112,6 +113,30 @@ _TARGET_REEVAL_PERIOD = 0x46
 _FLAG_SELF_DAMAGE_TICK = int(CreatureFlags.SELF_DAMAGE_TICK)
 _FLAG_SELF_DAMAGE_TICK_STRONG = int(CreatureFlags.SELF_DAMAGE_TICK_STRONG)
 _FLAG_AI7_LINK_TIMER = int(CreatureFlags.AI7_LINK_TIMER)
+
+# Rewrite-only: relic drop chance on kill, by rarity tier. --test-mode ~8x.
+# Uses a private RNG (not the sim `rng`) so it never perturbs replay parity;
+# relics are meta progression, not run state.
+_RELIC_DROP_RNG = _random.Random(0xC0FFEE)
+_RELIC_DROP_CHANCE = (0.015, 0.10, 0.30, 0.75)
+
+
+def _maybe_drop_relic(creature: CreatureState, rng: CrandLike) -> None:
+    _ = rng
+    tier = int(getattr(creature, "rarity", 0) or 0)
+    chance = _RELIC_DROP_CHANCE[tier if 0 <= tier < len(_RELIC_DROP_CHANCE) else 0]
+    try:
+        from ..test_mode import test_mode_enabled
+
+        if test_mode_enabled():
+            chance = min(1.0, chance * 8.0)
+    except Exception:
+        pass
+    if chance <= 0.0 or _RELIC_DROP_RNG.random() >= chance:
+        return
+    from ..meta.relics import award_relic_drop
+
+    award_relic_drop()
 
 _CREATURE_CONTACT_SFX: dict[CreatureTypeId, tuple[SfxId, SfxId]] = {
     CreatureTypeId.ZOMBIE: (SfxId.ZOMBIE_ATTACK_01, SfxId.ZOMBIE_ATTACK_02),
@@ -288,6 +313,14 @@ class CreatureState(msgspec.Struct):
     # seconds of separate fire damage and cannot re-trigger until that expires.
     ignite_heat: float = 0.0
     ignite_timer: float = 0.0
+
+    # Rewrite-only: monster rarity & affixes (creatures/rarity.py). 0 = normal.
+    rarity: int = 0
+    affixes: tuple[int, ...] = ()
+    damage_taken_mult_by_type: dict[int, float] = msgspec.field(default_factory=dict)
+    affix_base_move_speed: float = 0.0
+    affix_base_contact_damage: float = 0.0
+    affix_regen_pause: float = 0.0
 
 
 class CreatureDeath(msgspec.Struct, frozen=True):
@@ -1621,6 +1654,15 @@ class CreaturePool:
         entry.spawn_slot_index = None
         entry.attack_cooldown = 0.0
 
+        # Rewrite-only: monster rarity & affixes.
+        entry.rarity = int(getattr(init, "rarity", 0) or 0)
+        entry.affixes = tuple(getattr(init, "affixes", ()) or ())
+        _dtm = getattr(init, "damage_taken_mult_by_type", None)
+        entry.damage_taken_mult_by_type = dict(_dtm) if _dtm else {}
+        entry.affix_base_move_speed = 0.0
+        entry.affix_base_contact_damage = 0.0
+        entry.affix_regen_pause = 0.0
+
         entry.bonus_id = init.bonus_id
         entry.bonus_duration_override = (
             int(init.bonus_duration_override) if init.bonus_duration_override is not None else None
@@ -1799,6 +1841,24 @@ class CreaturePool:
     ) -> CreatureDeath:
         if creature.spawn_slot_index is not None:
             self._disable_spawn_slot(int(creature.spawn_slot_index))
+
+        if creature.rarity and creature.affixes:
+            from .rarity import apply_monster_death_affixes
+
+            apply_monster_death_affixes(
+                self,
+                int(idx),
+                creature,
+                state=state,
+                players=players,
+                rng=rng,
+                detail_preset=int(detail_preset),
+                world_width=float(world_width),
+                world_height=float(world_height),
+            )
+
+        # Rewrite-only: monsters drop relics, auto-collected (crimson.meta.relics).
+        _maybe_drop_relic(creature, rng)
 
         if (creature.flags & CreatureFlags.SPLIT_ON_DEATH) and float(creature.size) > 35.0:
             for heading_offset, phase_seed_caller in (

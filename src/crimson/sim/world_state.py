@@ -10,6 +10,7 @@ from grim.sfx_map import SfxId
 
 from ..bonuses.blade_orbit import update_blade_orbits
 from ..bonuses.ion_overload import update_ion_overload_clouds
+from ..creatures.rarity import update_monster_affixes
 from ..weapon_runtime.arc_gun import update_arc_gun
 from ..weapon_runtime.power_up import WPU_FLAME_DAMAGE_MULT
 from ..weapon_runtime.scythe_sweep import update_scythe_swings
@@ -474,6 +475,8 @@ class WorldState(msgspec.Struct):
                 pickups=pickups,
                 detail_preset=int(detail_preset),
             )
+        # Not native: advance monster rarity affixes (regen / frenzy / auras).
+        update_monster_affixes(self.players, self.creatures, dt, state=self.state)
         # Not native: advance orbiting-blade bonuses and apply their contact hits.
         update_blade_orbits(
             self.players,

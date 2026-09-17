@@ -223,7 +223,11 @@ def test_survival_spawn_creature_rare_variants(
     expected_tint_g: float,
     expected_tint_b: float,
     expected_rng_state: int,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    # These assert the native colour-variant stat overrides; the rewrite-only
+    # rarity/affix system replaces that path (see creatures/rarity.py).
+    monkeypatch.setattr("crimson.creatures.rarity.MONSTER_RARITY_ENABLED", False)
     rng = Crand(seed)
     c = build_survival_spawn_creature(Vec2(1.0, 2.0), rng, player_experience=0)
 

@@ -326,6 +326,15 @@ def creature_apply_damage(
 
     for step in _CREATURE_DAMAGE_PRE_STEPS.get(ctx.damage_type, ()):
         step(ctx)
+
+    # Rewrite-only: monster rarity affix resistances + regen-pause bookkeeping.
+    if creature.rarity:
+        from .rarity import monster_affix_on_hit
+
+        resist = monster_affix_on_hit(creature, int(ctx.damage_type))
+        if resist != 1.0:
+            ctx.damage = f32(float(ctx.damage) * resist)
+
     if ctx.damage_type in (
         CreatureDamageType.BULLET,
         CreatureDamageType.ENERGY,

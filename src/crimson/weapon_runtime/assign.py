@@ -92,6 +92,27 @@ def weapon_assign_player(player: PlayerState, weapon_id: WeaponId, *, state: Gam
         state.sfx_queue.append(weapon.reload_sound)
 
 
+def apply_clip_stat_mods_to_current_weapon(player: PlayerState) -> None:
+    """Reapply clip-size stat mods (perks/relics) to the player's already-assigned
+    weapon, in place, without touching reload/cooldown timers.
+
+    Not native: Survival's spawn reset (`sim_world_state._reset_player_weapon_native`)
+    hardcodes a bare 10-round pistol and deliberately skips `weapon_assign_player`
+    to preserve native parity (fixed reload/cooldown priming). That means a
+    pre-run relic's `clip_size_add` never reached the starting pistol. Call this
+    once right after that native reset (see `session_builders.build_survival_session`)
+    so the relic bonus applies to the spawn weapon too.
+    """
+
+    refresh_player_stats([player])
+    weapon = weapon_entry(WeaponId(player.weapon.weapon_id))
+    clip_ctx = _WeaponAssignCtx(player=player, clip_size=max(0, int(weapon.clip_size)))
+    for modifier in _WEAPON_ASSIGN_CLIP_MODIFIERS:
+        modifier(clip_ctx)
+    player.weapon.clip_size = max(0, int(clip_ctx.clip_size))
+    player.weapon.ammo = float(player.weapon.clip_size)
+
+
 def most_used_weapon_id_for_player(
     state: GameplayState,
     *,

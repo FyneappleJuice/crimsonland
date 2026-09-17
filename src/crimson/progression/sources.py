@@ -176,5 +176,10 @@ def refresh_player_stats(players: Sequence[PlayerState]) -> None:
     sim tick (see `WorldState.step`) and again at the few subsystem entry
     points that tests drive directly; cheap enough to run unconditionally."""
 
+    # Rewrite-only: relics placed in the pre-run grid feed extra stat mods for
+    # the current run (crimson.meta.relics). Empty tuple when no run is active.
+    from ..meta.relics import active_run_stat_mods
+
+    extra = active_run_stat_mods()
     for player in players:
-        player.stats = resolve_player_stats(player)
+        player.stats = resolve_player_stats(player, extra_sources=extra)

@@ -6,7 +6,7 @@ from ..quests.types import SpawnEntry
 from ..sim.world_state import WorldState
 from ..tutorial import reset_tutorial_state
 from ..typo.state import reset_typo_state
-from ..weapon_runtime import weapon_assign_player
+from ..weapon_runtime import apply_clip_stat_mods_to_current_weapon, weapon_assign_player
 from ..weapons import WeaponId
 from .sessions import (
     DeterministicSession,
@@ -32,6 +32,12 @@ def build_survival_session(
     finalize_post_render_lifecycle: bool,
     apply_world_dt_steps: bool = True,
 ) -> tuple[DeterministicSession, SurvivalSpawnState]:
+    # The native-parity reset just above (`_reset_player_weapon_native`) hardcodes
+    # a bare pistol and skips weapon_assign_player, so a pre-run relic's clip
+    # bonus wouldn't otherwise reach the spawn weapon - reapply it here.
+    for player in world.players:
+        apply_clip_stat_mods_to_current_weapon(player)
+
     mode_runtime = SurvivalSessionRuntime()
     session = DeterministicSession(
         world=world,
