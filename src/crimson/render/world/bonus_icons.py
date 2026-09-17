@@ -1,12 +1,15 @@
 from __future__ import annotations
 
-"""Not native: icon art for the two project-added bonuses.
+"""Not native: icon art for project-added bonuses.
 
 The shared 4x4 bonus sheet (game/bonuses.jaz) has no frame for Fork Shot, and
 Blade only borrows an unrelated frame. Both are drawn here instead - Fork Shot
-procedurally, Blade from its actual orbiting-blade sprite - and used by both the
-ground pickup renderer (render/world/bonuses.py) and the character-anchored
-power-up stack (render/world/player_status.py).
+procedurally, Blade from its actual orbiting-blade sprite. Ion Overload gets
+its own dedicated icon texture (grim/optional_textures/ion_overload.png,
+TextureId.ION_OVERLOAD_ICON) instead of the Shock Chain frame it used to
+borrow. All three are used by both the ground pickup renderer
+(render/world/bonuses.py) and the character-anchored power-up stack
+(render/world/player_status.py).
 """
 
 import math
@@ -73,4 +76,26 @@ def draw_blade_icon(
     )
 
 
-__all__ = ["draw_blade_icon", "draw_fork_icon"]
+def draw_ion_overload_icon(
+    render_ctx: WorldRenderCtx, cx: float, cy: float, size: float, alpha: float, rotation_rad: float = 0.0,
+) -> bool:
+    """Ion Overload's own icon (TextureId.ION_OVERLOAD_ICON), centred on (cx, cy).
+
+    Returns False (drawing nothing) if the optional texture failed to load,
+    so the caller can fall back to the old borrowed Shock Chain frame.
+    """
+    a = clamp(float(alpha), 0.0, 1.0)
+    if a <= 1e-3 or size <= 0.0:
+        return True
+    tex = render_ctx.frame.resources.texture_optional(TextureId.ION_OVERLOAD_ICON)
+    if tex is None:
+        return False
+    src = rl.Rectangle(0.0, 0.0, float(tex.width), float(tex.height))
+    dst = rl.Rectangle(cx, cy, size, size)
+    origin = rl.Vector2(size * 0.5, size * 0.5)
+    tint = rl.Color(255, 255, 255, int(255 * a))
+    rl.draw_texture_pro(tex, src, dst, origin, float(math.degrees(rotation_rad)), tint)
+    return True
+
+
+__all__ = ["draw_blade_icon", "draw_fork_icon", "draw_ion_overload_icon"]

@@ -23,7 +23,7 @@ from grim.raylib_api import rl
 
 from ...bonuses.ids import BonusId
 from ...sim.state_types import PlayerState
-from .bonus_icons import draw_blade_icon, draw_fork_icon
+from .bonus_icons import draw_blade_icon, draw_fork_icon, draw_ion_overload_icon
 from .context import WorldRenderCtx
 
 # Ring geometry in world pixels, before the view scale is applied.
@@ -110,8 +110,13 @@ def _active_powerup_slots(render_ctx: WorldRenderCtx) -> list:
     for slot in bonus_hud.slots:
         if not slot.active:
             continue
-        # Blade / Fork Shot draw their own icon; the rest need a valid sheet cell.
-        drawable = int(slot.icon_id) >= 0 or slot.bonus_id in (BonusId.BLADE, BonusId.PROJECTILE_FORK)
+        # Blade / Fork Shot / Ion Overload draw their own icon; the rest need
+        # a valid sheet cell.
+        drawable = int(slot.icon_id) >= 0 or slot.bonus_id in (
+            BonusId.BLADE,
+            BonusId.PROJECTILE_FORK,
+            BonusId.ION_OVERLOAD,
+        )
         if not drawable:
             continue
         remaining = max(float(slot.timer_value), float(slot.timer_value_alt))
@@ -151,6 +156,10 @@ def _draw_player_powerups(
             draw_blade_icon(render_ctx, x + icon * 0.5, y + icon * 0.5, icon, alpha)
         elif slot.bonus_id == BonusId.PROJECTILE_FORK:
             draw_fork_icon(x + icon * 0.5, y + icon * 0.5, icon, alpha)
+        elif slot.bonus_id == BonusId.ION_OVERLOAD and draw_ion_overload_icon(
+            render_ctx, x + icon * 0.5, y + icon * 0.5, icon, alpha,
+        ):
+            pass
         else:
             src = _bonus_icon_src(bonuses_tex, int(slot.icon_id))
             dst = rl.Rectangle(x, y, icon, icon)

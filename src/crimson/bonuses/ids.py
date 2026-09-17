@@ -223,9 +223,11 @@ BONUS_TABLE = [
         bonus_id=BonusId.ION_OVERLOAD,
         name="Ion Overload",
         description="Charges up, then fires a huge ion bolt that blooms into a nova.",
-        # Placeholder: borrows Shock Chain's icon (electric-themed) until real
-        # art is authored, same as the other rewrite-only bonuses started on
-        # borrowed frames.
+        # Now has its own dedicated icon (TextureId.ION_OVERLOAD_ICON,
+        # grim/optional_textures/ion_overload.png - see render/world/
+        # bonus_icons.py::draw_ion_overload_icon). This icon_id=3 (Shock
+        # Chain's electric-themed frame) is kept only as the fallback drawn
+        # if that texture ever fails to load.
         icon_id=3,
         native_amount=5,
         apply_seconds=5.0,

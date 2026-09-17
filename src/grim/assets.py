@@ -92,6 +92,9 @@ class TextureId(Enum):
     # Rewrite-only content. Loaded best-effort: absent from a stock PAQ, the
     # renderer falls back to a procedural shape (see OPTIONAL_TEXTURE_SPECS).
     SCYTHE = auto()
+    # Rewrite-only content: Ion Overload's own icon art (bonus_icons.py). Absent
+    # from a stock PAQ - always served from the committed fallback copy below.
+    ION_OVERLOAD_ICON = auto()
 
 
 class TextureSpec(msgspec.Struct, frozen=True):
@@ -178,6 +181,7 @@ TEXTURE_SPECS: Final[dict[TextureId, TextureSpec]] = {
 # never raises when one is absent.
 OPTIONAL_TEXTURE_SPECS: Final[dict[TextureId, TextureSpec]] = {
     TextureId.SCYTHE: TextureSpec("game/scythe.tga", clamp=True),
+    TextureId.ION_OVERLOAD_ICON: TextureSpec("game/ion_overload.png", clamp=True),
 }
 _OPTIONAL_TEXTURE_FALLBACK_DIR: Final[Path] = Path(__file__).resolve().parent / "optional_textures"
 
@@ -289,6 +293,8 @@ def _load_texture_asset_from_bytes(rel_path: str, data: bytes | None) -> rl.Text
         buf = io.BytesIO()
         img.save(buf, format="PNG")
         texture = _load_texture_from_bytes(buf.getvalue(), ".png")
+    elif rel_path.lower().endswith(".png"):
+        texture = _load_texture_from_bytes(data, ".png")
     else:
         texture = None
     return texture
