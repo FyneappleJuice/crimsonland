@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .assign import (
+    apply_clip_stat_mods_to_current_weapon,
     init_default_alt_weapon,
     most_used_weapon_id_for_player,
     player_start_reload,
@@ -21,6 +22,7 @@ from .spawn import (
 __all__ = [
     "WeaponFireCtx",
     "WeaponFireResult",
+    "apply_clip_stat_mods_to_current_weapon",
     "fire_weapon",
     "init_default_alt_weapon",
     "most_used_weapon_id_for_player",
