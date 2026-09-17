@@ -23,7 +23,13 @@ from grim.raylib_api import rl
 
 from ...bonuses.ids import BonusId
 from ...sim.state_types import PlayerState
-from .bonus_icons import draw_blade_icon, draw_fork_icon, draw_ion_overload_icon
+from .bonus_icons import (
+    draw_blade_icon,
+    draw_explosive_payload_icon,
+    draw_fork_icon,
+    draw_ion_overload_icon,
+    draw_plasma_overload_icon,
+)
 from .context import WorldRenderCtx
 
 # Ring geometry in world pixels, before the view scale is applied.
@@ -110,12 +116,14 @@ def _active_powerup_slots(render_ctx: WorldRenderCtx) -> list:
     for slot in bonus_hud.slots:
         if not slot.active:
             continue
-        # Blade / Fork Shot / Ion Overload draw their own icon; the rest need
-        # a valid sheet cell.
+        # Blade / Fork Shot / Ion Overload / Plasma Overload / Explosive
+        # Payload draw their own icon; the rest need a valid sheet cell.
         drawable = int(slot.icon_id) >= 0 or slot.bonus_id in (
             BonusId.BLADE,
             BonusId.PROJECTILE_FORK,
             BonusId.ION_OVERLOAD,
+            BonusId.PLASMA_OVERLOAD,
+            BonusId.EXPLOSIVE_PAYLOAD,
         )
         if not drawable:
             continue
@@ -157,6 +165,14 @@ def _draw_player_powerups(
         elif slot.bonus_id == BonusId.PROJECTILE_FORK:
             draw_fork_icon(x + icon * 0.5, y + icon * 0.5, icon, alpha)
         elif slot.bonus_id == BonusId.ION_OVERLOAD and draw_ion_overload_icon(
+            render_ctx, x + icon * 0.5, y + icon * 0.5, icon, alpha,
+        ):
+            pass
+        elif slot.bonus_id == BonusId.PLASMA_OVERLOAD and draw_plasma_overload_icon(
+            render_ctx, x + icon * 0.5, y + icon * 0.5, icon, alpha,
+        ):
+            pass
+        elif slot.bonus_id == BonusId.EXPLOSIVE_PAYLOAD and draw_explosive_payload_icon(
             render_ctx, x + icon * 0.5, y + icon * 0.5, icon, alpha,
         ):
             pass

@@ -36,6 +36,7 @@ from ...ui.perk_menu import (
     draw_ui_text,
 )
 from ...ui.text_input import flush_text_input_events, gameplay_controls_held, update_name_entry_text
+from ...weapon_icon_overrides import weapon_icon_dst_rect, weapon_icon_override_texture
 from ...weapons import WEAPON_BY_ID, WeaponId, weapon_display_name
 
 GAME_OVER_PANEL_X = -45.0
@@ -540,13 +541,21 @@ class GameOverUi(msgspec.Struct):
             )
 
             wicons = resources.texture(TextureId.UI_WICONS)
-            src = _weapon_icon_src(wicons, record.most_used_weapon_id)
+            override_tex = weapon_icon_override_texture(resources, record.most_used_weapon_id)
+            src = (
+                rl.Rectangle(0.0, 0.0, float(override_tex.width), float(override_tex.height))
+                if override_tex is not None
+                else _weapon_icon_src(wicons, record.most_used_weapon_id)
+            )
             if src is not None:
                 dst = rl.Rectangle(weapon_pos.x, weapon_pos.y, 64.0 * scale, 32.0 * scale)
+                draw_dst = (
+                    weapon_icon_dst_rect(dst, record.most_used_weapon_id) if override_tex is not None else dst
+                )
                 rl.draw_texture_pro(
-                    wicons,
+                    override_tex if override_tex is not None else wicons,
                     src,
-                    dst,
+                    draw_dst,
                     rl.Vector2(0.0, 0.0),
                     0.0,
                     rl.Color(255, 255, 255, int(255 * alpha)),

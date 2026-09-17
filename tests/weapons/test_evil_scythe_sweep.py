@@ -5,6 +5,7 @@ import math
 import pytest
 
 from crimson.creatures.damage_runtime import DirectCreatureDamageRuntime
+from crimson.effects_atlas import EffectId
 from crimson.gameplay import GameplayState
 from crimson.progression import refresh_player_stats
 from crimson.sim.input import PlayerInput
@@ -12,6 +13,7 @@ from crimson.sim.state_types import PlayerState, WeaponSlot
 from crimson.weapon_runtime import WeaponFireCtx, fire_weapon, weapon_assign_player
 from crimson.weapon_runtime.scythe_sweep import (
     SCYTHE_ARC,
+    SCYTHE_BLOOD_SPLATTER_PARTICLES,
     SCYTHE_DAMAGE,
     SCYTHE_REACH,
     SCYTHE_SWING_DURATION_S,
@@ -176,3 +178,68 @@ def test_wpu_does_not_speed_up_the_scythe_cadence() -> None:
 
     player_start_reload(player, state, players=[player])
     assert player.weapon.reload_timer == pytest.approx(1.0, abs=1e-3)
+
+
+# --- blood splatter on hit --------------------------------------------------
+
+
+def test_a_connecting_slash_spawns_blood_splatter() -> None:
+    state = GameplayState()
+    player = _player_with_scythe(state)
+    creature = make_creature_state(pos=Vec2(SCYTHE_REACH * 0.6, 0.0), hp=100000.0, size=30.0)
+    runtime = DirectCreatureDamageRuntime(creatures=[creature])
+
+    start_scythe_swing(player, Vec2(200.0, 0.0), shots_fired_this_clip=0)
+    steps = int(SCYTHE_SWING_DURATION_S / 0.016) + 2
+    for _ in range(steps):
+        update_scythe_swings(
+            [player],
+            [creature],
+            0.016,
+            creature_damage_runtime=runtime,
+            effects=state.effects,
+            rng=state.rng,
+            detail_preset=5,
+            violence_disabled=0,
+        )
+
+    active = state.effects.iter_active()
+    blood = [e for e in active if int(e.effect_id) == int(EffectId.BLOOD_SPLATTER)]
+    assert len(blood) == SCYTHE_BLOOD_SPLATTER_PARTICLES
+
+
+def test_no_blood_splatter_without_effects_or_rng_wired() -> None:
+    # Backward-compatible default: callers that don't pass effects/rng (older
+    # call sites, or tests) get no blood splatter, not a crash.
+    player = PlayerState(index=0, pos=Vec2(0.0, 0.0))
+    creature = make_creature_state(pos=Vec2(SCYTHE_REACH * 0.6, 0.0), hp=100000.0, size=30.0)
+    runtime = DirectCreatureDamageRuntime(creatures=[creature])
+
+    start_scythe_swing(player, Vec2(200.0, 0.0), shots_fired_this_clip=0)
+    _swing_to_completion(player, [creature], runtime)
+
+    assert (100000.0 - creature.hp) == pytest.approx(SCYTHE_DAMAGE)
+
+
+def test_no_blood_splatter_when_violence_disabled() -> None:
+    state = GameplayState()
+    player = _player_with_scythe(state)
+    creature = make_creature_state(pos=Vec2(SCYTHE_REACH * 0.6, 0.0), hp=100000.0, size=30.0)
+    runtime = DirectCreatureDamageRuntime(creatures=[creature])
+
+    start_scythe_swing(player, Vec2(200.0, 0.0), shots_fired_this_clip=0)
+    steps = int(SCYTHE_SWING_DURATION_S / 0.016) + 2
+    for _ in range(steps):
+        update_scythe_swings(
+            [player],
+            [creature],
+            0.016,
+            creature_damage_runtime=runtime,
+            effects=state.effects,
+            rng=state.rng,
+            detail_preset=5,
+            violence_disabled=1,
+        )
+
+    active = state.effects.iter_active()
+    assert not any(int(e.effect_id) == int(EffectId.BLOOD_SPLATTER) for e in active)

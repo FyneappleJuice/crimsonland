@@ -95,6 +95,16 @@ class TextureId(Enum):
     # Rewrite-only content: Ion Overload's own icon art (bonus_icons.py). Absent
     # from a stock PAQ - always served from the committed fallback copy below.
     ION_OVERLOAD_ICON = auto()
+    # Rewrite-only content: Plasma Overload's own icon art (bonus_icons.py).
+    # Absent from a stock PAQ - always served from the committed fallback copy.
+    PLASMA_OVERLOAD_ICON = auto()
+    # Rewrite-only content: Explosive Payload's own icon art (bonus_icons.py).
+    # Absent from a stock PAQ - always served from the committed fallback copy.
+    EXPLOSIVE_PAYLOAD_ICON = auto()
+    # Rewrite-only content: Evil Scythe's own weapon icon (weapon_icon_overrides.py) -
+    # it used to just borrow Plasma Cannon's WEAPON_TABLE icon_index=25 frame.
+    # Absent from a stock PAQ - always served from the committed fallback copy.
+    EVIL_SCYTHE_WEAPON_ICON = auto()
 
 
 class TextureSpec(msgspec.Struct, frozen=True):
@@ -182,6 +192,9 @@ TEXTURE_SPECS: Final[dict[TextureId, TextureSpec]] = {
 OPTIONAL_TEXTURE_SPECS: Final[dict[TextureId, TextureSpec]] = {
     TextureId.SCYTHE: TextureSpec("game/scythe.tga", clamp=True),
     TextureId.ION_OVERLOAD_ICON: TextureSpec("game/ion_overload.png", clamp=True),
+    TextureId.PLASMA_OVERLOAD_ICON: TextureSpec("game/plasma_overload.png", clamp=True),
+    TextureId.EXPLOSIVE_PAYLOAD_ICON: TextureSpec("game/explosive_payload.png", clamp=True),
+    TextureId.EVIL_SCYTHE_WEAPON_ICON: TextureSpec("game/evil_scythe_weapon_icon.png", clamp=True),
 }
 _OPTIONAL_TEXTURE_FALLBACK_DIR: Final[Path] = Path(__file__).resolve().parent / "optional_textures"
 

@@ -506,6 +506,22 @@ def test_effect_pool_blood_splatter_queues_decal_on_expiry() -> None:
     assert first.color.a == f32(0.8)
 
 
+def test_spawn_blood_splatter_count_overrides_the_native_default() -> None:
+    # Default stays the native 2 (see test_effect_pool_blood_splatter_queues_decal_on_expiry
+    # above); rewrite-only content (Evil Scythe) can ask for a different count.
+    pool = EffectPool(size=16)
+    pool.spawn_blood_splatter(
+        pos=Vec2(),
+        angle=0.0,
+        age=0.0,
+        rng=ScriptedCrand(0, fallback=ScriptedCrand.Fallback.REPEAT_LAST),
+        detail_preset=5,
+        violence_disabled=0,
+        count=5,
+    )
+    assert len(pool.iter_active()) == 5
+
+
 def test_effect_pool_update_keeps_native_f32_lifetime_boundary() -> None:
     pool = EffectPool(size=1)
     idx = pool.spawn(

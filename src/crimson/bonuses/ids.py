@@ -206,8 +206,11 @@ BONUS_TABLE = [
         bonus_id=BonusId.EXPLOSIVE_PAYLOAD,
         name="Explosive Payload",
         description="Every bullet you fire becomes a rocket for a while.",
-        # Placeholder: borrows the Nuke icon (an explosion) until real art is
-        # authored, same as Fork Shot / Blade started on borrowed frames.
+        # Now has its own dedicated icon (TextureId.EXPLOSIVE_PAYLOAD_ICON,
+        # grim/optional_textures/explosive_payload.png - see render/world/
+        # bonus_icons.py::draw_explosive_payload_icon). This icon_id=1
+        # (Nuke's explosion frame) is kept only as the fallback drawn if that
+        # texture ever fails to load.
         icon_id=1,
         native_amount=8,
         apply_seconds=8.0,
@@ -248,9 +251,11 @@ BONUS_TABLE = [
         bonus_id=BonusId.PLASMA_OVERLOAD,
         name="Plasma Overload",
         description="Every weapon fires twin Plasma Rifle bolts for a while.",
-        # Placeholder: borrows the Weapon Power Up icon until real art is
-        # authored, same as the other rewrite-only bonuses started on
-        # borrowed frames.
+        # Now has its own dedicated icon (TextureId.PLASMA_OVERLOAD_ICON,
+        # grim/optional_textures/plasma_overload.png - see render/world/
+        # bonus_icons.py::draw_plasma_overload_icon). This icon_id=7 (Weapon
+        # Power Up's frame) is kept only as the fallback drawn if that
+        # texture ever fails to load.
         icon_id=7,
         native_amount=8,
         apply_seconds=8.0,

@@ -940,8 +940,14 @@ class EffectPool:
         rng: CrandLike,
         detail_preset: int,
         violence_disabled: int,
+        count: int = 2,
     ) -> None:
-        """Port of `effect_spawn_blood_splatter` (0x0042eb10)."""
+        """Port of `effect_spawn_blood_splatter` (0x0042eb10).
+
+        `count` defaults to 2, the native particle count every existing
+        caller relies on - only pass a different value for rewrite-only
+        content that wants its own splatter size (e.g. Evil Scythe).
+        """
 
         if int(violence_disabled) != 0:
             return
@@ -950,7 +956,7 @@ class EffectPool:
         base = float(angle) + math.pi
         direction = Vec2.from_angle(base)
 
-        for _ in range(2):
+        for _ in range(int(count)):
             r0 = rng.rand_tagged(RngCallerStatic.EFFECT_SPAWN_BLOOD_SPLATTER_ROTATION)
             rotation = float((r0 & 0x3F) - 0x20) * 0.1 + base
             r1 = rng.rand_tagged(RngCallerStatic.EFFECT_SPAWN_BLOOD_SPLATTER_HALF)

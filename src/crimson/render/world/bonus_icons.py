@@ -4,11 +4,13 @@ from __future__ import annotations
 
 The shared 4x4 bonus sheet (game/bonuses.jaz) has no frame for Fork Shot, and
 Blade only borrows an unrelated frame. Both are drawn here instead - Fork Shot
-procedurally, Blade from its actual orbiting-blade sprite. Ion Overload gets
-its own dedicated icon texture (grim/optional_textures/ion_overload.png,
-TextureId.ION_OVERLOAD_ICON) instead of the Shock Chain frame it used to
-borrow. All three are used by both the ground pickup renderer
-(render/world/bonuses.py) and the character-anchored power-up stack
+procedurally, Blade from its actual orbiting-blade sprite. Ion Overload,
+Plasma Overload and Explosive Payload each get their own dedicated icon
+texture (grim/optional_textures/{ion,plasma}_overload.png,
+explosive_payload.png; TextureId.ION_OVERLOAD_ICON / PLASMA_OVERLOAD_ICON /
+EXPLOSIVE_PAYLOAD_ICON) instead of the Shock Chain / Weapon Power Up / Nuke
+frames they used to borrow. All five are used by both the ground pickup
+renderer (render/world/bonuses.py) and the character-anchored power-up stack
 (render/world/player_status.py).
 """
 
@@ -76,26 +78,77 @@ def draw_blade_icon(
     )
 
 
-def draw_ion_overload_icon(
-    render_ctx: WorldRenderCtx, cx: float, cy: float, size: float, alpha: float, rotation_rad: float = 0.0,
+def _draw_own_icon_texture(
+    render_ctx: WorldRenderCtx,
+    texture_id: TextureId,
+    cx: float,
+    cy: float,
+    size: float,
+    alpha: float,
+    rotation_rad: float,
+    size_mult: float = 1.0,
 ) -> bool:
-    """Ion Overload's own icon (TextureId.ION_OVERLOAD_ICON), centred on (cx, cy).
+    """Shared body for the bonuses with a dedicated optional icon texture.
 
-    Returns False (drawing nothing) if the optional texture failed to load,
-    so the caller can fall back to the old borrowed Shock Chain frame.
+    `size_mult` scales the drawn icon down/up from the shared `size` every
+    bonus icon is laid out at, for source art with more or less padding than
+    the rest (e.g. Plasma Overload's art reads big at the standard size).
+
+    Returns False (drawing nothing) if the texture failed to load, so the
+    caller can fall back to whatever borrowed sheet frame it used before.
     """
     a = clamp(float(alpha), 0.0, 1.0)
     if a <= 1e-3 or size <= 0.0:
         return True
-    tex = render_ctx.frame.resources.texture_optional(TextureId.ION_OVERLOAD_ICON)
+    tex = render_ctx.frame.resources.texture_optional(texture_id)
     if tex is None:
         return False
+    drawn_size = size * float(size_mult)
     src = rl.Rectangle(0.0, 0.0, float(tex.width), float(tex.height))
-    dst = rl.Rectangle(cx, cy, size, size)
-    origin = rl.Vector2(size * 0.5, size * 0.5)
+    dst = rl.Rectangle(cx, cy, drawn_size, drawn_size)
+    origin = rl.Vector2(drawn_size * 0.5, drawn_size * 0.5)
     tint = rl.Color(255, 255, 255, int(255 * a))
     rl.draw_texture_pro(tex, src, dst, origin, float(math.degrees(rotation_rad)), tint)
     return True
 
 
-__all__ = ["draw_blade_icon", "draw_fork_icon", "draw_ion_overload_icon"]
+def draw_ion_overload_icon(
+    render_ctx: WorldRenderCtx, cx: float, cy: float, size: float, alpha: float, rotation_rad: float = 0.0,
+) -> bool:
+    """Ion Overload's own icon (TextureId.ION_OVERLOAD_ICON), centred on (cx, cy)."""
+    return _draw_own_icon_texture(render_ctx, TextureId.ION_OVERLOAD_ICON, cx, cy, size, alpha, rotation_rad)
+
+
+_PLASMA_OVERLOAD_ICON_SIZE_MULT = 0.8  # reads big at the standard icon size
+
+
+def draw_plasma_overload_icon(
+    render_ctx: WorldRenderCtx, cx: float, cy: float, size: float, alpha: float, rotation_rad: float = 0.0,
+) -> bool:
+    """Plasma Overload's own icon (TextureId.PLASMA_OVERLOAD_ICON), centred on (cx, cy)."""
+    return _draw_own_icon_texture(
+        render_ctx,
+        TextureId.PLASMA_OVERLOAD_ICON,
+        cx,
+        cy,
+        size,
+        alpha,
+        rotation_rad,
+        size_mult=_PLASMA_OVERLOAD_ICON_SIZE_MULT,
+    )
+
+
+def draw_explosive_payload_icon(
+    render_ctx: WorldRenderCtx, cx: float, cy: float, size: float, alpha: float, rotation_rad: float = 0.0,
+) -> bool:
+    """Explosive Payload's own icon (TextureId.EXPLOSIVE_PAYLOAD_ICON), centred on (cx, cy)."""
+    return _draw_own_icon_texture(render_ctx, TextureId.EXPLOSIVE_PAYLOAD_ICON, cx, cy, size, alpha, rotation_rad)
+
+
+__all__ = [
+    "draw_blade_icon",
+    "draw_explosive_payload_icon",
+    "draw_fork_icon",
+    "draw_ion_overload_icon",
+    "draw_plasma_overload_icon",
+]

@@ -38,6 +38,7 @@ from ...ui.perk_menu import (
     draw_ui_text,
 )
 from ...ui.text_input import flush_text_input_events, gameplay_controls_held, update_name_entry_text
+from ...weapon_icon_overrides import weapon_icon_dst_rect, weapon_icon_override_texture
 from ...weapons import WEAPON_BY_ID, WeaponId, weapon_display_name
 
 # `quest_results_screen_update` base layout (Crimsonland classic UI panel).
@@ -331,10 +332,23 @@ class QuestResultsUi(msgspec.Struct):
 
         row_y = row_top
         wicons = resources.texture(TextureId.UI_WICONS)
-        src = _weapon_icon_src(wicons, record.most_used_weapon_id)
+        override_tex = weapon_icon_override_texture(resources, record.most_used_weapon_id)
+        src = (
+            rl.Rectangle(0.0, 0.0, float(override_tex.width), float(override_tex.height))
+            if override_tex is not None
+            else _weapon_icon_src(wicons, record.most_used_weapon_id)
+        )
         if src is not None:
             dst = rl.Rectangle(x + 4.0 * scale, row_y, 64.0 * scale, 32.0 * scale)
-            rl.draw_texture_pro(wicons, src, dst, rl.Vector2(0.0, 0.0), 0.0, icon_tint)
+            draw_dst = weapon_icon_dst_rect(dst, record.most_used_weapon_id) if override_tex is not None else dst
+            rl.draw_texture_pro(
+                override_tex if override_tex is not None else wicons,
+                src,
+                draw_dst,
+                rl.Vector2(0.0, 0.0),
+                0.0,
+                icon_tint,
+            )
 
         weapon_id = record.most_used_weapon_id
         weapon_name = weapon_display_name(weapon_id, preserve_bugs=bool(self.preserve_bugs))

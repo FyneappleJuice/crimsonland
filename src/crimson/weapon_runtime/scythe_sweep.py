@@ -20,12 +20,17 @@ swing start, the blade bearing runs from ``base - dir*arc/2`` to
 """
 
 import math
+from typing import TYPE_CHECKING
 
 from grim.geom import Vec2
+from grim.rand import CrandLike
 
 from ..creatures.damage_types import CreatureDamageType
 from ..owner_ref import OwnerRef
 from ..sim.state_types import PlayerState, ScytheSwingState
+
+if TYPE_CHECKING:
+    from ..effects import EffectPool
 
 # Total cone the blade sweeps (radians). ~162 degrees.
 SCYTHE_ARC = math.radians(162.0)
@@ -42,6 +47,10 @@ SCYTHE_CREATURE_REACH_FACTOR = 0.3
 SCYTHE_EDGE_PAD = math.radians(5.0)
 SCYTHE_DAMAGE = 91.2
 SCYTHE_KNOCKBACK = 2.6
+# Not native: blood particles per connecting slash (spawn_blood_splatter's
+# `count`, effects.py) - a plain bullet's native default is 2; Blade Gun's
+# own 8-call spray is 16. This sits in between.
+SCYTHE_BLOOD_SPLATTER_PARTICLES = 5
 
 # Weapon Power Up: ~+30% DPS, delivered as swing damage (no cadence change - the
 # scythe is in power_up.WPU_NO_RATE_WEAPON_IDS). A hair of extra reach for feel.
@@ -133,6 +142,10 @@ def update_scythe_swings(
     dt: float,
     *,
     creature_damage_runtime,
+    effects: EffectPool | None = None,
+    rng: CrandLike | None = None,
+    detail_preset: int = 5,
+    violence_disabled: int = 0,
 ) -> None:
     """Advance every active scythe swing and apply the edge's melee hits."""
 
@@ -189,6 +202,20 @@ def update_scythe_swings(
                     impulse,
                     owner,
                 )
+                # Not native: blood on every slash that connects, same effect
+                # bullets/Blade Gun already spawn on a hit (effects.py::
+                # spawn_blood_splatter) - a heavier weapon's hit gets more
+                # particles than a plain bullet's native 2.
+                if effects is not None and rng is not None:
+                    effects.spawn_blood_splatter(
+                        pos=creature.pos,
+                        angle=math.atan2(cdy, cdx),
+                        age=0.0,
+                        rng=rng,
+                        detail_preset=detail_preset,
+                        violence_disabled=violence_disabled,
+                        count=SCYTHE_BLOOD_SPLATTER_PARTICLES,
+                    )
 
         swing.prev_angle = curr_angle
         if progress >= 1.0:

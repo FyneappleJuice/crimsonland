@@ -497,6 +497,10 @@ class WorldState(msgspec.Struct):
             self.creatures.entries,
             dt,
             creature_damage_runtime=step_runtime,
+            effects=self.state.effects,
+            rng=self.state.rng,
+            detail_preset=int(detail_preset),
+            violence_disabled=int(violence_disabled),
         )
         # Not native: resolve pending Arc Gun chain-lightning strikes.
         update_arc_gun(

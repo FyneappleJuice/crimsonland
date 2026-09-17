@@ -8,6 +8,7 @@ from grim.geom import Vec2
 from grim.raylib_api import rl
 
 from ...game.types import GameState
+from ...weapon_icon_overrides import weapon_icon_dst_rect, weapon_icon_override_texture
 from ..assets import require_runtime_resources
 from ..high_scores_layout import weapons_db_right_detail_x_shift
 from .databases_base import _DatabaseBaseView
@@ -106,7 +107,7 @@ class UnlockedWeaponsDatabaseView(_DatabaseBaseView):
         draw_small_text(font, f"{weapon_no_label} #{weapon_id}", detail_top_left + Vec2(240.0 * scale, 32.0 * scale), rl.Color(255, 255, 255, int(255 * 0.4)))
         draw_small_text(font, name, detail_top_left + Vec2(50.0 * scale, 50.0 * scale), text_color)
         if icon_index is not None:
-            self._draw_wicon(icon_index, pos=detail_top_left + Vec2(82.0 * scale, 82.0 * scale), scale=scale)
+            self._draw_wicon(icon_index, weapon_id=weapon_id, pos=detail_top_left + Vec2(82.0 * scale, 82.0 * scale), scale=scale)
 
         reload_time = weapon.reload_time
         clip_size = weapon.clip_size
@@ -195,8 +196,9 @@ class UnlockedWeaponsDatabaseView(_DatabaseBaseView):
     def _weapon_rpm(self, weapon: Weapon) -> int:
         return int(60.0 / float(weapon.shot_cooldown))
 
-    def _draw_wicon(self, icon_index: int, *, pos: Vec2, scale: float) -> None:
-        tex = require_runtime_resources(self.state).texture(TextureId.UI_WICONS)
+    def _draw_wicon(self, icon_index: int, *, weapon_id: int, pos: Vec2, scale: float) -> None:
+        resources = require_runtime_resources(self.state)
+        tex = resources.texture(TextureId.UI_WICONS)
         idx = int(icon_index)
         if idx < 0 or idx > 31:
             return
@@ -208,10 +210,18 @@ class UnlockedWeaponsDatabaseView(_DatabaseBaseView):
         src_y = float(frame // grid) * cell_h
         icon_w = cell_w * 2.0
         icon_h = cell_h
+        override_tex = weapon_icon_override_texture(resources, weapon_id)
+        dst = rl.Rectangle(pos.x, pos.y, icon_w * scale, icon_h * scale)
+        if override_tex is not None:
+            tex = override_tex
+            src = rl.Rectangle(0.0, 0.0, float(override_tex.width), float(override_tex.height))
+            dst = weapon_icon_dst_rect(dst, weapon_id)
+        else:
+            src = rl.Rectangle(src_x, src_y, icon_w, icon_h)
         rl.draw_texture_pro(
             tex,
-            rl.Rectangle(src_x, src_y, icon_w, icon_h),
-            rl.Rectangle(pos.x, pos.y, icon_w * scale, icon_h * scale),
+            src,
+            dst,
             rl.Vector2(0.0, 0.0),
             0.0,
             rl.WHITE,

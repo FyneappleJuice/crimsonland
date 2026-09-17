@@ -10,8 +10,15 @@ from grim.raylib_api import rl
 
 from ...bonuses import BONUS_BY_ID, BonusId
 from ...bonuses.pool import bonus_find_aim_hover_entry, bonus_label_for_entry
+from ...weapon_icon_overrides import weapon_icon_override_texture, weapon_icon_size_mult
 from ...weapons import WEAPON_BY_ID, WeaponId
-from .bonus_icons import draw_blade_icon, draw_fork_icon, draw_ion_overload_icon
+from .bonus_icons import (
+    draw_blade_icon,
+    draw_explosive_payload_icon,
+    draw_fork_icon,
+    draw_ion_overload_icon,
+    draw_plasma_overload_icon,
+)
 from .constants import _RAD_TO_DEG
 from .context import WorldRenderCtx
 
@@ -117,20 +124,35 @@ def draw_bonus_pickups(
             if icon_scale <= 1e-3:
                 continue
 
-            src = weapon_icon_src(wicons_texture, icon_index)
             w = 60.0 * icon_scale * scale
             h = 30.0 * icon_scale * scale
             dst = rl.Rectangle(screen.x, screen.y, w, h)
             origin = rl.Vector2(w * 0.5, h * 0.5)
             icon_tint = rl.Color(255, 255, 255, int(fade * alpha * 255.0 + 0.5))
-            rl.draw_texture_pro(wicons_texture, src, dst, origin, 0.0, icon_tint)
+            override_tex = weapon_icon_override_texture(frame.resources, weapon_id)
+            if override_tex is not None:
+                override_src = rl.Rectangle(0.0, 0.0, float(override_tex.width), float(override_tex.height))
+                mult = weapon_icon_size_mult(weapon_id)
+                override_dst = rl.Rectangle(screen.x, screen.y, w * mult, h * mult)
+                override_origin = rl.Vector2(w * mult * 0.5, h * mult * 0.5)
+                rl.draw_texture_pro(override_tex, override_src, override_dst, override_origin, 0.0, icon_tint)
+            else:
+                src = weapon_icon_src(wicons_texture, icon_index)
+                rl.draw_texture_pro(wicons_texture, src, dst, origin, 0.0, icon_tint)
             continue
 
         meta = BONUS_BY_ID.get(bonus_id)
         icon_id = int(meta.icon_id) if meta is not None and meta.icon_id is not None else None
-        # Fork Shot / Blade / Ion Overload draw their own art (no usable
-        # bonus-sheet frame - or, for Ion Overload, a nicer dedicated one).
-        has_own_icon = bonus_id in (BonusId.PROJECTILE_FORK, BonusId.BLADE, BonusId.ION_OVERLOAD)
+        # Fork Shot / Blade / Ion Overload / Plasma Overload / Explosive
+        # Payload draw their own art (no usable bonus-sheet frame - or, for
+        # the Overloads/Explosive Payload, a nicer dedicated one).
+        has_own_icon = bonus_id in (
+            BonusId.PROJECTILE_FORK,
+            BonusId.BLADE,
+            BonusId.ION_OVERLOAD,
+            BonusId.PLASMA_OVERLOAD,
+            BonusId.EXPLOSIVE_PAYLOAD,
+        )
         if not has_own_icon and (icon_id is None or icon_id < 0):
             continue
         if bonus_id == BonusId.POINTS and int(bonus.amount) == 1000 and icon_id is not None:
@@ -143,8 +165,8 @@ def draw_bonus_pickups(
 
         size = 32.0 * icon_scale * scale
         rotation_rad = math.sin(float(idx) - float(frame.elapsed_ms) * 0.003) * 0.2
-        # Fork Shot / Blade / Ion Overload draw their own art, upright (no
-        # wobble / spin).
+        # Fork Shot / Blade / Ion Overload / Plasma Overload draw their own
+        # art, upright (no wobble / spin).
         if bonus_id == BonusId.PROJECTILE_FORK:
             draw_fork_icon(screen.x, screen.y, size, alpha)
             continue
@@ -152,6 +174,14 @@ def draw_bonus_pickups(
             draw_blade_icon(render_ctx, screen.x, screen.y, size, alpha)
             continue
         if bonus_id == BonusId.ION_OVERLOAD and draw_ion_overload_icon(render_ctx, screen.x, screen.y, size, alpha):
+            continue
+        if bonus_id == BonusId.PLASMA_OVERLOAD and draw_plasma_overload_icon(
+            render_ctx, screen.x, screen.y, size, alpha,
+        ):
+            continue
+        if bonus_id == BonusId.EXPLOSIVE_PAYLOAD and draw_explosive_payload_icon(
+            render_ctx, screen.x, screen.y, size, alpha,
+        ):
             continue
 
         src = bonus_icon_src(bonuses_texture, int(icon_id))

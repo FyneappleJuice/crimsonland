@@ -8,6 +8,7 @@ from grim.geom import Vec2
 from grim.raylib_api import rl
 
 from ...game_modes import GameMode
+from ...weapon_icon_overrides import weapon_icon_dst_rect, weapon_icon_override_texture
 from ..high_scores_layout import (
     HS_LOCAL_CLOCK_X,
     HS_LOCAL_CLOCK_Y,
@@ -466,6 +467,7 @@ def _draw_right_panel_local_score(
     if icon_index is not None:
         _draw_wicon(
             resources=resources,
+            weapon_id=weapon_id,
             icon_index=icon_index,
             pos=card_top_left + Vec2(HS_LOCAL_WICON_X * scale, HS_LOCAL_WICON_Y * scale),
             scale=scale,
@@ -524,6 +526,7 @@ def _draw_clock_gauge(
 def _draw_wicon(
     *,
     resources: RuntimeResources,
+    weapon_id: int,
     icon_index: int,
     pos: Vec2,
     scale: float,
@@ -540,10 +543,18 @@ def _draw_wicon(
     src_y = float(frame // grid) * cell_h
     icon_w = cell_w * 2.0
     icon_h = cell_h
+    override_tex = weapon_icon_override_texture(resources, weapon_id)
+    dst = rl.Rectangle(pos.x, pos.y, icon_w * scale, icon_h * scale)
+    if override_tex is not None:
+        tex = override_tex
+        src = rl.Rectangle(0.0, 0.0, float(override_tex.width), float(override_tex.height))
+        dst = weapon_icon_dst_rect(dst, weapon_id)
+    else:
+        src = rl.Rectangle(src_x, src_y, icon_w, icon_h)
     rl.draw_texture_pro(
         tex,
-        rl.Rectangle(src_x, src_y, icon_w, icon_h),
-        rl.Rectangle(pos.x, pos.y, icon_w * scale, icon_h * scale),
+        src,
+        dst,
         rl.Vector2(0.0, 0.0),
         0.0,
         rl.WHITE,

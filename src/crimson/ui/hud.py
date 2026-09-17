@@ -15,6 +15,7 @@ from ..bonuses.hud import BonusHudState
 from ..game_modes import GameMode
 from ..gameplay import survival_level_threshold
 from ..sim.state_types import PlayerState
+from ..weapon_icon_overrides import weapon_icon_dst_rect, weapon_icon_override_texture
 from ..weapons import WEAPON_BY_ID, WeaponId, weapon_display_name
 
 HUD_TEXT_COLOR = rl.Color(220, 220, 220, 255)
@@ -481,10 +482,16 @@ def draw_hud_overlay(
             icon_step = Vec2(0.0, 16.0)
 
         for idx, hud_player in enumerate(hud_players):
-            icon_index = _weapon_icon_index(hud_player.weapon.weapon_id)
+            weapon_id = hud_player.weapon.weapon_id
+            icon_index = _weapon_icon_index(weapon_id)
             if icon_index is None:
                 continue
-            src = _weapon_icon_src(wicons, icon_index)
+            override_tex = weapon_icon_override_texture(resources, weapon_id)
+            src = (
+                rl.Rectangle(0.0, 0.0, float(override_tex.width), float(override_tex.height))
+                if override_tex is not None
+                else _weapon_icon_src(wicons, icon_index)
+            )
             icon_pos = icon_base_pos + icon_step * float(idx)
             if weapon_tl:
                 pad = HUD_WEAPON_TL_PAD
@@ -501,11 +508,12 @@ def draw_hud_overlay(
                 ui(icon_size.x),
                 ui(icon_size.y),
             )
+            draw_dst = weapon_icon_dst_rect(dst, weapon_id) if override_tex is not None else dst
             icon_tint_alpha = alpha if weapon_tl else alpha * HUD_ICON_ALPHA
             rl.draw_texture_pro(
-                wicons,
+                override_tex if override_tex is not None else wicons,
                 src,
-                dst,
+                draw_dst,
                 rl.Vector2(0.0, 0.0),
                 0.0,
                 rl.Color(255, 255, 255, int(255 * icon_tint_alpha)),
@@ -947,13 +955,22 @@ def draw_hud_overlay(
 
         icon_index = _weapon_icon_index(hud_player.weapon.weapon_id)
         if icon_index is not None:
-            src = _weapon_icon_src(wicons, icon_index)
+            aux_override_tex = weapon_icon_override_texture(resources, hud_player.weapon.weapon_id)
+            if aux_override_tex is not None:
+                aux_tex = aux_override_tex
+                src = rl.Rectangle(0.0, 0.0, float(aux_override_tex.width), float(aux_override_tex.height))
+            else:
+                aux_tex = wicons
+                src = _weapon_icon_src(wicons, icon_index)
             icon_pos = aux_icon_base_pos + aux_step * float(aux_row)
             dst = rl.Rectangle(ui(icon_pos.x), ui(icon_pos.y), ui(60.0), ui(30.0))
+            aux_draw_dst = (
+                weapon_icon_dst_rect(dst, hud_player.weapon.weapon_id) if aux_override_tex is not None else dst
+            )
             rl.draw_texture_pro(
-                wicons,
+                aux_tex,
                 src,
-                dst,
+                aux_draw_dst,
                 rl.Vector2(0.0, 0.0),
                 0.0,
                 rl.Color(255, 255, 255, int(255 * panel_alpha)),
