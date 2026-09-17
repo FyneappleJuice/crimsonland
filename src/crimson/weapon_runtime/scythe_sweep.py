@@ -102,6 +102,7 @@ def start_scythe_swing(
     *,
     shots_fired_this_clip: int,
     weapon_power_up: bool = False,
+    crit_mult: float = 1.0,
 ) -> None:
     """Begin a swing. Even shots sweep left->right (+1), odd shots right->left."""
 
@@ -118,7 +119,10 @@ def start_scythe_swing(
     swing.direction = float(direction)
     swing.arc = float(arc)
     swing.reach = float(SCYTHE_REACH * (SCYTHE_WPU_REACH_MULT if weapon_power_up else 1.0))
-    swing.damage = float(SCYTHE_DAMAGE * (SCYTHE_WPU_DAMAGE_MULT if weapon_power_up else 1.0))
+    # Rewrite-only: crit compensation/multiplier (weapon_runtime/crit.py),
+    # rolled once at swing start and frozen into the whole swing's damage -
+    # every creature this swing hits shares the same crit-or-not outcome.
+    swing.damage = float(SCYTHE_DAMAGE * (SCYTHE_WPU_DAMAGE_MULT if weapon_power_up else 1.0) * crit_mult)
     swing.prev_angle = _blade_angle_at(base_angle, direction, 0.0, arc)
     swing.hit = []
 

@@ -53,13 +53,22 @@ ARC_WPU_RANGE_MULT = 1.0
 ARC_WPU_DAMAGE_MULT = 1.0
 
 
-def start_arc_strike(player: PlayerState, aim_world: Vec2, *, weapon_power_up: bool = False) -> None:
+def start_arc_strike(
+    player: PlayerState,
+    aim_world: Vec2,
+    *,
+    weapon_power_up: bool = False,
+    crit_mult: float = 1.0,
+) -> None:
     arc = player.arc_gun
     arc.pending = True
     arc.aim_x = float(aim_world.x)
     arc.aim_y = float(aim_world.y)
     arc.weapon_power_up = bool(weapon_power_up)
     arc.seed = int(arc.seed) + 1
+    # Rewrite-only: crit compensation/multiplier (weapon_runtime/crit.py),
+    # rolled once at fire time and applied to every hop of the resolved chain.
+    arc.crit_mult = float(crit_mult)
 
 
 def _dist(ax: float, ay: float, bx: float, by: float) -> float:
@@ -150,7 +159,7 @@ def update_arc_gun(
             used.add(cur)
 
             if creature_damage_runtime is not None:
-                dmg = ARC_DAMAGE * dmg_mult * (ARC_CHAIN_GROWTH ** hop)
+                dmg = ARC_DAMAGE * dmg_mult * (ARC_CHAIN_GROWTH ** hop) * float(arc.crit_mult)
                 inv = 1.0 / (math.hypot(cx - prev_x, cy - prev_y) or 1.0)
                 impulse = Vec2((cx - prev_x) * inv * ARC_KNOCKBACK, (cy - prev_y) * inv * ARC_KNOCKBACK)
                 creature_damage_runtime.apply_creature_damage(

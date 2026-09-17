@@ -31,6 +31,7 @@ from ..sim.input import PlayerInput
 from ..sim.state_types import GameplayState, PlayerState
 from ..weapons import WEAPON_TABLE, WeaponId, weapon_entry_for_projectile_type_id
 from .assign import player_start_reload, weapon_entry
+from .crit import roll_crit_mult
 from .fire_recipes import (
     ArcStrikeMode,
     MaskCenteredJitter,
@@ -434,6 +435,7 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
                 )
                 if energy_heat_mult != 1.0:
                     state.projectiles.entries[int(proj_id)].energy_heat_mult = float(energy_heat_mult)
+                state.projectiles.entries[int(proj_id)].crit_mult = roll_crit_mult(weapon_id)
                 if explosive_payload_active and pellet_index == explosive_pellet_index:
                     state.projectiles.entries[int(proj_id)].is_rocket = True
                 if isinstance(speed_rule, ModuloSpeedScale):
@@ -453,7 +455,7 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
                     spawn_creatures = creatures
                 case _:
                     pass
-            state.secondary_projectiles.spawn_from_spec(
+            secondary_proj_id = state.secondary_projectiles.spawn_from_spec(
                 SecondarySpawnSpec(
                     pos=muzzle,
                     angle=shot_angle,
@@ -464,16 +466,18 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
                     preserve_bugs=bool(state.preserve_bugs),
                 ),
             )
+            state.secondary_projectiles.entries[int(secondary_proj_id)].crit_mult = roll_crit_mult(weapon_id)
         case ParticleStreamMode(style=style, slow=slow):
             counts_accuracy_shots = False
             # WPU for a stream weapon is +30% per-particle damage (fire rate is a
             # no-op - the stream already emits every frame); see world_state.py.
             if slow:
-                state.particles.spawn_particle_slow(
+                particle_id = state.particles.spawn_particle_slow(
                     pos=muzzle,
                     angle=Vec2.from_heading(shot_angle).to_angle(),
                     owner=owner,
                 )
+                state.particles.entries[particle_id].crit_mult = roll_crit_mult(weapon_id)
             else:
                 particle_id = state.particles.spawn_particle(
                     pos=muzzle,
@@ -483,6 +487,7 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
                 )
                 if style is not None:
                     state.particles.entries[particle_id].style_id = style
+                state.particles.entries[particle_id].crit_mult = roll_crit_mult(weapon_id)
         case MultiPlasmaFanMode():
             # Multi-Plasma: 5-shot fixed spread using type 0x09 and 0x0B.
             shot_count = 5
@@ -506,6 +511,7 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
                 )
                 if energy_heat_mult != 1.0:
                     state.projectiles.entries[int(fan_proj_id)].energy_heat_mult = float(energy_heat_mult)
+                state.projectiles.entries[int(fan_proj_id)].crit_mult = roll_crit_mult(weapon_id)
         case PlasmaOverloadMode():
             # Not native: Plasma Overload bonus - two Plasma Rifle bolts fired
             # side-by-side on the same heading (not a fan - no angle spread).
@@ -528,6 +534,7 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
                 )
                 if energy_heat_mult != 1.0:
                     state.projectiles.entries[int(bolt_proj_id)].energy_heat_mult = float(energy_heat_mult)
+                state.projectiles.entries[int(bolt_proj_id)].crit_mult = roll_crit_mult(weapon_id)
         case SwarmerDumpMode():
             # Mini-Rocket Swarmers -> secondary type 2 (fires the full clip in a spread).
             # Native spawns one rocket per integer counter step below the float ammo
@@ -549,7 +556,7 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
                 step = 0.0 if rocket_count <= 1 else spread / float(rocket_count - 1)
                 angle = shot_angle - spread * 0.5
             for _ in range(rocket_count):
-                state.secondary_projectiles.spawn_from_spec(
+                swarmer_proj_id = state.secondary_projectiles.spawn_from_spec(
                     SecondarySpawnSpec(
                         pos=muzzle,
                         angle=angle,
@@ -560,6 +567,7 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
                         preserve_bugs=bool(state.preserve_bugs),
                     ),
                 )
+                state.secondary_projectiles.entries[int(swarmer_proj_id)].crit_mult = roll_crit_mult(weapon_id)
                 angle = x87_pc24_add(angle, step) if preserve_swarmer_bug else angle + step
             # Native subtracts the full clip value, zeroing the ammo even when
             # the clip was fractional or negative.
@@ -577,6 +585,7 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
                 aim,
                 shots_fired_this_clip=shots_fired_this_clip,
                 weapon_power_up=weapon_power_up_active,
+                crit_mult=roll_crit_mult(weapon_id),
             )
         case ArcStrikeMode():
             # Arc Gun: no projectile - flag a chain-lightning strike for the
@@ -584,7 +593,12 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
             from .arc_gun import start_arc_strike
 
             counts_accuracy_shots = False
-            start_arc_strike(player, aim, weapon_power_up=weapon_power_up_active)
+            start_arc_strike(
+                player,
+                aim,
+                weapon_power_up=weapon_power_up_active,
+                crit_mult=roll_crit_mult(weapon_id),
+            )
 
     if 0 <= int(player.index) < len(state.shots_fired):
         if counts_accuracy_shots:

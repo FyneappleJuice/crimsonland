@@ -461,15 +461,15 @@ def test_flame_damage_mult_hook_scales_per_particle_damage() -> None:
     assert _hit(1.25) == pytest.approx(_hit(1.0) * 1.25)
 
 
-def test_flame_hits_accumulate_ignite_heat() -> None:
-    from crimson.creatures.ignite import IGNITE_HEAT_PER_HIT
+def test_flame_hits_accumulate_ignite_flammability() -> None:
+    from crimson.creatures.ignite import IGNITE_FLAMMABILITY_PER_HIT
 
     c = CreatureState()
     c.active, c.hp, c.pos, c.size, c.lifecycle_stage = True, 1e9, Vec2(), 50.0, 16.0
     pool = ParticlePool(size=1, rng=ScriptedCrand(0, fallback=ScriptedCrand.Fallback.REPEAT_LAST))
     pool.spawn_particle(pos=Vec2(), angle=0.0, intensity=1.0)
     pool.update(0.016, creatures=[c], creature_damage_runtime=RecordingCreatureDamageRuntime(creatures=[c]))
-    assert c.ignite_heat == pytest.approx(IGNITE_HEAT_PER_HIT * 1.0, abs=1.0)  # ~ one full-intensity hit
+    assert c.ignite_flammability == pytest.approx(IGNITE_FLAMMABILITY_PER_HIT * 1.0, abs=1.0)  # ~ one full-intensity hit
 
 
 def test_effect_pool_blood_splatter_queues_decal_on_expiry() -> None:

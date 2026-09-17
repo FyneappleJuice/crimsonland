@@ -101,6 +101,11 @@ class Projectile(msgspec.Struct):
     # firing weapon's clip-heat (see weapon_runtime/plasma_heat.py). 1.0 = no
     # ramp / not a plasma bolt.
     energy_heat_mult: float = 1.0
+    # Rewrite-only: outgoing crit multiplier stamped at spawn from the firing
+    # weapon's archetype crit chance (weapon_runtime/crit.py). Always applied
+    # at hit time (compensation factor on a miss, compensation*2 on a crit) so
+    # DPS averages stay anchored to the pre-crit baseline.
+    crit_mult: float = 1.0
     # Rewrite-only: extra full-damage targets this bolt punches through before it
     # stops (Weapon Power Up for kinetic lead). 0 = native stop-on-first-hit.
     pierce_left: float = 0.0
@@ -134,6 +139,10 @@ class SecondaryProjectile(msgspec.Struct):
     owner: OwnerRef = msgspec.field(default_factory=lambda: OwnerRef.from_local_player(0))
     trail_timer: float = 0.0
     target_id: int = -1
+    # Rewrite-only: outgoing crit multiplier stamped at spawn (weapon_runtime/
+    # crit.py) - carries through from the direct-hit burst into the
+    # detonation AoE tick, since both phases come from the same rocket.
+    crit_mult: float = 1.0
 
 
 __all__ = [

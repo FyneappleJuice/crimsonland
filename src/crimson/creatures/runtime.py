@@ -308,10 +308,12 @@ class CreatureState(msgspec.Struct):
     bonus_id: BonusId | None = None
     bonus_duration_override: int | None = None
 
-    # Rewrite-only: flamethrower ignite DoT (creatures/ignite.py). `ignite_heat`
-    # builds from flame hits; at IGNITE_HEAT_THRESHOLD it starts `ignite_timer`
-    # seconds of separate fire damage and cannot re-trigger until that expires.
-    ignite_heat: float = 0.0
+    # Rewrite-only: flamethrower ignite DoT (creatures/ignite.py).
+    # `ignite_flammability` builds from flame hits (named apart from the
+    # unrelated plasma clip-heat system, weapon_runtime/plasma_heat.py); at
+    # IGNITE_FLAMMABILITY_THRESHOLD it starts `ignite_timer` seconds of
+    # separate fire damage and cannot re-trigger until that expires.
+    ignite_flammability: float = 0.0
     ignite_timer: float = 0.0
 
     # Rewrite-only: monster rarity & affixes (creatures/rarity.py). 0 = normal.

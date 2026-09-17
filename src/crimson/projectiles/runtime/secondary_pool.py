@@ -128,6 +128,7 @@ class SecondaryProjectilePool:
         entry.vel = Vec2()
         entry.detonation_t = 0.0
         entry.detonation_scale = 1.0
+        entry.crit_mult = 1.0
 
         rule = secondary_rule_for_type_id(type_id)
         match rule:
@@ -258,6 +259,10 @@ class SecondaryProjectilePool:
                 radius_sq = radius * radius
                 damage = x87_pc24_mul(dt, scale)
                 damage = x87_pc24_mul(damage, 700.0)
+                if entry.crit_mult != 1.0:
+                    # Crit compensation/multiplier, stamped on the rocket when it was
+                    # fired - carries through into its detonation AoE tick.
+                    damage = x87_pc24_mul(damage, float(entry.crit_mult))
                 for creature_idx in creature_spatial.candidate_indices(pos=entry.pos, radius=float(radius)):
                     creature = creatures[int(creature_idx)]
                     if not _creature_is_collidable(creature):
@@ -544,6 +549,9 @@ class SecondaryProjectilePool:
                     x87_pc24_mul(entry.speed, float(damage_speed_mul)),
                     float(damage_base),
                 )
+                if entry.crit_mult != 1.0:
+                    # Crit compensation/multiplier, stamped on the rocket when it was fired.
+                    damage = x87_pc24_mul(damage, float(entry.crit_mult))
                 inv_dt = f32(1.0 / float(dt))
                 impulse = Vec2(
                     x87_pc24_mul(inv_dt, entry.vel.x),

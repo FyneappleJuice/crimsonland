@@ -111,12 +111,16 @@ def test_weapon_drop_near_player2_stays_player1_only_with_preserve_bugs() -> Non
     state.rng = ScriptedCrand([1, 13, 1, 4], fallback=ScriptedCrand.Fallback.ZERO)
 
     player1 = PlayerState(index=0, pos=Vec2(), weapon=WeaponSlot(weapon_id=WeaponId.ASSAULT_RIFLE))
-    player2 = PlayerState(index=1, pos=Vec2(500.0, 500.0), weapon=WeaponSlot(weapon_id=WeaponId.SUBMACHINE_GUN))
+    player2 = PlayerState(index=1, pos=Vec2(500.0, 500.0), weapon=WeaponSlot(weapon_id=WeaponId.PLASMA_RIFLE))
 
     entry = state.bonus_pool.try_spawn_on_kill(pos=Vec2(500.0, 500.0), state=state, players=[player1, player2])
     assert entry is not None
     assert entry.bonus_id == BonusId.WEAPON
-    assert entry.amount == WeaponId.SUBMACHINE_GUN
+    # Submachine Gun is shelved (weapon_runtime.availability.INACTIVE_WEAPON_IDS),
+    # so the picker skips its scripted roll and falls through to the ZERO
+    # fallback, which lands on Pistol (id 1) - unrelated to what's being
+    # tested here (the preserve-bugs player1-only proximity gate).
+    assert entry.amount == WeaponId.PISTOL
 
 
 def test_weapon_drop_near_check_uses_native_pc24_hypotenuse_boundary() -> None:
@@ -134,7 +138,9 @@ def test_weapon_drop_near_check_uses_native_pc24_hypotenuse_boundary() -> None:
     # hypotenuse to exactly 56 and does not convert the weapon drop to points.
     assert entry is not None
     assert entry.bonus_id == BonusId.WEAPON
-    assert entry.amount == WeaponId.SUBMACHINE_GUN
+    # See the ZERO-fallback note above - Submachine Gun being shelved is
+    # unrelated to what this test actually checks (the hypotenuse rounding).
+    assert entry.amount == WeaponId.PISTOL
 
 
 def test_pistol_safety_net_consumes_weapon_rng_when_spawn_pos_is_blocked() -> None:

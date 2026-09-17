@@ -5,9 +5,9 @@ import pytest
 from crimson.creatures.ignite import (
     IGNITE_DPS,
     IGNITE_DURATION_S,
-    IGNITE_HEAT_DECAY_PER_S,
-    IGNITE_HEAT_PER_HIT,
-    IGNITE_HEAT_THRESHOLD,
+    IGNITE_FLAMMABILITY_DECAY_PER_S,
+    IGNITE_FLAMMABILITY_PER_HIT,
+    IGNITE_FLAMMABILITY_THRESHOLD,
     flame_ignite_accumulate,
     ignite_tick,
 )
@@ -34,32 +34,32 @@ def _tick(creature: CreatureState, dt: float, *, runtime=None) -> bool:
     )
 
 
-def test_heat_accumulates_and_ignites_at_the_threshold() -> None:
+def test_flammability_accumulates_and_ignites_at_the_threshold() -> None:
     c = _creature()
     hits = 0
     while c.ignite_timer <= 0.0:
-        flame_ignite_accumulate(c, IGNITE_HEAT_PER_HIT)
+        flame_ignite_accumulate(c, IGNITE_FLAMMABILITY_PER_HIT)
         hits += 1
-    assert hits == pytest.approx(IGNITE_HEAT_THRESHOLD / IGNITE_HEAT_PER_HIT, abs=1)
+    assert hits == pytest.approx(IGNITE_FLAMMABILITY_THRESHOLD / IGNITE_FLAMMABILITY_PER_HIT, abs=1)
     assert c.ignite_timer == IGNITE_DURATION_S
-    assert c.ignite_heat == 0.0  # consumed on ignite
+    assert c.ignite_flammability == 0.0  # consumed on ignite
 
 
 def test_a_burning_creature_cannot_be_re_ignited_until_it_expires() -> None:
     c = _creature()
     c.ignite_timer = IGNITE_DURATION_S
     for _ in range(50):
-        flame_ignite_accumulate(c, IGNITE_HEAT_PER_HIT)
-    assert c.ignite_heat == 0.0  # heat is ignored while burning
+        flame_ignite_accumulate(c, IGNITE_FLAMMABILITY_PER_HIT)
+    assert c.ignite_flammability == 0.0  # flammability is ignored while burning
     assert c.ignite_timer == IGNITE_DURATION_S
 
 
-def test_heat_decays_while_not_burning_so_a_graze_cools_off() -> None:
+def test_flammability_decays_while_not_burning_so_a_graze_cools_off() -> None:
     c = _creature()
-    flame_ignite_accumulate(c, IGNITE_HEAT_THRESHOLD * 0.6)  # not enough to ignite
+    flame_ignite_accumulate(c, IGNITE_FLAMMABILITY_THRESHOLD * 0.6)  # not enough to ignite
     assert c.ignite_timer <= 0.0
     _tick(c, 1.0)  # one second of cooling
-    assert c.ignite_heat == pytest.approx(IGNITE_HEAT_THRESHOLD * 0.6 - IGNITE_HEAT_DECAY_PER_S)
+    assert c.ignite_flammability == pytest.approx(IGNITE_FLAMMABILITY_THRESHOLD * 0.6 - IGNITE_FLAMMABILITY_DECAY_PER_S)
     assert c.ignite_timer <= 0.0
 
 
@@ -77,7 +77,7 @@ def test_ignite_tick_deals_fire_damage_over_the_duration_then_can_relight() -> N
     assert ticks == pytest.approx(IGNITE_DURATION_S * 60.0, abs=1)
     assert (hp0 - c.hp) == pytest.approx(IGNITE_DPS * IGNITE_DURATION_S, rel=0.02)
     # eligible again now that the burn lapsed
-    flame_ignite_accumulate(c, IGNITE_HEAT_THRESHOLD)
+    flame_ignite_accumulate(c, IGNITE_FLAMMABILITY_THRESHOLD)
     assert c.ignite_timer == IGNITE_DURATION_S
 
 
@@ -106,7 +106,7 @@ def test_ignite_damage_is_fire_typed_so_pyromaniac_scales_it() -> None:
     assert (100000.0 - pyro.hp) == pytest.approx(plain_loss * 1.5, rel=1e-4)
 
 
-def test_ignite_tick_is_inert_with_no_burn_and_no_heat() -> None:
+def test_ignite_tick_is_inert_with_no_burn_and_no_flammability() -> None:
     c = _creature()
     assert _tick(c, 1.0) is False
     assert c.hp == 1000.0

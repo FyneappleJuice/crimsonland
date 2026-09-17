@@ -48,6 +48,9 @@ from .sim.timing import ftol_ms_i32, reflex_boost_time_scale_factor
 from .tutorial import TutorialOverlayState, TutorialState
 from .typo.state import TypoState
 from .weapon_runtime import (
+    INACTIVE_WEAPON_IDS,
+)
+from .weapon_runtime import (
     WeaponFireCtx as _WeaponFireCtx,
 )
 from .weapon_runtime.power_up import wpu_boosts_fire_rate
@@ -326,7 +329,7 @@ def survival_update_weapon_handouts(
         and int(float(survival_elapsed_ms)) > 64000
         and bool(state.survival_reward_handout_enabled)
     ):
-        if player.weapon.weapon_id == WeaponId.PISTOL:
+        if player.weapon.weapon_id == WeaponId.PISTOL and WeaponId.SHRINKIFIER_5K not in INACTIVE_WEAPON_IDS:
             _weapon_assign_player(player, WeaponId.SHRINKIFIER_5K, state=state)
             state.survival_reward_weapon_guard_id = WeaponId.SHRINKIFIER_5K
         state.survival_reward_handout_enabled = False

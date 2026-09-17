@@ -13,7 +13,7 @@ from grim.math import clamp
 from grim.rand import CallerStatic, Crand, CrandLike
 
 from .creatures.damage_runtime import CreatureDamageRuntime, DirectCreatureDamageRuntime
-from .creatures.ignite import IGNITE_HEAT_PER_HIT, flame_ignite_accumulate
+from .creatures.ignite import IGNITE_FLAMMABILITY_PER_HIT, flame_ignite_accumulate
 from .creatures.lifecycle import creature_lifecycle_is_collidable
 from .effects_atlas import EffectId
 from .math_parity import (
@@ -141,6 +141,9 @@ class Particle(msgspec.Struct):
     style_id: ParticleStyleId = ParticleStyleId.FLAMETHROWER
     target_id: int = -1
     owner: OwnerRef = msgspec.field(default_factory=lambda: OwnerRef.from_local_player(0))
+    # Rewrite-only: outgoing crit multiplier stamped at spawn (weapon_runtime/
+    # crit.py) - one roll per particle, reused across every tick it damages.
+    crit_mult: float = 1.0
 
 
 class ParticlePool:
@@ -197,6 +200,7 @@ class ParticlePool:
         entry.style_id = ParticleStyleId.FLAMETHROWER
         entry.target_id = -1
         entry.owner = owner
+        entry.crit_mult = 1.0
         return idx
 
     def spawn_particle_slow(
@@ -225,6 +229,7 @@ class ParticlePool:
         entry.style_id = ParticleStyleId.BUBBLEGUN
         entry.target_id = -1
         entry.owner = owner
+        entry.crit_mult = 1.0
         return idx
 
     def iter_active(self) -> list[Particle]:
@@ -437,7 +442,15 @@ class ParticlePool:
                         # now boosts the flamethrower via emission rate, not this.
                         if flame_damage_mult != 1.0:
                             damage = max(0.0, float(f32(float(damage) * float(flame_damage_mult))))
-                        heat_gain = IGNITE_HEAT_PER_HIT * float(entry.intensity)
+                        flammability_gain = IGNITE_FLAMMABILITY_PER_HIT * float(entry.intensity)
+                        if entry.crit_mult != 1.0:
+                            # Crit compensation/multiplier, stamped on the particle
+                            # when it was spawned (weapon_runtime/crit.py) - applies
+                            # to ignite flammability gain, not the direct hit, so a
+                            # "crit" ember builds toward ignition faster rather than
+                            # hitting harder (currently a no-op: Flamethrower's own
+                            # crit chance is 0%, see weapon_runtime/crit.py).
+                            flammability_gain = float(f32(float(flammability_gain) * float(entry.crit_mult)))
                         if damage > 0.0:
                             if creature_damage_runtime is not None:
                                 creature_damage_runtime.apply_creature_damage(
@@ -451,7 +464,7 @@ class ParticlePool:
                                 creature.hp -= float(damage)
 
                         _flame_char_creature(creature, entry.intensity)
-                        flame_ignite_accumulate(creature, heat_gain)
+                        flame_ignite_accumulate(creature, flammability_gain)
 
                         if sprite_effects is not None and (idx % 3 == 0):
                             sprite_vel = Vec2(
@@ -493,7 +506,7 @@ class ParticlePool:
                                 else:
                                     extra.hp -= float(damage)
                                 _flame_char_creature(extra, entry.intensity)
-                                flame_ignite_accumulate(extra, heat_gain)
+                                flame_ignite_accumulate(extra, flammability_gain)
                                 extra.pos = Vec2(
                                     x87_pc24_add(extra.pos.x, x87_pc24_mul(entry.vel.x, dt)),
                                     x87_pc24_add(extra.pos.y, x87_pc24_mul(entry.vel.y, dt)),

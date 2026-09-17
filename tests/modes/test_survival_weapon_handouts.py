@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from crimson.creatures.runtime import CreaturePool
 from crimson.gameplay import (
     GameplayState,
@@ -8,12 +10,41 @@ from crimson.gameplay import (
     survival_update_weapon_handouts,
 )
 from crimson.sim.state_types import PlayerState
-from crimson.weapon_runtime import prepare_weapon_availability, weapon_assign_player
+from crimson.weapon_runtime import INACTIVE_WEAPON_IDS, prepare_weapon_availability, weapon_assign_player
 from crimson.weapons import WeaponId
 from grim.geom import Vec2
 
 
-def test_survival_handout_time_gate_assigns_shrinkifier() -> None:
+def test_survival_handout_time_gate_skips_shrinkifier_while_shelved() -> None:
+    # Shrinkifier 5K is in weapon_runtime.availability.INACTIVE_WEAPON_IDS -
+    # the one-time handout window still closes (bookkeeping below still
+    # fires, matching native), it just never actually hands out the weapon.
+    state = GameplayState()
+    player = PlayerState(index=0, pos=Vec2(512.0, 512.0))
+    weapon_assign_player(player, WeaponId.PISTOL, state=state)
+
+    survival_update_weapon_handouts(
+        state,
+        [player],
+        survival_elapsed_ms=64001.0,
+    )
+
+    assert player.weapon.weapon_id == WeaponId.PISTOL
+    assert state.survival_reward_weapon_guard_id != WeaponId.SHRINKIFIER_5K
+    assert state.survival_reward_handout_enabled is False
+    assert state.survival_reward_damage_seen is True
+    assert state.survival_reward_fire_seen is True
+
+
+def test_survival_handout_time_gate_assigns_shrinkifier_when_reactivated(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Same scenario with Shrinkifier 5K pulled back out of the inactive pool -
+    # the underlying native handout mechanic itself is untouched.
+    monkeypatch.setattr(
+        "crimson.gameplay.INACTIVE_WEAPON_IDS",
+        tuple(w for w in INACTIVE_WEAPON_IDS if w != WeaponId.SHRINKIFIER_5K),
+    )
     state = GameplayState()
     player = PlayerState(index=0, pos=Vec2(512.0, 512.0))
     weapon_assign_player(player, WeaponId.PISTOL, state=state)

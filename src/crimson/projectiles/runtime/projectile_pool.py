@@ -225,6 +225,7 @@ class ProjectilePool:
         entry.life_timer = float(f32(0.4))
         entry.reserved = 0.0
         entry.energy_heat_mult = 1.0
+        entry.crit_mult = 1.0
         entry.pierce_left = 0.0
         entry.speed_scale = 1.0
         entry.travel_budget = float(travel_budget)
@@ -650,6 +651,9 @@ class ProjectilePool:
                     if proj.energy_heat_mult != 1.0:
                         # Plasma clip-heat ramp, stamped on the bolt when it was fired.
                         damage_amount = float(f32(float(damage_amount) * float(proj.energy_heat_mult)))
+                    if proj.crit_mult != 1.0:
+                        # Crit compensation/multiplier, stamped on the bolt when it was fired.
+                        damage_amount = float(f32(float(damage_amount) * float(proj.crit_mult)))
 
                     did_pierce = False
                     if damage_amount > 0.0 and creature.hp > 0.0:

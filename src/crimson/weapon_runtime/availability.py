@@ -35,6 +35,23 @@ _NON_PLAYER_WEAPON_IDS: tuple[WeaponId, ...] = (
     WeaponId.SPIDER_PLASMA,
 )
 
+# Rewrite-only: weapons shelved out of the active roster while the crit/build
+# design settles (redundant Flamethrower reskins, novelty/no-damage guns, and
+# the plain SMG). Not deleted - still in WEAPON_TABLE, still fireable via the
+# debug weapon cycle (modes/survival_mode.py, modes/quest_mode.py) - just
+# excluded from drops/unlocks and, for Shrinkifier 5K, its native scripted
+# Survival handout (see gameplay.py::survival_update_weapon_handouts). Move an
+# id back out of this tuple to reactivate it.
+INACTIVE_WEAPON_IDS: tuple[WeaponId, ...] = (
+    WeaponId.SUBMACHINE_GUN,
+    WeaponId.BLOW_TORCH,
+    WeaponId.HR_FLAMER,
+    WeaponId.SHRINKIFIER_5K,
+    WeaponId.PLAGUE_SPREADER_GUN,
+    WeaponId.BUBBLEGUN,
+    WeaponId.RAINBOW_GUN,
+)
+
 
 def build_weapon_availability(
     *,
@@ -59,7 +76,8 @@ def build_weapon_availability(
 
     fireable = fireable_weapon_ids()
     for weapon_id in range(1, min(WEAPON_DROP_ID_COUNT + 1, WEAPON_AVAILABLE_COUNT)):
-        if WeaponId(weapon_id) in fireable and WeaponId(weapon_id) not in _NON_PLAYER_WEAPON_IDS:
+        wid = WeaponId(weapon_id)
+        if wid in fireable and wid not in _NON_PLAYER_WEAPON_IDS and wid not in INACTIVE_WEAPON_IDS:
             available[weapon_id] = True
     return available
 

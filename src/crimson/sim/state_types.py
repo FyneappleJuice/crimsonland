@@ -99,6 +99,9 @@ class ArcGunState(msgspec.Struct):
     bolt_timer: float = 0.0
     chain: list[float] = msgspec.field(default_factory=list)
     seed: int = 0
+    # Rewrite-only: outgoing crit multiplier stamped when the strike is fired
+    # (weapon_runtime/crit.py), consumed by update_arc_gun for every hop.
+    crit_mult: float = 1.0
 
 
 class PlayerState(msgspec.Struct):

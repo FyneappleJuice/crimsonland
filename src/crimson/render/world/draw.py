@@ -40,6 +40,12 @@ if TYPE_CHECKING:
     from ...sim.state_types import PlayerState
 
 
+# Not native: repeated ignite ember-burst VFX (see the ignite_timer overlay
+# below) - mirrors the Pyrokinetic perk's 5-angle radial burst intensities.
+_IGNITE_VFX_INTENSITIES: tuple[float, ...] = (0.8, 0.6, 0.4, 0.3, 0.2)
+_IGNITE_VFX_BURST_PERIOD_S = 0.5
+_IGNITE_VFX_BURST_DURATION_S = 0.35
+
 _CREATURE_TEXTURE_IDS: dict[str, TextureId] = {
     "alien": TextureId.ALIEN,
     "lizard": TextureId.LIZARD,
@@ -315,17 +321,33 @@ def draw_creature_overlays(
             tint = rl.Color(255, 0, 0, int(clamp(poison_alpha, 0.0, 1.0) * 255.0 + 0.5))
             rl.draw_texture_pro(ctx.particles_texture, ctx.poison_src, dst, origin, 0.0, tint)
 
-    # Not native: flickering orange aura on creatures burning from the ignite DoT.
+    # Not native: repeated ember bursts on creatures burning from the ignite DoT -
+    # mirrors the Pyrokinetic perk's 5-angle radial burst look (perks/impl/
+    # pyrokinetic_effect.py's 0.8/0.6/0.4/0.3/0.2 intensity fan), but computed
+    # purely from elapsed time + creature position (like the flicker this
+    # replaced) rather than spawning real particles/sprite-effects - keeps it
+    # cosmetic-only, no sim RNG draws, no gameplay damage, no new state.
     if ctx.particles_texture is not None and ctx.poison_src is not None and float(creature.ignite_timer) > 0.0:
-        t = float(render_ctx.frame.elapsed_ms) * 0.018 + float(creature.pos.x) * 0.1
-        flicker = 0.6 + 0.4 * math.sin(t)
-        ignite_alpha = fade * ctx.entity_alpha * flicker
-        if ignite_alpha > 1e-3:
-            size = (58.0 + 6.0 * math.sin(t * 1.7)) * ctx.scale
-            dst = rl.Rectangle(screen.x, screen.y, size, size)
+        elapsed_s = float(render_ctx.frame.elapsed_ms) * 0.001
+        seed = float(creature.pos.x) * 0.037 + float(creature.pos.y) * 0.019
+        local_t = elapsed_s + seed
+        burst_index = math.floor(local_t / _IGNITE_VFX_BURST_PERIOD_S)
+        burst_phase = local_t - burst_index * _IGNITE_VFX_BURST_PERIOD_S
+        burst_progress = min(1.0, burst_phase / _IGNITE_VFX_BURST_DURATION_S)
+        burst_rotation = burst_index * 2.399963  # golden-angle-ish, decorrelates each burst's fan
+        for i, intensity in enumerate(_IGNITE_VFX_INTENSITIES):
+            angle = burst_rotation + i * (2.0 * math.pi / len(_IGNITE_VFX_INTENSITIES))
+            reach = 26.0 * intensity * burst_progress * ctx.scale
+            ember_alpha = fade * ctx.entity_alpha * intensity * (1.0 - burst_progress)
+            if ember_alpha <= 1e-3:
+                continue
+            size = (14.0 + 10.0 * burst_progress) * intensity * ctx.scale
+            ex = screen.x + math.cos(angle) * reach
+            ey = screen.y + math.sin(angle) * reach
+            dst = rl.Rectangle(ex, ey, size, size)
             origin = rl.Vector2(size * 0.5, size * 0.5)
-            tint = rl.Color(255, 130, 20, int(clamp(ignite_alpha, 0.0, 1.0) * 255.0 + 0.5))
-            rl.draw_texture_pro(ctx.particles_texture, ctx.poison_src, dst, origin, float(t * 40.0), tint)
+            tint = rl.Color(255, 140, 30, int(clamp(ember_alpha, 0.0, 1.0) * 255.0 + 0.5))
+            rl.draw_texture_pro(ctx.particles_texture, ctx.poison_src, dst, origin, math.degrees(angle), tint)
 
 
 def draw_creatures(render_ctx: WorldRenderCtx, *, ctx: WorldDrawContext) -> None:

@@ -58,8 +58,9 @@ def test_prepare_weapon_availability_includes_survival_defaults() -> None:
     assert state.weapon_available[WeaponId.PISTOL]
     assert state.weapon_available[WeaponId.ASSAULT_RIFLE]
     assert state.weapon_available[WeaponId.SHOTGUN]
-    assert state.weapon_available[WeaponId.SUBMACHINE_GUN]
-    # Not native: every fireable weapon is unlocked regardless of mode.
+    # Not native: every fireable weapon is unlocked regardless of mode -
+    # except the shelved roster in weapon_runtime.availability.INACTIVE_WEAPON_IDS
+    # (Submachine Gun among them - see test_prepare_weapon_availability_excludes_inactive_weapons).
     assert state.weapon_available[WeaponId.FLAMETHROWER]
 
 
@@ -100,6 +101,20 @@ def test_prepare_weapon_availability_excludes_spider_plasma() -> None:
     prepare_weapon_availability(state)
 
     assert not state.weapon_available[WeaponId.SPIDER_PLASMA]
+
+
+def test_prepare_weapon_availability_excludes_inactive_weapons() -> None:
+    # weapon_runtime.availability.INACTIVE_WEAPON_IDS - shelved out of the
+    # active roster while the crit/build design settles. Still in
+    # WEAPON_TABLE and still fireable via the debug weapon cycle, just not
+    # droppable/unlockable.
+    from crimson.weapon_runtime.availability import INACTIVE_WEAPON_IDS
+
+    state = GameplayState()
+    prepare_weapon_availability(state)
+
+    for weapon_id in INACTIVE_WEAPON_IDS:
+        assert not state.weapon_available[weapon_id], weapon_id
 
 
 def test_prepare_weapon_availability_keeps_full_version_unlocks_in_demo_mode() -> None:
