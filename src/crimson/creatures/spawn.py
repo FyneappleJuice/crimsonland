@@ -1352,24 +1352,33 @@ def build_survival_spawn_creature(pos: Vec2, rng: CrandLike, *, player_experienc
             c.reward_value = x87_pc24_mul(c.reward_value, f32(0.8))
     else:
         # --- rarity & affix system (creatures/rarity.py) ------------------
+        # Rewrite-only odds, tuned well above the native rare-variant rate
+        # (which this replaced - see the `if not MONSTER_RARITY_ENABLED`
+        # branch above for those original 1-in-90/120/180/330/405 rolls).
+        # Final tier odds work out to an exact 3:2:1 split of a 10% total:
+        # Tainted 1/20 (5%), Mutated 1/30 (3.33%), Apex 1/60 (1.67%), Normal
+        # 90%. The whole tier-1 roll is folded into RED (GREEN/BLUE always
+        # miss now, kept only so this still consumes the same RNG calls as
+        # the native cascade - see the caller-order tests in
+        # tests/modes/test_survival_spawn.py).
         tier = 0
         r = rng.rand_tagged(RngCallerStatic.SURVIVAL_SPAWN_CREATURE_RARE_RED)
-        if r % 180 < 2:
+        if r % 19 < 1:
             tier = 1
         else:
             r = rng.rand_tagged(RngCallerStatic.SURVIVAL_SPAWN_CREATURE_RARE_GREEN)
-            if r % 240 < 2:
+            if r % 240 < 0:
                 tier = 1
             else:
                 r = rng.rand_tagged(RngCallerStatic.SURVIVAL_SPAWN_CREATURE_RARE_BLUE)
-                if r % 360 < 2:
+                if r % 360 < 0:
                     tier = 1
         r = rng.rand_tagged(RngCallerStatic.SURVIVAL_SPAWN_CREATURE_RARE_PURPLE)
-        if r % 1320 < 4:
+        if r % 30 < 1:
             tier = 2
         else:
             r = rng.rand_tagged(RngCallerStatic.SURVIVAL_SPAWN_CREATURE_RARE_YELLOW)
-            if r % 1620 < 4:
+            if r % 58 < 1:
                 tier = 3
 
         if _rarity.rarity_test_bias_enabled():
