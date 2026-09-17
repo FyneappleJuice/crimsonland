@@ -24,18 +24,6 @@ from .damage_types import CreatureDamageType
 # overrides instead of this system (used by native-parity replay / spawn tests).
 MONSTER_RARITY_ENABLED = True
 
-
-def rarity_test_bias_enabled() -> bool:
-    """--test-mode makes rare tiers common so affixes can be seen quickly."""
-    if not MONSTER_RARITY_ENABLED:
-        return False
-    try:
-        from ..test_mode import test_mode_enabled
-
-        return test_mode_enabled()
-    except Exception:
-        return False
-
 # --- tiers ------------------------------------------------------------------
 
 

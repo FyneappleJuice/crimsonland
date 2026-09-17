@@ -114,7 +114,7 @@ _FLAG_SELF_DAMAGE_TICK = int(CreatureFlags.SELF_DAMAGE_TICK)
 _FLAG_SELF_DAMAGE_TICK_STRONG = int(CreatureFlags.SELF_DAMAGE_TICK_STRONG)
 _FLAG_AI7_LINK_TIMER = int(CreatureFlags.AI7_LINK_TIMER)
 
-# Rewrite-only: relic drop chance on kill, by rarity tier. --test-mode ~8x.
+# Rewrite-only: relic drop chance on kill, by rarity tier.
 # Uses a private RNG (not the sim `rng`) so it never perturbs replay parity;
 # relics are meta progression, not run state.
 _RELIC_DROP_RNG = _random.Random(0xC0FFEE)
@@ -125,13 +125,6 @@ def _maybe_drop_relic(creature: CreatureState, rng: CrandLike) -> None:
     _ = rng
     tier = int(getattr(creature, "rarity", 0) or 0)
     chance = _RELIC_DROP_CHANCE[tier if 0 <= tier < len(_RELIC_DROP_CHANCE) else 0]
-    try:
-        from ..test_mode import test_mode_enabled
-
-        if test_mode_enabled():
-            chance = min(1.0, chance * 8.0)
-    except Exception:
-        pass
     if chance <= 0.0 or _RELIC_DROP_RNG.random() >= chance:
         return
     from ..meta.relics import award_relic_drop

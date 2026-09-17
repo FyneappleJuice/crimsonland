@@ -1381,16 +1381,6 @@ def build_survival_spawn_creature(pos: Vec2, rng: CrandLike, *, player_experienc
             if r % 58 < 1:
                 tier = 3
 
-        if _rarity.rarity_test_bias_enabled():
-            # --test-mode: make rare tiers common so affixes can be inspected.
-            tr = int(rng.rand_tagged(RngCallerStatic.REWRITE_MONSTER_AFFIX_PICK)) % 100
-            if tr < 12:
-                tier = max(tier, 3)
-            elif tr < 38:
-                tier = max(tier, 2)
-            elif tr < 78:
-                tier = max(tier, 1)
-
         if c.reward_value is not None:
             c.reward_value = x87_pc24_mul(c.reward_value, f32(0.8))
         if c.health is not None:
