@@ -36,14 +36,34 @@ class ProjectileTemplateId(IntEnum):
     FIRE_BULLETS = 0x2D
 
 
-# Rewrite-only: templates that deal CreatureDamageType.ENERGY instead of BULLET.
+# Rewrite-only: templates that deal CreatureDamageType.PLASMA instead of BULLET.
 # Covers every plasma weapon (Multi-Plasma / Plasma Shotgun spawn these types).
-ENERGY_PROJECTILE_TEMPLATE_IDS: frozenset[ProjectileTemplateId] = frozenset(
+PLASMA_PROJECTILE_TEMPLATE_IDS: frozenset[ProjectileTemplateId] = frozenset(
     {
         ProjectileTemplateId.PLASMA_RIFLE,
         ProjectileTemplateId.PLASMA_MINIGUN,
         ProjectileTemplateId.PLASMA_CANNON,
         ProjectileTemplateId.SPIDER_PLASMA,
+    }
+)
+
+# Rewrite-only: templates that deal CreatureDamageType.ENERGY instead of
+# BULLET - Gauss Gun / Gauss Shotgun's own bucket, separate from plasma
+# (Gauss Shotgun fires GAUSS_GUN pellets, already covered).
+ENERGY_PROJECTILE_TEMPLATE_IDS: frozenset[ProjectileTemplateId] = frozenset(
+    {
+        ProjectileTemplateId.GAUSS_GUN,
+    }
+)
+
+# Rewrite-only: templates that deal CreatureDamageType.ION on direct hit (not
+# just their lingering AoE tick) - Ion Rifle/Minigun/Cannon (Ion Shotgun fires
+# ION_MINIGUN pellets, already covered).
+ION_PROJECTILE_TEMPLATE_IDS: frozenset[ProjectileTemplateId] = frozenset(
+    {
+        ProjectileTemplateId.ION_RIFLE,
+        ProjectileTemplateId.ION_MINIGUN,
+        ProjectileTemplateId.ION_CANNON,
     }
 )
 
@@ -118,6 +138,8 @@ class SecondaryProjectile(msgspec.Struct):
 
 __all__ = [
     "ENERGY_PROJECTILE_TEMPLATE_IDS",
+    "ION_PROJECTILE_TEMPLATE_IDS",
+    "PLASMA_PROJECTILE_TEMPLATE_IDS",
     "MAIN_PROJECTILE_POOL_SIZE",
     "SECONDARY_PROJECTILE_POOL_SIZE",
     "OwnerRef",

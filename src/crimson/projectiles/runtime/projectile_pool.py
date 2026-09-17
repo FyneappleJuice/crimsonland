@@ -30,7 +30,9 @@ from ...rng_caller_static import RngCallerStatic
 from ...weapons import WeaponId, weapon_entry_for_projectile_type_id
 from ..types import (
     ENERGY_PROJECTILE_TEMPLATE_IDS,
+    ION_PROJECTILE_TEMPLATE_IDS,
     MAIN_PROJECTILE_POOL_SIZE,
+    PLASMA_PROJECTILE_TEMPLATE_IDS,
     Projectile,
     ProjectileCollisionProfile,
     ProjectileHit,
@@ -416,7 +418,14 @@ class ProjectilePool:
             )
 
         def _damage_type_for(type_id: int) -> int:
-            if ProjectileTemplateId(type_id) in ENERGY_PROJECTILE_TEMPLATE_IDS:
+            tid = ProjectileTemplateId(type_id)
+            if tid in ION_PROJECTILE_TEMPLATE_IDS:
+                return int(CreatureDamageType.ION)
+            if tid == ProjectileTemplateId.FIRE_BULLETS:
+                return int(CreatureDamageType.FIRE)
+            if tid in PLASMA_PROJECTILE_TEMPLATE_IDS:
+                return int(CreatureDamageType.PLASMA)
+            if tid in ENERGY_PROJECTILE_TEMPLATE_IDS:
                 return int(CreatureDamageType.ENERGY)
             return int(CreatureDamageType.BULLET)
 

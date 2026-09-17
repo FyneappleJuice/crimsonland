@@ -133,11 +133,23 @@ def _damage_kinetic_bullet_damage_mult(ctx: _CreatureDamageCtx) -> None:
         ctx.damage = x87_pc24_mul(ctx.damage, f32(mult))
 
 
-def _damage_energy_damage_mult(ctx: _CreatureDamageCtx) -> None:
-    """Outgoing multiplier for energy/plasma hits (stats.damage_mult_energy).
+def _damage_plasma_damage_mult(ctx: _CreatureDamageCtx) -> None:
+    """Outgoing multiplier for plasma hits (stats.damage_mult_plasma).
 
     Fed by future plasma perks and by relic / map affixes. The per-shot clip-heat
     ramp is applied earlier, on the projectile itself (energy_heat_mult).
+    """
+
+    mult = float(ctx.team_stats.damage_mult_plasma)
+    if mult != 1.0:
+        ctx.damage = x87_pc24_mul(ctx.damage, f32(mult))
+
+
+def _damage_energy_damage_mult(ctx: _CreatureDamageCtx) -> None:
+    """Outgoing multiplier for Gauss hits (stats.damage_mult_energy).
+
+    Fed by future perks and by relic / map affixes. Gauss Gun / Gauss Shotgun
+    only - its own bucket, separate from plasma.
     """
 
     mult = float(ctx.team_stats.damage_mult_energy)
@@ -263,6 +275,11 @@ _CREATURE_DAMAGE_PRE_STEPS: dict[int, tuple[_CreatureDamageStep, ...]] = {
         _damage_projectile_damage_mult,
         _damage_type1_living_fortress,
     ),
+    CreatureDamageType.PLASMA: (
+        _damage_projectile_damage_mult,
+        _damage_plasma_damage_mult,
+        _damage_type1_living_fortress,
+    ),
     CreatureDamageType.ENERGY: (
         _damage_projectile_damage_mult,
         _damage_energy_damage_mult,
@@ -337,8 +354,10 @@ def creature_apply_damage(
 
     if ctx.damage_type in (
         CreatureDamageType.BULLET,
-        CreatureDamageType.ENERGY,
+        CreatureDamageType.PLASMA,
         CreatureDamageType.LIGHTNING,
+        CreatureDamageType.ION,
+        CreatureDamageType.ENERGY,
     ):
         _damage_type1_heading_jitter(ctx)
 

@@ -20,12 +20,13 @@ STAT_IDENTITIES: dict[str, float] = {
     # --- offense -------------------------------------------------------
     "damage_mult": 1.0,          # every outgoing hit, all damage types
     "damage_mult_projectile": 1.0,  # any main-pool projectile hit (kinetic bullet + energy/plasma)
-    "damage_mult_bullet": 1.0,   # kinetic lead only (not plasma)
+    "damage_mult_bullet": 1.0,   # kinetic lead only (not plasma/energy)
     "damage_mult_fire": 1.0,
     "damage_mult_ion": 1.0,
-    "damage_mult_energy": 1.0,   # plasma / energy weapons only
+    "damage_mult_plasma": 1.0,   # plasma weapons only (Plasma Rifle/Minigun/Cannon, Multi-Plasma)
     "damage_mult_lightning": 1.0,  # chain lightning (Arc Gun) only
     "damage_mult_explosion": 1.0,
+    "damage_mult_energy": 1.0,   # Gauss Gun/Shotgun only
     "shot_cooldown_mult": 1.0,   # <1.0 = fires faster (multiplies the cooldown)
     "reload_time_mult": 1.0,     # <1.0 = reloads faster
     "clip_size_mult": 1.0,
@@ -57,9 +58,10 @@ class PlayerStats(msgspec.Struct, frozen=True):
     damage_mult_bullet: float = 1.0
     damage_mult_fire: float = 1.0
     damage_mult_ion: float = 1.0
-    damage_mult_energy: float = 1.0
+    damage_mult_plasma: float = 1.0
     damage_mult_lightning: float = 1.0
     damage_mult_explosion: float = 1.0
+    damage_mult_energy: float = 1.0
     shot_cooldown_mult: float = 1.0
     reload_time_mult: float = 1.0
     clip_size_mult: float = 1.0

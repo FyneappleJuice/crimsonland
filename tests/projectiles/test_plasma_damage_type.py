@@ -10,7 +10,12 @@ from crimson.owner_ref import OwnerRef
 from crimson.perks.ids import PerkId
 from crimson.progression import refresh_player_stats
 from crimson.projectiles.runtime import PrimaryStepCtx, ProjectilePool
-from crimson.projectiles.types import ENERGY_PROJECTILE_TEMPLATE_IDS, ProjectileTemplateId
+from crimson.projectiles.types import (
+    ENERGY_PROJECTILE_TEMPLATE_IDS,
+    ION_PROJECTILE_TEMPLATE_IDS,
+    PLASMA_PROJECTILE_TEMPLATE_IDS,
+    ProjectileTemplateId,
+)
 from crimson.sim.state_types import PlayerState
 from grim.geom import Vec2
 from tests.support.factories import make_creature_state as _creature
@@ -50,31 +55,46 @@ def _apply(damage_type: CreatureDamageType, *perks: PerkId, amount: float = 100.
 # --- damage-type routing --------------------------------------------------
 
 
-def test_energy_type_exists_and_plasma_templates_are_tagged() -> None:
-    assert int(CreatureDamageType.ENERGY) == 8
-    assert ProjectileTemplateId.PLASMA_RIFLE in ENERGY_PROJECTILE_TEMPLATE_IDS
-    assert ProjectileTemplateId.PLASMA_MINIGUN in ENERGY_PROJECTILE_TEMPLATE_IDS
-    assert ProjectileTemplateId.PLASMA_CANNON in ENERGY_PROJECTILE_TEMPLATE_IDS
-    assert ProjectileTemplateId.SPIDER_PLASMA in ENERGY_PROJECTILE_TEMPLATE_IDS
-    assert ProjectileTemplateId.PISTOL not in ENERGY_PROJECTILE_TEMPLATE_IDS
-    assert ProjectileTemplateId.GAUSS_GUN not in ENERGY_PROJECTILE_TEMPLATE_IDS
+def test_plasma_type_exists_and_plasma_templates_are_tagged() -> None:
+    assert int(CreatureDamageType.PLASMA) == 8
+    assert ProjectileTemplateId.PLASMA_RIFLE in PLASMA_PROJECTILE_TEMPLATE_IDS
+    assert ProjectileTemplateId.PLASMA_MINIGUN in PLASMA_PROJECTILE_TEMPLATE_IDS
+    assert ProjectileTemplateId.PLASMA_CANNON in PLASMA_PROJECTILE_TEMPLATE_IDS
+    assert ProjectileTemplateId.SPIDER_PLASMA in PLASMA_PROJECTILE_TEMPLATE_IDS
+    # Gauss is its own separate bucket (ENERGY), not folded into plasma.
+    assert ProjectileTemplateId.GAUSS_GUN not in PLASMA_PROJECTILE_TEMPLATE_IDS
+    assert ProjectileTemplateId.PISTOL not in PLASMA_PROJECTILE_TEMPLATE_IDS
+
+
+def test_gauss_is_its_own_energy_bucket() -> None:
+    assert int(CreatureDamageType.ENERGY) == 10
+    assert ProjectileTemplateId.GAUSS_GUN in ENERGY_PROJECTILE_TEMPLATE_IDS
+    assert ProjectileTemplateId.PLASMA_RIFLE not in ENERGY_PROJECTILE_TEMPLATE_IDS
+
+
+def test_ion_templates_deal_ion_on_direct_hit() -> None:
+    assert ProjectileTemplateId.ION_RIFLE in ION_PROJECTILE_TEMPLATE_IDS
+    assert ProjectileTemplateId.ION_MINIGUN in ION_PROJECTILE_TEMPLATE_IDS
+    assert ProjectileTemplateId.ION_CANNON in ION_PROJECTILE_TEMPLATE_IDS
 
 
 # --- the perk taxonomy ---------------------------------------------------
 
 
-def test_doctor_and_barrel_greaser_scale_both_kinetic_and_energy() -> None:
+def test_doctor_and_barrel_greaser_scale_both_kinetic_and_plasma() -> None:
     base_b = _apply(CreatureDamageType.BULLET)
-    base_e = _apply(CreatureDamageType.ENERGY)
+    base_p = _apply(CreatureDamageType.PLASMA)
     assert _apply(CreatureDamageType.BULLET, PerkId.DOCTOR) == pytest.approx(base_b * 1.2, rel=1e-4)
-    assert _apply(CreatureDamageType.ENERGY, PerkId.DOCTOR) == pytest.approx(base_e * 1.2, rel=1e-4)
-    assert _apply(CreatureDamageType.ENERGY, PerkId.BARREL_GREASER) == pytest.approx(base_e * 1.4, rel=1e-4)
+    assert _apply(CreatureDamageType.PLASMA, PerkId.DOCTOR) == pytest.approx(base_p * 1.2, rel=1e-4)
+    assert _apply(CreatureDamageType.PLASMA, PerkId.BARREL_GREASER) == pytest.approx(base_p * 1.4, rel=1e-4)
 
 
 def test_uranium_filled_bullets_is_kinetic_only() -> None:
     base_b = _apply(CreatureDamageType.BULLET)
+    base_p = _apply(CreatureDamageType.PLASMA)
     base_e = _apply(CreatureDamageType.ENERGY)
     assert _apply(CreatureDamageType.BULLET, PerkId.URANIUM_FILLED_BULLETS) == pytest.approx(base_b * 2.0, rel=1e-4)
+    assert _apply(CreatureDamageType.PLASMA, PerkId.URANIUM_FILLED_BULLETS) == pytest.approx(base_p, rel=1e-4)
     assert _apply(CreatureDamageType.ENERGY, PerkId.URANIUM_FILLED_BULLETS) == pytest.approx(base_e, rel=1e-4)
 
 
@@ -89,8 +109,22 @@ def test_energy_pre_steps_run_projectile_then_energy_layer() -> None:
     energy_steps = _CREATURE_DAMAGE_PRE_STEPS[CreatureDamageType.ENERGY]
     assert _damage_projectile_damage_mult in energy_steps
     assert _damage_energy_damage_mult in energy_steps
-    # kinetic-lead scaling must NOT run for energy
     assert _damage_kinetic_bullet_damage_mult not in energy_steps
+
+
+def test_plasma_pre_steps_run_projectile_then_plasma_layer() -> None:
+    from crimson.creatures.damage import (
+        _CREATURE_DAMAGE_PRE_STEPS,
+        _damage_kinetic_bullet_damage_mult,
+        _damage_plasma_damage_mult,
+        _damage_projectile_damage_mult,
+    )
+
+    plasma_steps = _CREATURE_DAMAGE_PRE_STEPS[CreatureDamageType.PLASMA]
+    assert _damage_projectile_damage_mult in plasma_steps
+    assert _damage_plasma_damage_mult in plasma_steps
+    # kinetic-lead scaling must NOT run for plasma
+    assert _damage_kinetic_bullet_damage_mult not in plasma_steps
     # ...and it still runs for kinetic bullets
     assert _damage_kinetic_bullet_damage_mult in _CREATURE_DAMAGE_PRE_STEPS[CreatureDamageType.BULLET]
 

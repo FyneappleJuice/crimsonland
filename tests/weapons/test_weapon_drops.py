@@ -93,6 +93,15 @@ def test_prepare_weapon_availability_excludes_special_handout_weapons() -> None:
     assert not state.weapon_available[WeaponId.BLADE_GUN]
 
 
+def test_prepare_weapon_availability_excludes_spider_plasma() -> None:
+    # Enemy-only weapon stat block (Spider Plasma Shooter's own attack) -
+    # never meant to be a player pickup.
+    state = GameplayState()
+    prepare_weapon_availability(state)
+
+    assert not state.weapon_available[WeaponId.SPIDER_PLASMA]
+
+
 def test_prepare_weapon_availability_keeps_full_version_unlocks_in_demo_mode() -> None:
     status = _status_default()
     status.quest_unlock_index_full = 0x28

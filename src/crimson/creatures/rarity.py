@@ -252,7 +252,7 @@ def apply_rarity(init, *, tier: int, player_experience: int, rng) -> None:
             _resist(init, CreatureDamageType.FIRE, 0.4)
         elif aid == AffixId.INSULATED:
             _resist(init, CreatureDamageType.LIGHTNING, 0.4)
-            _resist(init, CreatureDamageType.ENERGY, 0.4)
+            _resist(init, CreatureDamageType.PLASMA, 0.4)
         elif aid == AffixId.BLAST_PROOF:
             _resist(init, CreatureDamageType.EXPLOSION, 0.5)
         elif aid == AffixId.SHELLED:
@@ -262,8 +262,9 @@ def apply_rarity(init, *, tier: int, player_experience: int, rng) -> None:
                 CreatureDamageType.EXPLOSION,
                 CreatureDamageType.FIRE,
                 CreatureDamageType.ION,
-                CreatureDamageType.ENERGY,
+                CreatureDamageType.PLASMA,
                 CreatureDamageType.LIGHTNING,
+                CreatureDamageType.ENERGY,
             ):
                 _resist(init, t, 0.55)
         elif aid == AffixId.GOLDEN:

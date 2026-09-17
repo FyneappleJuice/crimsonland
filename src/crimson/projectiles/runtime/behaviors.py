@@ -27,6 +27,7 @@ from ..effects import (
 )
 from ..types import (
     ENERGY_PROJECTILE_TEMPLATE_IDS,
+    PLASMA_PROJECTILE_TEMPLATE_IDS,
     Projectile,
     ProjectileTemplateId,
 )
@@ -81,10 +82,12 @@ def _projectile_hit_perk_poison_bullets(ctx: _ProjectileHitPerkCtx) -> None:
     if not ctx.poison_bullets_active:
         return
     # Keep the RNG draw unconditional (native draws it for every hit while the
-    # perk is owned) so a co-op partner's stream is unaffected, but a plasma bolt
-    # never actually gets poisoned - Poison Bullets coats a lead round.
+    # perk is owned) so a co-op partner's stream is unaffected, but a plasma
+    # bolt or Gauss slug never actually gets poisoned - Poison Bullets coats a
+    # lead round.
     poisoned = (ctx.rng.rand_tagged(RngCallerStatic.PROJECTILE_UPDATE_POISON_BULLETS_GATE) & 7) == 1
-    if poisoned and ProjectileTemplateId(ctx.proj.type_id) not in ENERGY_PROJECTILE_TEMPLATE_IDS:
+    tid = ProjectileTemplateId(ctx.proj.type_id)
+    if poisoned and tid not in PLASMA_PROJECTILE_TEMPLATE_IDS and tid not in ENERGY_PROJECTILE_TEMPLATE_IDS:
         ctx.creature.flags |= CreatureFlags.SELF_DAMAGE_TICK
 
 
