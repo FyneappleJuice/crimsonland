@@ -25,7 +25,10 @@ from grim.sfx_map import SfxId
 from tests.support.helpers import ScriptedCrand, assert_rng_progression
 
 
-def test_weapon_guard_runs_before_same_frame_locked_splitter_pickup() -> None:
+def test_splitter_gun_pickup_persists_across_frames() -> None:
+    # Not native: Splitter Gun is unconditionally unlocked (weapon_runtime/
+    # availability.py) and gameplay_enforce_weapon_guards no longer reverts
+    # it, so a pickup here now survives past the frame it lands on.
     world_size = 1024.0
     world = WorldState.build(
         world_size=world_size,
@@ -72,7 +75,7 @@ def test_weapon_guard_runs_before_same_frame_locked_splitter_pickup() -> None:
         perk_progression_enabled=False,
     )
 
-    assert player.weapon.weapon_id == WeaponId.PISTOL
+    assert player.weapon.weapon_id == WeaponId.SPLITTER_GUN
 
 
 def test_weapon_usage_time_precedes_same_frame_weapon_pickup() -> None:

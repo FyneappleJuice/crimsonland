@@ -80,6 +80,19 @@ def test_prepare_weapon_availability_ignores_quest_progress() -> None:
     assert state.weapon_available[WeaponId.SHOTGUN]
 
 
+def test_prepare_weapon_availability_excludes_special_handout_weapons() -> None:
+    # Shrinkifier 5K and Blade Gun are only ever granted by Survival's own
+    # scripted handout triggers (gameplay.py::survival_update_weapon_handouts)
+    # and immediately revoked back to Pistol if picked up any other way
+    # (survival_enforce_reward_weapon_guard) - rolling them from a normal
+    # Weapon bonus would just be an instant, confusing revert.
+    state = GameplayState()
+    prepare_weapon_availability(state)
+
+    assert not state.weapon_available[WeaponId.SHRINKIFIER_5K]
+    assert not state.weapon_available[WeaponId.BLADE_GUN]
+
+
 def test_prepare_weapon_availability_keeps_full_version_unlocks_in_demo_mode() -> None:
     status = _status_default()
     status.quest_unlock_index_full = 0x28

@@ -18,6 +18,18 @@ _FORK_ROSTER_WEAPON_IDS: tuple[WeaponId, ...] = (
     WeaponId.RAYGUN,
 )
 
+# Native special-handout weapons: never part of the normal Weapon-bonus drop
+# pool, regardless of unlock progress. Survival hands these out itself via
+# scripted triggers (idling too long, dying near your own graveyard - see
+# gameplay.py::survival_update_weapon_handouts) and immediately revokes them
+# back to Pistol if they show up any other way
+# (gameplay.py::survival_enforce_reward_weapon_guard). Letting them roll from
+# a normal Weapon bonus just means an instant, confusing revert.
+_SPECIAL_HANDOUT_WEAPON_IDS: tuple[WeaponId, ...] = (
+    WeaponId.SHRINKIFIER_5K,
+    WeaponId.BLADE_GUN,
+)
+
 
 def build_weapon_availability(
     *,
@@ -42,7 +54,7 @@ def build_weapon_availability(
 
     fireable = fireable_weapon_ids()
     for weapon_id in range(1, min(WEAPON_DROP_ID_COUNT + 1, WEAPON_AVAILABLE_COUNT)):
-        if WeaponId(weapon_id) in fireable:
+        if WeaponId(weapon_id) in fireable and WeaponId(weapon_id) not in _SPECIAL_HANDOUT_WEAPON_IDS:
             available[weapon_id] = True
     return available
 
