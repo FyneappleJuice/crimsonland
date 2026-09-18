@@ -103,6 +103,11 @@ WEAPON_TAGS: dict[WeaponId, WeaponTags] = {
     WeaponId.GAUSS_SHOTGUN: WeaponTags(_A.SHOTGUN, _D.ENERGY, _L.PROJECTILE),
     WeaponId.ION_SHOTGUN: WeaponTags(_A.SHOTGUN, _D.ION, _L.PROJECTILE),
     WeaponId.RAYGUN: WeaponTags(_A.ARC, _D.LIGHTNING, _L.BEAM),
+    # Rewrite-only: mechanically an exact Pistol clone (weapons.py's
+    # WEAPON_TABLE and this tag both mirror the Pistol's own) - the "reverse
+    # time" premise (weapon_runtime/tenet_gun_spawn.py) only changes where a
+    # shot spawns and which way it's pointed, not the shot itself.
+    WeaponId.TENET_GUN: WeaponTags(_A.PISTOL, _D.BULLET, _L.PROJECTILE),
     WeaponId.PLAGUE_SPREADER_GUN: WeaponTags(_A.UTILITY, _D.BULLET, _L.PROJECTILE),  # inactive
     WeaponId.BUBBLEGUN: WeaponTags(_A.FLAMETHROWER, _D.FIRE, _L.STREAM),  # inactive
     WeaponId.RAINBOW_GUN: WeaponTags(_A.RIFLE, _D.BULLET, _L.PROJECTILE),  # inactive

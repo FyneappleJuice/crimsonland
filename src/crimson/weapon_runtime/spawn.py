@@ -8,7 +8,8 @@ from ..math_parity import f32
 from ..owner_ref import OwnerRef
 from ..projectiles.types import ProjectileTemplateId
 from ..sim.state_types import GameplayState, PlayerState
-from ..weapons import weapon_entry_for_projectile_type_id
+from ..weapons import WeaponId, weapon_entry_for_projectile_type_id
+from .tenet_gun_spawn import tenet_reverse_spawn_params
 
 
 def owner_ref_for_player(player_index: int) -> OwnerRef:
@@ -40,6 +41,36 @@ def _resolve_player_slot(players: list[PlayerState], *, player_index: int) -> in
         if int(player.index) == target_index:
             return int(slot)
     return None
+
+
+def _resolve_owner_player(
+    players: list[PlayerState] | None,
+    *,
+    owner: OwnerRef,
+    owner_player_index: int | None,
+) -> PlayerState | None:
+    """Mirror `_shots_fired_player_index`'s owner precedence, but return the
+    actual `PlayerState` instead of an index - used to check what weapon the
+    player who triggered this spawn is holding (see the Tenet Gun check in
+    `projectile_spawn` below)."""
+
+    if not players:
+        return None
+
+    target_index: int | None = None
+    if owner_player_index is not None:
+        target_index = int(owner_player_index)
+    elif owner.is_player() and not (owner.local_host and owner.index == 0):
+        target_index = int(owner.index)
+    elif owner.local_host and owner.index == 0 and len(players) == 1:
+        target_index = int(players[0].index)
+
+    if target_index is None:
+        return None
+    slot = _resolve_player_slot(players, player_index=target_index)
+    if slot is None:
+        return None
+    return players[slot]
 
 
 def _shots_fired_player_index(
@@ -136,15 +167,39 @@ def projectile_spawn(
                 break
             type_id = ProjectileTemplateId.FIRE_BULLETS
 
+    # Tenet Gun (weapon_runtime/tenet_gun_spawn.py): every projectile that
+    # originates from a Tenet-Gun-wielding player - not just their own direct
+    # trigger-pull, but also Fireblast/Nuke/Shock Chain's opening bolt/Fire
+    # Cough/Hot Tempered/Man Bomb/Angry Reloader, all of which route through
+    # this one chokepoint - spawns at that player's aim point and flies back
+    # instead of out. Derived/chained spawns (Shock Chain's own relay hits,
+    # Fork Shot children, ...) re-own to a creature and go through
+    # `pool.spawn`/`ctx.pool.spawn` directly, bypassing this function, so they
+    # stay unaffected by design.
+    spawn_pos, spawn_angle = pos, float(angle)
+    tenet_reverse = False
+    owner_player = _resolve_owner_player(players, owner=owner, owner_player_index=owner_player_index)
+    if owner_player is not None and int(owner_player.weapon.weapon_id) == int(WeaponId.TENET_GUN):
+        tenet_reverse = True
+        spawn_pos, spawn_angle = tenet_reverse_spawn_params(
+            origin=pos,
+            muzzle=pos,
+            aim=owner_player.aim,
+            angle=float(angle),
+        )
+
     meta = travel_budget_for_type_id(type_id)
-    return state.projectiles.spawn(
-        pos=pos,
-        angle=float(angle),
+    proj_id = state.projectiles.spawn(
+        pos=spawn_pos,
+        angle=spawn_angle,
         type_id=type_id,
         owner=owner,
         travel_budget=float(meta),
         hits_players=bool(hits_players),
     )
+    if tenet_reverse:
+        state.projectiles.entries[int(proj_id)].tenet_reverse = True
+    return proj_id
 
 
 def spawn_projectile_ring(

@@ -51,6 +51,7 @@ from .fire_recipes import (
 )
 from .plasma_heat import is_plasma_heat_weapon, plasma_energy_heat_mult
 from .spawn import owner_ref_for_player, owner_ref_for_player_projectiles, travel_budget_for_type_id
+from .tenet_gun_spawn import tenet_reverse_spawn_params
 
 if TYPE_CHECKING:
     from ..creatures.runtime import CreatureState
@@ -71,6 +72,8 @@ _PLASMA_OVERLOAD_SPREAD_HEAT = 0.05
 
 _NATIVE_FIRE_MUZZLE_SPRITES: dict[int, tuple[tuple[float, float, float], ...]] = {
     WeaponId.PISTOL: ((25.0, 1.0, 0.23), (15.0, 2.0, 0.213)),
+    # Rewrite-only: Tenet Gun is mechanically a Pistol clone - same muzzle fx.
+    WeaponId.TENET_GUN: ((25.0, 1.0, 0.23), (15.0, 2.0, 0.213)),
     WeaponId.ASSAULT_RIFLE: ((25.0, 1.0, 0.23), (15.0, 2.0, 0.213)),
     WeaponId.SHOTGUN: ((25.0, 1.0, 0.25), (15.0, 2.0, 0.223)),
     WeaponId.SAWED_OFF_SHOTGUN: ((25.0, 1.0, 0.26), (15.0, 2.0, 0.233)),
@@ -89,6 +92,7 @@ _NATIVE_FIRE_MUZZLE_AFTER_PROJECTILE: frozenset[int] = frozenset(
     {
         WeaponId.PISTOL,
         WeaponId.SHRINKIFIER_5K,
+        WeaponId.TENET_GUN,
     },
 )
 
@@ -425,9 +429,21 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
                             jitter_rule=jitter_rule,
                             caller=int(pellet_jitter_caller),
                         )
+                spawn_pos, spawn_angle = muzzle, angle
+                if weapon_id == WeaponId.TENET_GUN:
+                    # Not native: Tenet Gun (tenet_gun_spawn.py) - spawns at
+                    # the aim point and fires back at the muzzle instead of
+                    # the usual way around; everything past this point
+                    # (damage, collision, pierce, ...) is unmodified.
+                    spawn_pos, spawn_angle = tenet_reverse_spawn_params(
+                        origin=muzzle,
+                        muzzle=muzzle,
+                        aim=aim,
+                        angle=angle,
+                    )
                 proj_id = state.projectiles.spawn(
-                    pos=muzzle,
-                    angle=angle,
+                    pos=spawn_pos,
+                    angle=spawn_angle,
                     type_id=type_id,
                     owner=projectile_owner,
                     travel_budget=meta,
@@ -436,6 +452,8 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
                 if energy_heat_mult != 1.0:
                     state.projectiles.entries[int(proj_id)].energy_heat_mult = float(energy_heat_mult)
                 state.projectiles.entries[int(proj_id)].crit_mult = roll_crit_mult(weapon_id)
+                if weapon_id == WeaponId.TENET_GUN:
+                    state.projectiles.entries[int(proj_id)].tenet_reverse = True
                 if explosive_payload_active and pellet_index == explosive_pellet_index:
                     state.projectiles.entries[int(proj_id)].is_rocket = True
                 if isinstance(speed_rule, ModuloSpeedScale):
@@ -524,9 +542,19 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
             for bolt_index in range(_PLASMA_OVERLOAD_BOLT_COUNT):
                 lateral = f32(-half_spacing + _PLASMA_OVERLOAD_LATERAL_SPACING * bolt_index)
                 bolt_pos = muzzle + perpendicular * float(lateral)
+                bolt_spawn_pos, bolt_angle = bolt_pos, float(shot_angle)
+                if weapon_id == WeaponId.TENET_GUN:
+                    # Not native: Tenet Gun (tenet_gun_spawn.py) - see the
+                    # identical branch in the PrimaryPelletsMode case above.
+                    bolt_spawn_pos, bolt_angle = tenet_reverse_spawn_params(
+                        origin=bolt_pos,
+                        muzzle=muzzle,
+                        aim=aim,
+                        angle=shot_angle,
+                    )
                 bolt_proj_id = state.projectiles.spawn(
-                    pos=bolt_pos,
-                    angle=shot_angle,
+                    pos=bolt_spawn_pos,
+                    angle=bolt_angle,
                     type_id=ProjectileTemplateId.PLASMA_RIFLE,
                     owner=projectile_owner,
                     travel_budget=travel_budget_for_type_id(ProjectileTemplateId.PLASMA_RIFLE),
@@ -535,6 +563,8 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
                 if energy_heat_mult != 1.0:
                     state.projectiles.entries[int(bolt_proj_id)].energy_heat_mult = float(energy_heat_mult)
                 state.projectiles.entries[int(bolt_proj_id)].crit_mult = roll_crit_mult(weapon_id)
+                if weapon_id == WeaponId.TENET_GUN:
+                    state.projectiles.entries[int(bolt_proj_id)].tenet_reverse = True
         case SwarmerDumpMode():
             # Mini-Rocket Swarmers -> secondary type 2 (fires the full clip in a spread).
             # Native spawns one rocket per integer counter step below the float ammo
@@ -599,7 +629,6 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
                 weapon_power_up=weapon_power_up_active,
                 crit_mult=roll_crit_mult(weapon_id),
             )
-
     if 0 <= int(player.index) < len(state.shots_fired):
         if counts_accuracy_shots:
             state.shots_fired[int(player.index)] += int(shot_count)

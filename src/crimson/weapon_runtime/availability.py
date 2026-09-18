@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import random as _random
+
 from ..game_modes import GameMode
 from ..persistence.save_status import GameStatus
 from ..quests.level import QuestLevel
@@ -11,11 +13,24 @@ from ..weapons import WEAPON_TABLE, WeaponId
 WEAPON_DROP_ID_COUNT = 0x21  # weapon ids 1..33
 WEAPON_AVAILABLE_COUNT = max(int(entry.weapon_id) for entry in WEAPON_TABLE) + 1
 
-# Fork: the two rewrite-only weapons, folded into the main roster - always
+# Rewrite-only: Tenet Gun is a meme weapon (weapons.py) - its id (54) sits
+# well outside the 1-33 range native `weapon_pick_random_available` rolls
+# over, so instead of being "just another weapon" like Evil Scythe/Raygun, it
+# gets one extra, extremely unlikely, separately-rolled chance to preempt
+# whatever that roll would have picked. Rolled on a private RNG (not
+# `state.rng`), same reasoning as the crit roll in weapon_runtime/crit.py -
+# purely cosmetic build variance, not run state, so it must not perturb
+# replay determinism or the RNG-trace tests that script the sim stream's
+# exact draw sequence.
+_TENET_GUN_RARE_DROP_CHANCE = 1.0 / 400.0
+_TENET_GUN_RARE_RNG = _random.Random(0x7E7E7)
+
+# Fork: the rewrite-only weapons, folded into the main roster - always
 # available in every mode so they drop from the normal Weapon bonus.
 _FORK_ROSTER_WEAPON_IDS: tuple[WeaponId, ...] = (
     WeaponId.EVIL_SCYTHE,
     WeaponId.RAYGUN,
+    WeaponId.TENET_GUN,
 )
 
 # Weapons kept out of the normal Weapon-bonus drop pool entirely, regardless
@@ -105,6 +120,11 @@ def weapon_pick_random_available(state: GameplayState) -> WeaponId:
     )
     if not has_eligible_weapon:
         raise RuntimeError("weapon availability has no eligible drop; call prepare_weapon_availability()")
+
+    tenet_gun_id = int(WeaponId.TENET_GUN)
+    if tenet_gun_id < len(state.weapon_available) and state.weapon_available[tenet_gun_id]:
+        if _TENET_GUN_RARE_RNG.random() < _TENET_GUN_RARE_DROP_CHANCE:
+            return WeaponId.TENET_GUN
 
     while True:
         base_rand = state.rng.rand_tagged(RngCallerStatic.WEAPON_PICK_RANDOM_AVAILABLE_PICK)

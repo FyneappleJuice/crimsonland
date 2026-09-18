@@ -6,6 +6,7 @@ import msgspec
 
 from grim.geom import Vec2
 
+from ..creatures.damage_types import CreatureDamageType
 from ..owner_ref import OwnerRef
 
 MAIN_PROJECTILE_POOL_SIZE = 0x60
@@ -68,6 +69,24 @@ ION_PROJECTILE_TEMPLATE_IDS: frozenset[ProjectileTemplateId] = frozenset(
 )
 
 
+def damage_type_for_projectile_type_id(type_id: int) -> int:
+    """The creature-damage type a primary-pool bullet of this type deals.
+
+    Extracted from projectile_pool.py's own per-tick `_damage_type_for` so
+    other callers can reuse the exact same mapping without duplicating it."""
+
+    tid = ProjectileTemplateId(type_id)
+    if tid in ION_PROJECTILE_TEMPLATE_IDS:
+        return int(CreatureDamageType.ION)
+    if tid == ProjectileTemplateId.FIRE_BULLETS:
+        return int(CreatureDamageType.FIRE)
+    if tid in PLASMA_PROJECTILE_TEMPLATE_IDS:
+        return int(CreatureDamageType.PLASMA)
+    if tid in ENERGY_PROJECTILE_TEMPLATE_IDS:
+        return int(CreatureDamageType.ENERGY)
+    return int(CreatureDamageType.BULLET)
+
+
 class SecondaryProjectileTypeId(IntEnum):
     NONE = 0
     ROCKET = 1
@@ -125,6 +144,14 @@ class Projectile(msgspec.Struct):
     travel_budget: float = 0.0
     owner: OwnerRef = msgspec.field(default_factory=OwnerRef.none)
     hits_players: bool = False
+    # Rewrite-only: a Tenet Gun shot (weapon_runtime/tenet_gun_spawn.py) -
+    # spawned at the far end of the shot and aimed back at the muzzle instead
+    # of the usual pos/angle, so it flies into the player instead of away
+    # from them. Everything else about it (damage, collision, pierce, Fork
+    # Shot, ...) is the same unmodified code every other bullet uses; this
+    # flag only marks it so the pool's step() stops it once it arrives back
+    # at its owner, instead of flying on through them.
+    tenet_reverse: bool = False
 
 
 class SecondaryProjectile(msgspec.Struct):
@@ -152,6 +179,7 @@ __all__ = [
     "MAIN_PROJECTILE_POOL_SIZE",
     "SECONDARY_PROJECTILE_POOL_SIZE",
     "OwnerRef",
+    "damage_type_for_projectile_type_id",
     "Projectile",
     "ProjectileCollisionProfile",
     "ProjectileHit",

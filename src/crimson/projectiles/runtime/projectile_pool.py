@@ -37,6 +37,7 @@ from ..types import (
     ProjectileCollisionProfile,
     ProjectileHit,
     ProjectileTemplateId,
+    damage_type_for_projectile_type_id,
 )
 from .behaviors import (
     _PROJECTILE_HIT_PERK_HOOKS,
@@ -105,6 +106,11 @@ _FORK_RESERVED_NONE = 0.0
 _FORK_RESERVED_FORKED = 1.0
 _FORK_RESERVED_SHOTGUN_CHILD = 2.0
 _SHOTGUN_WEAPON_IDS = frozenset({WeaponId.SHOTGUN})
+
+# Tenet Gun (not native): how close a reversed bolt (Projectile.tenet_reverse)
+# has to get to its owner before it's considered "arrived" and stops instead
+# of flying on through them.
+_TENET_REVERSE_STOP_RADIUS = 40.0
 
 # Explosive Payload bonus (not native): "scale" fed into the shared
 # secondary-projectile DETONATION state (secondary_pool.py) that a flagged
@@ -233,6 +239,7 @@ class ProjectilePool:
         entry.travel_budget = float(weapon_entry.travel_budget)
         entry.owner = owner
         entry.hits_players = bool(hits_players)
+        entry.tenet_reverse = False
 
         collision_profile = projectile_collision_profile(type_id)
         entry.hit_radius = float(collision_profile.hit_radius)
@@ -419,16 +426,7 @@ class ProjectilePool:
             )
 
         def _damage_type_for(type_id: int) -> int:
-            tid = ProjectileTemplateId(type_id)
-            if tid in ION_PROJECTILE_TEMPLATE_IDS:
-                return int(CreatureDamageType.ION)
-            if tid == ProjectileTemplateId.FIRE_BULLETS:
-                return int(CreatureDamageType.FIRE)
-            if tid in PLASMA_PROJECTILE_TEMPLATE_IDS:
-                return int(CreatureDamageType.PLASMA)
-            if tid in ENERGY_PROJECTILE_TEMPLATE_IDS:
-                return int(CreatureDamageType.ENERGY)
-            return int(CreatureDamageType.BULLET)
+            return damage_type_for_projectile_type_id(type_id)
 
         update_ctx = _ProjectileUpdateCtx(
             pool=self,
@@ -453,6 +451,19 @@ class ProjectilePool:
         for proj_index, proj in enumerate(self._entries):
             if not proj.active:
                 continue
+
+            if proj.tenet_reverse:
+                # Tenet Gun (not native): this bolt was spawned at the far
+                # end of the shot, aimed back at the muzzle (weapon_runtime/
+                # tenet_gun_spawn.py) - everything else about it (damage,
+                # collision, pierce, Fork Shot, ...) is the normal code every
+                # other bullet uses; this just stops it once it arrives back
+                # at its owner instead of flying on through them.
+                owner_player_index = proj.owner.player_index_in_bounds(len(players))
+                if owner_player_index is not None and proj.pos.distance_to(players[owner_player_index].pos) <= _TENET_REVERSE_STOP_RADIUS:
+                    proj.active = False
+                    continue
+
             rule = primary_rule_for_type_id(ProjectileTemplateId(proj.type_id))
 
             if proj.life_timer <= 0.0:

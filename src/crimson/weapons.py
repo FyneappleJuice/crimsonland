@@ -82,6 +82,10 @@ class WeaponId(IntEnum):
     BLASTER_R_300 = 51
     LIGHTNING_RIFLE = 52
     NUKE_LAUNCHER = 53
+    # Rewrite-only: past the native table (0-53), same as the other
+    # project-added weapons (Evil Scythe=27, Arc Gun=33 repurpose cut native
+    # slots instead since this one has no free slot to borrow).
+    TENET_GUN = 54
 
 
 class Weapon(msgspec.Struct, frozen=True):
@@ -638,6 +642,38 @@ WEAPON_TABLE = [
         pellet_count=1,
     ),
     Weapon(
+        # Rewrite-only: a meme weapon (extremely low drop chance - see
+        # weapon_runtime/availability.py's rare-roll in
+        # weapon_pick_random_available). Mechanically an exact Pistol clone -
+        # every stat below (ammo/clip/cooldown/reload/spread/sounds/
+        # travel_budget/damage_scale/pellet_count) is a direct copy, and
+        # weapon_runtime/tags.py tags it PISTOL archetype too, for matching
+        # crit chance. Its "reverse time" gimmick is purely where its bullets
+        # spawn and which way they're pointed (weapon_runtime/
+        # tenet_gun_spawn.py) - applies to every projectile the wielding
+        # player triggers, not just their own direct shots (fire.py,
+        # weapon_runtime/spawn.py::projectile_spawn, bonuses/ion_overload.py)
+        # - everything else (damage, collision, pierce, Fork Shot, ...) is the
+        # exact same unmodified code every other bullet uses. Icon is a
+        # dedicated horizontally-flipped Pistol
+        # frame (weapon_icon_overrides.py); icon_index below is just the
+        # borrowed-frame fallback if that ever fails to load.
+        weapon_id=WeaponId.TENET_GUN,
+        name='Tenet Gun',
+        ammo_class=0,
+        clip_size=12,
+        shot_cooldown=0.7117,
+        reload_time=1.2,
+        spread_heat_inc=0.22,
+        fire_sound=SfxId.PISTOL_FIRE,
+        reload_sound=SfxId.PISTOL_RELOAD,
+        icon_index=0,
+        flags=5,
+        travel_budget=55,
+        damage_scale=4.1,
+        pellet_count=1,
+    ),
+    Weapon(
         weapon_id=WeaponId.PLAGUE_SPREADER_GUN,
         name='Plague Sphreader Gun',
         ammo_class=None,
@@ -825,6 +861,9 @@ PROJECTILE_TEMPLATE_OVERRIDES: dict[WeaponId, tuple[ProjectileTemplateId, ...]] 
     # Empty tuples are explicit non-primary projectile paths.
     WeaponId.SAWED_OFF_SHOTGUN: (ProjectileTemplateId.SHOTGUN,),
     WeaponId.MEAN_MINIGUN: (ProjectileTemplateId.PISTOL,),
+    # Rewrite-only: Tenet Gun (weapon_id=54) has no native projectile template
+    # of its own - fires the exact same bullet as the Pistol.
+    WeaponId.TENET_GUN: (ProjectileTemplateId.PISTOL,),
     WeaponId.FLAMETHROWER: (),
     WeaponId.MULTI_PLASMA: (ProjectileTemplateId.PLASMA_RIFLE, ProjectileTemplateId.PLASMA_MINIGUN),
     WeaponId.ROCKET_LAUNCHER: (),

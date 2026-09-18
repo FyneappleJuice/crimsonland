@@ -52,7 +52,8 @@ from ..owner_ref import OwnerRef
 from ..projectiles.types import ProjectileTemplateId
 from ..sim.state_types import GameplayState, PlayerState
 from ..weapon_runtime.spawn import owner_ref_for_player_projectiles, travel_budget_for_type_id
-from ..weapons import weapon_entry_for_projectile_type_id
+from ..weapon_runtime.tenet_gun_spawn import tenet_reverse_spawn_params
+from ..weapons import WeaponId, weapon_entry_for_projectile_type_id
 from .apply_context import BonusApplyCtx, bonus_apply_seconds
 
 if TYPE_CHECKING:
@@ -102,15 +103,30 @@ def fire_ion_overload_bolt(state: GameplayState, player: PlayerState) -> None:
         return
 
     muzzle = native_fire_muzzle_pos(player.pos, float(player.aim_heading))
+    spawn_pos, spawn_angle = muzzle, float(player.aim_heading)
+    tenet_reverse = int(player.weapon.weapon_id) == int(WeaponId.TENET_GUN)
+    if tenet_reverse:
+        # See weapon_runtime/spawn.py::projectile_spawn's Tenet Gun check -
+        # this bolt fires on its own via `state.projectiles.spawn` directly
+        # instead of through that chokepoint, so it needs the same treatment
+        # applied by hand.
+        spawn_pos, spawn_angle = tenet_reverse_spawn_params(
+            origin=muzzle,
+            muzzle=muzzle,
+            aim=player.aim,
+            angle=float(player.aim_heading),
+        )
     proj_id = state.projectiles.spawn(
-        pos=muzzle,
-        angle=float(player.aim_heading),
+        pos=spawn_pos,
+        angle=spawn_angle,
         type_id=ProjectileTemplateId.ION_CANNON,
         owner=owner_ref_for_player_projectiles(state, player.index),
         travel_budget=travel_budget_for_type_id(ProjectileTemplateId.ION_CANNON),
         hits_players=bool(state.friendly_fire_enabled),
     )
     state.projectiles.entries[proj_id].ion_overload_charge = charge_seconds
+    if tenet_reverse:
+        state.projectiles.entries[proj_id].tenet_reverse = True
     # This bolt fires on its own (the charge timer expiring, not a trigger
     # pull), so it doesn't go through the normal per-shot sfx dispatch
     # (audio_router.py / sim/presentation_step.py) - queue the Ion Cannon's

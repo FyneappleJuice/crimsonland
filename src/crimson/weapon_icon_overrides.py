@@ -16,6 +16,7 @@ from .weapons import WeaponId
 
 _OVERRIDE_TEXTURE_BY_WEAPON: dict[WeaponId, TextureId] = {
     WeaponId.EVIL_SCYTHE: TextureId.EVIL_SCYTHE_WEAPON_ICON,
+    WeaponId.TENET_GUN: TextureId.TENET_GUN_WEAPON_ICON,
 }
 
 # Per-weapon size multiplier for override art that reads big/small at the
