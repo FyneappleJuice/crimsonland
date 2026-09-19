@@ -95,7 +95,7 @@ raw msgpack, concatenated frames, trailing bytes, and invalid frame checksums ar
 rejected. Checkpoint sidecars use the same single-frame rule with checkpoint
 format 5. Replay envelopes are capped at 65 MiB compressed and 64 MiB decoded;
 checkpoint envelopes are capped at 257 MiB compressed and 256 MiB decoded in
-both Python and Zig.
+the Python implementation.
 
 Every `ReplayTick` carries:
 

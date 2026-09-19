@@ -44,7 +44,6 @@ def _candidate_trace(case: dict, recorded: dict[str, Path], tmp_path_factory: py
     record_replay_to_trace(
         replay_path=replay_path,
         out_path=candidate_cdt,
-        warnings_out=[],
     )
     recorded[name] = candidate_cdt
     return candidate_cdt

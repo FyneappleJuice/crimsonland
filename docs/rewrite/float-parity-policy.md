@@ -117,23 +117,6 @@ Deterministic gameplay math follows three rules:
 3. Route parity-critical trig/angle helpers through shared native-style math
    helpers, not ad-hoc per-module implementations.
 
-### Zig runtime implementation
-
-- Canonical helpers live in `crimson-zig/src/runtime/native_math.zig`.
-- Native constants are sourced from exact `f32` bit patterns (`pi`, `half_pi`,
-  `tau`, turn-rate scale), not simplified decimal literals.
-- `roundF32(...)` is the canonical spill helper for boundary/store truncation.
-- `sinNative/cosNative/atan2Native` behavior:
-  - use `sinl/cosl/atan2l` when `c_longdouble` is wider than `f64`,
-  - otherwise use `sin/cos/atan2`,
-  - freestanding builds fall back to `std.math`.
-- Shared angle helpers (`wrapAngle0Tau`, `headingFromDeltaNative`,
-  `headingAddPiNative`) encode decompile/native corner-case behavior in one
-  place.
-- `crimson-zig/src/runtime/math.zig` dispatches by type:
-  - `f32` uses the native helper path,
-  - `f64`/`comptime_float` remain available for non-domain/boundary use.
-
 ## Allowed normalization
 
 Literal simplification is acceptable when all of the following are true:
@@ -146,8 +129,7 @@ If any condition is missing, keep the native-looking float behavior.
 
 ## Implementation guidance
 
-- Prefer a single shared helper source over local math wrappers:
-  `runtime/native_math.zig` + `runtime/math.zig`.
+- Prefer a single shared helper source over local math wrappers (`src/crimson/math_parity.py`).
 - Keep gameplay-domain state in `f32`; avoid repeated `f64 -> f32 -> f64`
   churn inside hot loops.
 - Use explicit spill points (`roundF32`) where native would store to `float`.

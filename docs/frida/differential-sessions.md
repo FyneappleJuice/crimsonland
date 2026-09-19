@@ -23,7 +23,7 @@ CDT container 2/schema 15 with its CRD replay 16 and evidence sidecars.
   `<evidence.msgpack.zst>`
 - **Capture versions:** `Frida 22 / CDT 2+15 / CRD 16 / evidence 2`
 - **Capture SHA256:** `<sha256 for every artifact>`
-- **Replay trace:** `<python-or-zig.cdt>`
+- **Replay trace:** `<python.cdt>`
 - **Commands:** `<exact health, record, diff, bisect, or focus commands>`
 - **First mismatch by channel:** `<channel -> tick/path>`
 - **First diagnostics:** `<channel -> tick/path>`
@@ -71,7 +71,7 @@ The normal command sequence is:
 
 ```text
 uv run crimson dbg health <native.cdt>
-uv run crimson dbg record <run.crd> --out <candidate.cdt> --impl <python|zig>
+uv run crimson dbg record <run.crd> --out <candidate.cdt>
 uv run crimson dbg health <candidate.cdt>
 uv run crimson dbg diff <native.cdt> <candidate.cdt>
 ```

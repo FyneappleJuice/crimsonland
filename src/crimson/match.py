@@ -79,7 +79,6 @@ RESOLVED_NAME_AUDIT_SUFFIXES = frozenset(
         ".ts",
         ".yaml",
         ".yml",
-        ".zig",
     },
 )
 RESOLVED_NAME_AUDIT_PRUNED_DIRECTORIES = frozenset(
@@ -6996,7 +6995,7 @@ def collect_naming_debt(
 
 def _resolved_name_audit_files(repo_root: Path) -> tuple[Path, ...]:
     files: list[Path] = []
-    for relative_root in ("analysis", "crimson-zig", "docs", "src", "scripts", "tools"):
+    for relative_root in ("analysis", "docs", "src", "scripts", "tools"):
         source_root = repo_root / relative_root
         if not source_root.is_dir():
             continue

@@ -38,11 +38,6 @@ __pycache__/
 coverage.xml
 htmlcov/
 screenshots/
-zig-cache/
-.zig-cache/
-zig-pkg/
-zig-out/
-/tools/zig/
 .DS_Store
 .mcp.json
 .gemini/

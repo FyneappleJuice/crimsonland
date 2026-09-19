@@ -14,7 +14,7 @@ Use this when an agent is given a new capture run artifact (typically
 continue cross-implementation investigation.
 
 This runbook is updated for the decoupled `dbg` trace suite which unifies telemetry
-difﬁng for Original vs Python vs Zig.
+difﬁng for Original vs Python.
 
 ## 1) Identify the capture artifact
 
@@ -41,15 +41,7 @@ Record the SHA256 of the `.cdt` trace first. Session tracking is by capture SHA 
 ```bash
 uv run crimson dbg record \
   analysis/frida/traces/gameplay_diff_capture.<run>.crd \
-  --impl python \
   --out analysis/frida/traces/gameplay_diff_capture.<run>.py.cdt
-```
-
-```bash
-uv run crimson dbg record \
-  analysis/frida/traces/gameplay_diff_capture.<run>.crd \
-  --impl zig \
-  --out analysis/frida/traces/gameplay_diff_capture.<run>.zig.cdt
 ```
 
 `dbg record` always emits full traces; there is no profile mode or tick-cap mode.
@@ -78,7 +70,7 @@ Unlike the legacy process, `dbg` diffing is extremely fast because playback and 
 ```bash
 uv run crimson dbg diff \
   analysis/frida/traces/capture_<sha8>.cdt \
-  analysis/frida/traces/capture_<sha8>_zig.cdt
+  analysis/frida/traces/capture_<sha8>_py.cdt
 ```
 
 Capture the first divergence plus its surrounding focus window:
@@ -86,7 +78,7 @@ Capture the first divergence plus its surrounding focus window:
 ```bash
 uv run crimson dbg bisect \
   analysis/frida/traces/capture_<sha8>.cdt \
-  analysis/frida/traces/capture_<sha8>_zig.cdt \
+  analysis/frida/traces/capture_<sha8>_py.cdt \
   --window-before 12 \
   --window-after 6 \
   --json-out analysis/frida/reports/capture_<sha8>_bisect.json
@@ -97,7 +89,7 @@ For surgical detail at exactly the focus mismatch tick, inspect the state across
 ```bash
 uv run crimson dbg focus \
   analysis/frida/traces/capture_<sha8>.cdt \
-  analysis/frida/traces/capture_<sha8>_zig.cdt \
+  analysis/frida/traces/capture_<sha8>_py.cdt \
   --tick <focus_tick>
 ```
 

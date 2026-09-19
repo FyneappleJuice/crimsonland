@@ -7,13 +7,12 @@ tags:
 
 # Trace format alignment
 
-The debugging pipeline has one current contract shared by the three producers
+The debugging pipeline has one current contract shared by the two producers
 used for parity work:
 
 1. Original executable capture through Frida JSONL, finalized by
    `src/crimson/dbg/frida_finalize.py`.
 2. Python replay recording through `src/crimson/dbg/record.py`.
-3. Zig replay recording through `crimson-zig/src/cdt_trace.zig`.
 
 Frida JSONL remains a producer-private transport. Once a run becomes a `.cdt`,
 all consumers see the same typed tick data and no producer-specific aliases.
@@ -53,8 +52,7 @@ Schema 15 requires every channel on every tick:
 - `timing_samples`
 
 The core channel types live in
-`src/crimson/dbg/canonical_channels.py`; Zig mirrors the same wire schema in
-`crimson-zig/src/cdt_trace.zig`.
+`src/crimson/dbg/canonical_channels.py`.
 
 ### Replay-driving evidence
 
@@ -128,18 +126,11 @@ and timing evidence while it executes a CRD replay. Metadata identifies the
 replay fingerprint and implementation, and is validated through the same typed
 `TraceMeta` contract.
 
-### Zig replay recorder
-
-Zig writes the same CDT v2/schema 15 chunks and channel payloads. Use
-`crimson-zig dbg record <replay.crd> --out <trace.cdt>` to record and
-`crimson-zig dbg verify` to check that its compiled schema and replay versions
-match the owned contract.
-
 ## Differential workflow
 
 Run `dbg verify` after changing any owned format; it prints the complete current
 Frida, evidence, CDT, replay, and checkpoint version matrix, then checks the
-Python, Frida, and Zig source declarations, tick-boundary field order, required
+Python and Frida source declarations, tick-boundary field order, required
 channels, and replay/checkpoint payload ceilings for drift.
 
 Run `dbg health` on both traces before interpreting a diff. Health validates the

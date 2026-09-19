@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Literal, cast
+from typing import cast
 
 import typer
 
@@ -48,31 +48,21 @@ def _first_diff_path(detail: BuiltinObject | None) -> str | None:
 def cmd_dbg_record(
     replay_file: Path = typer.Argument(..., help="replay file (.crd)"),
     out: Path = typer.Option(..., "--out", help="output trace path (.cdt)"),
-    impl: Literal["python", "zig"] = typer.Option(
-        "python",
-        "--impl",
-        help="recording backend implementation",
-    ),
 ) -> None:
     """Run replay simulation and record a CDT trace."""
     from ..dbg.record import record_replay_to_trace
     from ..dbg.trace import TraceError
     from ..replay.driver.setup import ReplayRunnerError
 
-    warnings_out: list[str] = []
     try:
         summary = record_replay_to_trace(
             replay_path=Path(replay_file),
             out_path=Path(out),
-            impl=impl,
-            warnings_out=warnings_out,
         )
     except (TraceError, ValueError, ReplayRunnerError) as exc:
         typer.echo(f"dbg record failed: {exc}", err=True)
         raise typer.Exit(code=1) from exc
 
-    for warning in warnings_out:
-        typer.echo(str(warning), err=True)
     tick_range = summary.meta.tick_range
     typer.echo(f"trace={out}")
     typer.echo(

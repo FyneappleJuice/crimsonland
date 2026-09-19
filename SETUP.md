@@ -83,9 +83,8 @@ uv run pytest -q
 
 **Known pre-existing failures — not caused by the mod, always ignore:**
 
-- Anything under `tests/native/`, `tests/grim/test_zig_*`, `tests/replay/cli/test_zig_*`,
-  `test_match.py`, `test_mod_sdk.py`, `test_library_*.py` — these need a
-  capstone / `crimsonland.exe` / zig toolchain that isn't set up here.
+- Anything under `tests/native/`, `test_match.py`, `test_mod_sdk.py`, `test_library_*.py` — these need a
+  capstone / `crimsonland.exe` that isn't set up here.
 - `tests/replay/cli/test_list.py::test_replay_list_shows_replays_under_base_dir` —
   a Windows path-display quirk, unrelated.
 

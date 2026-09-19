@@ -177,7 +177,6 @@ The intended comparison set is:
 
 1. Frida capture format 22 finalized into CDT v2/schema 15.
 2. Python CRD v16 replay recording.
-3. Zig CRD v16 replay recording.
 
 All emit the same durable channel semantics. A producer may keep additional
 diagnostics before finalization, but it may not add aliases or optional channel

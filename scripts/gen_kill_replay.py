@@ -1,4 +1,4 @@
-"""Generate a synthetic survival replay with kills for zig/python differential checks."""
+"""Generate a synthetic survival replay with kills for differential checks."""
 
 from __future__ import annotations
 

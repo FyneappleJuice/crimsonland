@@ -4,8 +4,7 @@ We are decompiling and porting an old game. The goal is **deterministic, evidenc
 
 - Project docs and notes: `docs/`
 - Authoritative decompiles: `analysis/`
-- More mature Python rewrite: `src/`
-- Newly started Zig rewrite: `crimson-zig/`
+- Python rewrite: `src/`
 
 If you are doing **capture-driven** parity work, start with: `docs/frida/differential-playbook.md`
 
@@ -82,18 +81,15 @@ Text rules are forgettable; structural rules enforce themselves.
 
 ### required pre-commit checks
 - Install hooks once per clone/worktree: `prek install -c prek.toml -t pre-commit -t pre-push`
-- `pre-commit` runs fast checks only (ruff/import-linter/ty/docs/ast-grep/ziglint) and is file-scoped.
-- `pre-push` runs the fast packaging and Zig unit-test checks and is file-scoped.
-- Full pytest plus optimized/WASM Zig builds run in CI and remain explicit local checks.
-- ziglint behavior is configured in `crimson-zig/.ziglint.zon` (`Z024` disabled).
+- `pre-commit` runs fast checks only (ruff/import-linter/ty/docs/ast-grep) and is file-scoped.
+- `pre-push` runs the fast packaging checks and is file-scoped.
+- Full pytest runs in CI and remains an explicit local check.
 - Manual runs:
   - `prek run --stage pre-commit`
   - `prek run --stage pre-push`
-  - `prek run py-pytest`, `prek run zig-release`, or `prek run zig-wasm`
+  - `prek run py-pytest`
 - CI-equivalent local run:
-  - Python/docs/tooling changes (`src/`, `tests/`, `docs/`, `tools/`, etc.): `just check && uv build`
-  - Zig-only changes (`crimson-zig/`): `just check-zig`
-  - Mixed Zig + Python/docs/tooling changes: run both
+  - `just check && uv build`
 
 ## quick playbooks
 
@@ -110,7 +106,7 @@ Text rules are forgettable; structural rules enforce themselves.
 2. Migrate all internal callers in one wave.
 3. Delete legacy APIs/re-exports/tests in the same wave.
 4. Search for remaining references to old surfaces and remove them.
-5. Verify with `just check` / `just check-zig` and parity tests/artifacts.
+5. Verify with `just check` and parity tests/artifacts.
 
 ### capture-only triage
 1. Follow `docs/frida/differential-playbook.md`.
@@ -126,8 +122,6 @@ Text rules are forgettable; structural rules enforce themselves.
 ## structural search / codemods: prefer ast-grep
 
 - Prefer `ast-grep` over regex-only edits for structural transformations.
-- For Zig: use `sgconfig.local.yml` to load the custom Zig parser
-- Zig metavariables use `_VAR` syntax (e.g. `_EXPR`)
 
 ## pull requests (gh cli hygiene)
 

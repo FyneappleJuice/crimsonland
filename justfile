@@ -29,18 +29,6 @@ check *args:
     sg scan
     sg test
     uv run pytest --no-cov {{args}}
-    just check-zig
-
-ast-grep-all:
-    sg scan
-    sg test
-    sg scan -c sgconfig.local.yml
-    sg test -c sgconfig.local.yml
-
-check-zig:
-    cd crimson-zig && zig build test --summary all
-    cd crimson-zig && zig build -Doptimize=ReleaseFast
-    cd crimson-zig && zig build wasm
 
 ty:
     uv run ty check src tests
@@ -51,10 +39,6 @@ ty-tests:
 # Lint
 lint-imports:
     uv run lint-imports
-
-zig-z004-fix:
-    sg run -c sgconfig.local.yml -l zig -p 'const _NAME = _TYPE{};' -r 'const $NAME: $TYPE = .{};' crimson-zig/src -U
-    sg run -c sgconfig.local.yml -l zig -p 'var _NAME = _TYPE{};' -r 'var $NAME: $TYPE = .{};' crimson-zig/src -U
 
 # Duplication
 dup-report out="artifacts/duplication/pylint-r0801.txt" min="12":
@@ -225,19 +209,6 @@ pe-info target="crimsonland.exe":
 
 pe-imports target="crimsonland.exe":
     rabin2 -i {{game_dir}}/{{target}}
-
-# Zig
-zig-build:
-    cd crimson-zig && zig build
-
-zig-run:
-    cd crimson-zig && zig build run
-
-zig-test:
-    cd crimson-zig && zig build test
-
-zig-wasm:
-    cd crimson-zig && zig build wasm
 
 # WinDbg
 windbg-server:

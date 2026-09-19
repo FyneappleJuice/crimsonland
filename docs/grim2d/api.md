@@ -482,13 +482,12 @@ These offsets appear with keycodes or input-related values:
 | `0x148` | `draw_text_small_fmt` | `void draw_text_small_fmt(float x, float y, const char *fmt, ...)` | high | formatted small-font text (wrapper around `0x144`) |
 | `0x14c` | `measure_text_width` | `int measure_text_width(char *text)` | confirmed | exact-matched maximum-line width metric for newline-delimited small-font text |
 
-The working vtable skeleton lives in the Zig workspace under `crimson-zig/` once a
-signature is confirmed. Until then, the authoritative source is the vtable map
-JSON in `analysis/ghidra/derived/`.
+The authoritative source for the vtable is the vtable map JSON in
+`analysis/ghidra/derived/`.
 
 
 ## Next steps
 
 1. Validate the high-callsite entries in the table above with runtime evidence.
-2. Port confirmed signatures into the Zig workspace under `crimson-zig/`.
+2. Port confirmed signatures into the Python rewrite (`src/grim/`).
 3. Validate behavior with runtime toggles (config, input, draw calls).

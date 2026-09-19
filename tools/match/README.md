@@ -998,7 +998,7 @@ an older bulk rename rewrote an auto-generated provider comment to the new
 canonical identity.
 
 `resolved-name-audit` is the repository-wide companion to the scratch/map
-audit. It scans maintained analysis, Zig, documentation, source, scripts,
+audit. It scans maintained analysis, documentation, source, scripts,
 matching notes, and native data initializers for analyzer identities whose
 address already has a stronger curated identity. This includes semantic raw
 function names, not only address-derived labels. Raw analyzer exports, native

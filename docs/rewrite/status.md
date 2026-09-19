@@ -20,33 +20,6 @@ largest remaining parity gaps vs the classic Windows build (v1.9.93) documented 
   - `uv run crimson net join --code <invite> --relay-host <ip> --relay-port 31993`
   - `uv run crimson net host --mode survival --players 2 --netcode lockstep --host <ip> --port 31993`
   - `uv run crimson net join --netcode lockstep --host <ip> --port 31993`
-  - `cd crimson-zig && zig build --prefix zig-out && ./zig-out/bin/crimson-zig net host --mode survival --players 2 --format json`
-  - `cd crimson-zig && zig build --prefix zig-out && ./zig-out/bin/crimson-zig net join --code <invite> --format json`
-  - `cd crimson-zig && zig build --prefix zig-out && ./zig-out/bin/crimson-zig net smoke-rollback --format json`
-  - `cd crimson-zig && zig build --prefix zig-out && ./zig-out/bin/crimson-zig net smoke-rollback --impair delay-first-guest-input --format json`
-  - `cd crimson-zig && zig build --prefix zig-out && ./zig-out/bin/crimson-zig net smoke-rollback --impair reorder-first-guest-input --format json`
-  - `cd crimson-zig && zig build --prefix zig-out && ./zig-out/bin/crimson-zig net smoke-rollback --impair drop-first-guest-input --format json`
-  - `cd crimson-zig && zig build --prefix zig-out && ./zig-out/bin/crimson-zig net smoke-rollback --impair force-guest-resync --format json`
-  - `cd crimson-zig && zig build --prefix zig-out && ./zig-out/bin/crimson-zig net smoke-rollback --impair guest-reconnect --format json`
-  - `cd crimson-zig && zig build --prefix zig-out && ./zig-out/bin/crimson-zig net smoke-rollback --impair guest-reconnect-resync --format json`
-  - `cd crimson-zig && zig build --prefix zig-out && ./zig-out/bin/crimson-zig net smoke-rollback --impair guest-double-reconnect --format json`
-  - `cd crimson-zig && zig build --prefix zig-out && ./zig-out/bin/crimson-zig net smoke-rollback --impair guest-triple-reconnect --format json`
-  - `cd crimson-zig && zig build --prefix zig-out && ./zig-out/bin/crimson-zig net smoke-rollback --impair guest-double-reconnect-resync --format json`
-  - `cd crimson-zig && zig build --prefix zig-out && ./zig-out/bin/crimson-zig net smoke-rollback --impair guest-triple-reconnect-resync --format json`
-  - `cd crimson-zig && zig build --prefix zig-out && ./zig-out/bin/crimson-zig net smoke-rollback --impair jitter-burst --format json`
-  - `cd crimson-zig && zig build --prefix zig-out && ./zig-out/bin/crimson-zig net smoke-rollback --impair bidirectional-jitter-burst --format json`
-  - `cd crimson-zig && zig build --prefix zig-out && ./zig-out/bin/crimson-zig net smoke-rollback --impair guest-reconnect-bidirectional-jitter-burst --format json`
-  - `cd crimson-zig && zig build --prefix zig-out && ./zig-out/bin/crimson-zig net smoke-rollback --impair guest-double-reconnect-bidirectional-jitter-burst --format json`
-  - `cd crimson-zig && zig build --prefix zig-out && ./zig-out/bin/crimson-zig net smoke-rollback --impair guest-triple-reconnect-bidirectional-jitter-burst --format json`
-    - The native Zig `net host/join` surface now reports `runtime_supported=true` for rollback sessions, and the native smoke command exercises an in-process relay plus host/guest live rollback exchange, including delayed-input, reordered-input, dropped-input, repeated and bidirectional jitter recovery without resync, guest-requested resync snapshot, relay-token guest self-reconnect with post-reconnect input continuity, double and triple guest reconnect, a longer reconnect-then-resync path that accepts fresh guest input after the applied snapshot, double- and triple-reconnect-then-resync recovery, and bidirectional jitter after one, two, or three reconnect cycles. The desktop network lobby now opens and backs out through the same native panel timeline as the Python shell. Remaining network work is broader stress and lobby parity, not first launch support.
-- Asset tooling:
-  - `cd crimson-zig && zig build --prefix zig-out && ./zig-out/bin/crimson-zig-asset-smoke <assets-dir>`
-    - The installed native smoke tool validates `crimson.paq`, JAZ/TGA/JPEG image decoding, runtime texture specs, and small-font width data.
-  - `cd crimson-zig && zig build --prefix zig-out && ./zig-out/bin/crimson-zig-asset-extract <game-dir> <assets-dir>`
-    - The installed native extractor walks `.paq` files, preserves the Python extractor's `<assets-dir>/<paq-stem>/...` layout, writes raw payloads, and converts decoded JAZ/TGA entries to PNG.
-- Desktop shell:
-  - `cd crimson-zig && zig build --prefix zig-out && ./zig-out/bin/crimson-zig-window`
-    - The installed native desktop shell starts the boot/menu/gameplay product flow; `--demo` starts with shareware demo limits enabled.
 - Replay tooling:
   - `uv run crimson replay play <replay.crd>`
   - `uv run crimson replay verify <replay.crd>`
@@ -57,19 +30,7 @@ largest remaining parity gaps vs the classic Windows build (v1.9.93) documented 
   - `uv run crimson replay diff-checkpoints <expected> <actual>`
 - Original/capture differential tooling (via structural traces):
   - `uv run --with frida==17.15.4 python scripts/frida/gameplay_diff_capture_host.py --raw-path <capture.jsonl> --output-dir <dir>` (add `--finalize-only` to finalize without attaching)
-  - `uv run crimson dbg record <replay.crd> --impl python --out <trace.py.cdt>`
-  - `uv run crimson dbg record <replay.crd> --impl zig --out <trace.zig.cdt>`
-  - `crimson-zig dbg record <replay.crd> --out <trace.zig.cdt>`
-  - `crimson-zig dbg health <trace.cdt> --format json`
-  - `crimson-zig dbg tick <trace.cdt> <tick> --json`
-  - `crimson-zig dbg entity <trace.cdt> <entity_uid> --json`
-  - `crimson-zig dbg query <trace.cdt> "entities where uid == 0" --json`
-  - `crimson-zig dbg verify`
-  - `crimson-zig config --path <crimson.cfg> --format json`
-  - `crimson-zig status --path <game.cfg> --format json`
-  - `crimson-zig quests <level> --format json --seed <seed>`
-  - `crimson-zig quests <level> --show-plan`
-  - `crimson-zig spawn-plan <template_id> --json` (add `--no-demo-mode-active` to include runtime burst effects)
+  - `uv run crimson dbg record <replay.crd> --out <trace.cdt>`
   - `uv run crimson dbg health <trace.cdt>`
   - `uv run crimson dbg tick <trace.cdt> <tick>`
   - `uv run crimson dbg entity <trace.cdt> <entity_uid>`
@@ -78,15 +39,6 @@ largest remaining parity gaps vs the classic Windows build (v1.9.93) documented 
   - `uv run crimson dbg bisect <expected.cdt> <actual.cdt>`
   - `uv run crimson dbg focus <expected.cdt> <actual.cdt> --tick <n>`
 
-## Zig native port status
-
-- Zig native-port details now live on a dedicated page:
-  - [`docs/rewrite/zig-verifier.md`](zig-verifier.md)
-- `crimson-zig/` is being tracked as a full native port effort, not a verifier
-  side project.
-- This page remains focused on overall rewrite (Python + raylib) status and
-  major parity gaps, while the Zig page tracks the native-port surface directly.
-
 ## Coverage map (rewrite vs classic)
 
 ### Front-end (menus + screens)
@@ -94,7 +46,6 @@ largest remaining parity gaps vs the classic Windows build (v1.9.93) documented 
 - **Main menu (state `0`)**: implemented, including timeline/layout behavior and terrain/sign-shadow rules.
   - Code: `src/crimson/screens/menu.py`
   - Ref: [`docs/crimsonland-exe/main-menu.md`](../crimsonland-exe/main-menu.md)
-  - Zig now routes root menu selections and demo-idle attract launch through the native close timeline before dispatch.
 - **Play Game panel (state `1`)**: implemented (mode buttons, player-count dropdown, tooltips, debug-gated F1 times-played overlay).
   - Code: `src/crimson/game/__init__.py` (`PlayGameMenuView`)
   - Ref: [`docs/crimsonland-exe/play-game-menu.md`](../crimsonland-exe/play-game-menu.md)
@@ -102,29 +53,24 @@ largest remaining parity gaps vs the classic Windows build (v1.9.93) documented 
   - Code: `src/crimson/game/__init__.py` (`QuestsMenuView`)
   - Ref: [`docs/crimsonland-exe/quest-select-menu.md`](../crimsonland-exe/quest-select-menu.md)
 - **Options panel (state `2`)**: implemented for core sliders + controls workflow.
-  - Code: `src/crimson/screens/panels/options.py`, `src/crimson/screens/panels/controls.py`, `crimson-zig/src/window_options.zig`
-  - Implemented: SFX/music/detail/mouse sliders, UI info toggle, display config editing, controls entry and interactive rebinding flow. Zig now routes Options/Controls navigation through the native 300 ms panel close timeline before dispatching Back or Controls actions.
+  - Code: `src/crimson/screens/panels/options.py`, `src/crimson/screens/panels/controls.py`
+  - Implemented: SFX/music/detail/mouse sliders, UI info toggle, display config editing, controls entry and interactive rebinding flow.
 - **Statistics hub (state `4`)**: implemented with child panels.
   - Code: `src/crimson/screens/panels/stats.py`
   - Child views: high scores, weapons database, perks database, credits.
-  - Code: `src/crimson/game/__init__.py`, `src/crimson/screens/panels/databases.py`, `src/crimson/screens/panels/credits.py`, `crimson-zig/src/window_statistics.zig`
-  - Zig now gates the hub buttons until the native 300 ms open timeline completes and closes both the hub and child panels before dispatching descendant or Back actions.
+  - Code: `src/crimson/game/__init__.py`, `src/crimson/screens/panels/databases.py`, `src/crimson/screens/panels/credits.py`
 - **Demo / attract mode**: implemented (variant sequencing, upsell flow, trial overlay during gameplay).
   - Code: `src/crimson/demo.py`, `src/crimson/ui/demo_trial_overlay.py`
   - Ref: [`docs/crimsonland-exe/demo-mode.md`](../crimsonland-exe/demo-mode.md), [`docs/crimsonland-exe/screens.md`](../crimsonland-exe/screens.md)
 - **Game over / high score entry (state `7`)**: implemented for Survival/Rush/Typ-o.
   - Code: `src/crimson/ui/game_over.py`, `src/crimson/persistence/highscores.py`, `src/crimson/game/__init__.py`
-  - Zig now animates game-over/results panels through the native open/close slide timeline, keeps high-score/button hitboxes aligned with the moving panel, routes Play Again, High scores, and Main Menu actions through the native close timeline before dispatch, returns Back from result-launched high scores to the results screen, and clears that stacked results screen before Play a game opens Play Game.
 - **Quest results (state `8`) / quest failed (state `0x0c`)**: implemented.
-  - Code: `src/crimson/ui/quest_results.py`, `src/crimson/game/__init__.py`, `crimson-zig/src/window_main.zig`
-  - Zig quest-completion results show the resolved weapon/perk unlock names after the final-time breakdown completes, honor the completed-results keyboard shortcuts, and route the final quest end-note screen through the native 300 ms open/close timeline before dispatching its follow-up action.
+  - Code: `src/crimson/ui/quest_results.py`, `src/crimson/game/__init__.py`
 - **Pause menu**: implemented.
-  - Code: `src/crimson/screens/pause_menu.py`, `crimson-zig/src/window_pause_menu.zig`
-  - Zig now routes pause-menu Back, Options, and Quit actions through the native close timeline before dispatch.
+  - Code: `src/crimson/screens/pause_menu.py`
 - **Mods menu (state `0x14` path from main menu)**: implemented as a panel and filesystem DLL discovery UI; plugin loading/runtime is still not implemented.
   - Code: `src/crimson/screens/panels/mods.py`, `src/crimson/screens/menu.py`
   - Ref: [`docs/crimsonland-exe/mods.md`](../crimsonland-exe/mods.md)
-  - Zig now routes Mods, Other Games, Network Session, and live Network Lobby panel Back/Launch actions through the native panel timeline before dispatch.
 - **Scope policy for Mods and Other Games/shareware ads**: out of scope for the rewrite target.
   - Rationale: native DLL plugin runtime is not practical to support in the Python rewrite architecture.
   - Rewrite stance: keep menu-shell UX compatibility where useful, but do not implement native DLL mod loading/execution or Other Games ad/runtime flows.
@@ -193,7 +139,7 @@ largest remaining parity gaps vs the classic Windows build (v1.9.93) documented 
    - This status page intentionally avoids tick/session-specific examples that go stale quickly.
    - Current active probes and per-SHA outcomes are tracked in [`docs/frida/differential-sessions.md`](../frida/differential-sessions.md).
 3. **Rollback stress hardening + lockstep fallback maintenance**
-   - Rollback is now the default path, and Zig has native delayed-input, reordered-input, dropped-input, repeated jitter, guest-requested resync, relay-token guest self-reconnect, reconnect-then-resync with fresh guest input after the applied snapshot, multi-reconnect, and multi-reconnect jitter smoke cases. Longer reconnect/resync stress still needs broader multi-cycle scenario coverage across long sessions.
+   - Rollback is now the default path. Longer reconnect/resync stress still needs broader multi-cycle scenario coverage across long sessions.
    - Legacy lockstep fallback remains available and must continue to receive compatibility maintenance while rollback remains primary.
 
 ## Out of scope for this rewrite

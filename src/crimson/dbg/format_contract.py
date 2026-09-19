@@ -7,19 +7,13 @@ from pathlib import Path
 import msgspec
 
 from ..replay.checkpoints import (
-    FORMAT_VERSION as CHECKPOINT_FORMAT_VERSION,
-)
-from ..replay.checkpoints import (
-    MAX_CHECKPOINTS_FILE_BYTES,
-    MAX_CHECKPOINTS_PAYLOAD_BYTES,
     ReplayCheckpoint,
     ReplayDeathLedgerEntry,
     ReplayEventSummary,
     ReplayPerkSnapshot,
     ReplayPlayerCheckpoint,
 )
-from ..replay.codec import MAX_REPLAY_FILE_BYTES, MAX_REPLAY_PAYLOAD_BYTES
-from ..replay.types import REPLAY_FORMAT_VERSION, ReplayTick
+from ..replay.types import ReplayTick
 from . import frida_finalize as frida_format
 from .canonical_channels import (
     BonusEntitySample,
@@ -35,7 +29,6 @@ from .canonical_channels import (
     TimingSampleRow,
 )
 from .frida_finalize import FRIDA_CAPTURE_FORMAT_VERSION, FRIDA_RUNTIME_VERSION
-from .schema import TRACE_FORMAT_VERSION, TRACE_REQUIRED_CHANNELS, TRACE_SCHEMA_VERSION
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _TICK_BOUNDARY_FIELDS = ("dt", "inputs", "prelude", "postlude", "commands")
@@ -109,20 +102,8 @@ def _source_int(
     return int(match.group(1))
 
 
-def _zig_struct_fields(source: str, *, name: str, errors: list[str]) -> tuple[str, ...] | None:
-    match = re.search(
-        rf"^const {re.escape(name)} = struct \{{(?P<body>.*?)^\}};$",
-        source,
-        flags=re.MULTILINE | re.DOTALL,
-    )
-    if match is None:
-        errors.append(f"Zig {name} declaration is missing")
-        return None
-    return tuple(re.findall(r"^\s{4}([a-z_][a-z0-9_]*):", match.group("body"), flags=re.MULTILINE))
-
-
 def format_contract_errors() -> list[str]:
-    """Return every current-format wiring mismatch across Python, Frida, and Zig."""
+    """Return every current-format wiring mismatch across Python and Frida."""
 
     errors: list[str] = []
     for label, struct_type in (
@@ -199,115 +180,5 @@ def format_contract_errors() -> list[str]:
         )
         if frida_fields != _TICK_BOUNDARY_FIELDS:
             errors.append(f"Frida replay_step fields are {frida_fields!r}, expected {_TICK_BOUNDARY_FIELDS!r}")
-
-    replay_source = (_REPO_ROOT / "crimson-zig" / "src" / "replay_codec.zig").read_text()
-    cdt_source = (_REPO_ROOT / "crimson-zig" / "src" / "cdt_trace.zig").read_text()
-    checkpoint_source = (_REPO_ROOT / "crimson-zig" / "src" / "checkpoint_diff_native.zig").read_text()
-    dbg_verify_source = (_REPO_ROOT / "crimson-zig" / "src" / "dbg_verify_native.zig").read_text()
-
-    comparisons = (
-        (
-            replay_source,
-            r"^pub const replay_format_version: i32 = (\d+);$",
-            "Zig replay format version",
-            int(REPLAY_FORMAT_VERSION),
-        ),
-        (
-            cdt_source,
-            r"^pub const trace_format_version: u32 = (\d+);$",
-            "Zig trace format version",
-            int(TRACE_FORMAT_VERSION),
-        ),
-        (
-            cdt_source,
-            r"^pub const trace_schema_version: i32 = (\d+);$",
-            "Zig trace schema version",
-            int(TRACE_SCHEMA_VERSION),
-        ),
-        (
-            checkpoint_source,
-            r"^pub const checkpoints_format_version: i32 = (\d+);$",
-            "Zig checkpoints format version",
-            int(CHECKPOINT_FORMAT_VERSION),
-        ),
-        (
-            dbg_verify_source,
-            r"^pub const frida_capture_format_version: i32 = (\d+);$",
-            "Zig Frida capture format version",
-            int(FRIDA_CAPTURE_FORMAT_VERSION),
-        ),
-        (
-            dbg_verify_source,
-            r"^pub const frida_evidence_format_version: i32 = (\d+);$",
-            "Zig Frida evidence format version",
-            int(frida_format.FRIDA_EVIDENCE_FORMAT_VERSION),
-        ),
-    )
-    for source, pattern, label, expected in comparisons:
-        actual = _source_int(source, pattern=pattern, label=label, errors=errors)
-        if actual is not None and actual != expected:
-            errors.append(f"{label} is {actual}, expected {expected}")
-
-    zig_runtime = re.search(
-        r'^pub const frida_runtime_version = "([^"]+)";$',
-        dbg_verify_source,
-        flags=re.MULTILINE,
-    )
-    if zig_runtime is None:
-        errors.append("Zig Frida runtime version declaration is missing")
-    elif zig_runtime.group(1) != FRIDA_RUNTIME_VERSION:
-        errors.append(
-            f"Zig Frida runtime version is {zig_runtime.group(1)!r}, expected {FRIDA_RUNTIME_VERSION!r}",
-        )
-
-    size_comparisons = (
-        (
-            replay_source,
-            r"^pub const max_replay_payload_bytes: usize = (\d+) \* 1024 \* 1024;$",
-            "Zig replay payload MiB limit",
-            int(MAX_REPLAY_PAYLOAD_BYTES // (1024 * 1024)),
-        ),
-        (
-            replay_source,
-            r"^pub const max_replay_file_bytes: usize = (\d+) \* 1024 \* 1024;$",
-            "Zig replay file MiB limit",
-            int(MAX_REPLAY_FILE_BYTES // (1024 * 1024)),
-        ),
-        (
-            checkpoint_source,
-            r"^pub const max_checkpoints_payload_bytes: usize = (\d+) \* 1024 \* 1024;$",
-            "Zig checkpoints payload MiB limit",
-            int(MAX_CHECKPOINTS_PAYLOAD_BYTES // (1024 * 1024)),
-        ),
-        (
-            checkpoint_source,
-            r"^pub const max_checkpoints_file_bytes: usize = (\d+) \* 1024 \* 1024;$",
-            "Zig checkpoints file MiB limit",
-            int(MAX_CHECKPOINTS_FILE_BYTES // (1024 * 1024)),
-        ),
-    )
-    for source, pattern, label, expected in size_comparisons:
-        actual = _source_int(source, pattern=pattern, label=label, errors=errors)
-        if actual is not None and actual != expected:
-            errors.append(f"{label} is {actual}, expected {expected}")
-
-    for source, name in (
-        (replay_source, "ReplayTickCurrentWire"),
-        (cdt_source, "ReplayStepSnapshot"),
-    ):
-        fields = _zig_struct_fields(source, name=name, errors=errors)
-        if fields is not None and fields != _TICK_BOUNDARY_FIELDS:
-            errors.append(f"Zig {name} fields are {fields!r}, expected {_TICK_BOUNDARY_FIELDS!r}")
-
-    zig_channels = re.search(
-        r'^pub const trace_required_channels = "([^"]+)";$',
-        cdt_source,
-        flags=re.MULTILINE,
-    )
-    expected_channels = ",".join(TRACE_REQUIRED_CHANNELS)
-    if zig_channels is None:
-        errors.append("Zig required trace channel declaration is missing")
-    elif zig_channels.group(1) != expected_channels:
-        errors.append(f"Zig required trace channels are {zig_channels.group(1)!r}, expected {expected_channels!r}")
 
     return errors
