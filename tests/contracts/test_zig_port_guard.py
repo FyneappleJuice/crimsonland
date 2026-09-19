@@ -33,6 +33,11 @@ ZIG_WEAPON_DATA = REPO_ROOT / "crimson-zig" / "src" / "runtime" / "weapon_data.z
 ZIG_WINDOW_MENU_PANELS = REPO_ROOT / "crimson-zig" / "src" / "window_menu_panels.zig"
 ZIG_WINDOW_OPTIONS = REPO_ROOT / "crimson-zig" / "src" / "window_options.zig"
 
+# Python-rewrite-only weapons with no native reference and no Zig port
+# counterpart (ids past the native table), same reason the bonus/mode guards
+# below exclude their own rewrite-only entries.
+REWRITE_ONLY_WEAPON_NAMES = {"tenet_gun"}
+
 
 def _python_enum_values(enum_type: type[IntEnum], *, exclude: set[str] | None = None) -> dict[str, int]:
     excluded = exclude or set()
@@ -71,7 +76,7 @@ def _zig_supported_spawn_ids() -> set[int]:
 def _python_supported_fire_weapons() -> set[str]:
     supported: set[str] = set()
     for weapon_id in WeaponId:
-        if int(weapon_id) <= 0:
+        if int(weapon_id) <= 0 or weapon_id.name.lower() in REWRITE_ONLY_WEAPON_NAMES:
             continue
         try:
             recipe = resolve_fire_recipe(weapon_id, pellet_count=1, fire_bullets_active=False)
@@ -228,7 +233,7 @@ def test_python_supported_fire_weapons_are_ported_in_zig() -> None:
 
 
 def test_zig_weapon_ids_match_python_port() -> None:
-    assert _zig_enum_values("WeaponId") == _python_enum_values(WeaponId)
+    assert _zig_enum_values("WeaponId") == _python_enum_values(WeaponId, exclude=REWRITE_ONLY_WEAPON_NAMES)
 
 
 def test_zig_bonus_ids_match_python_port() -> None:
