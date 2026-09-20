@@ -17,6 +17,12 @@ class OwnerRef(msgspec.Struct, frozen=True):
     kind: OwnerKind
     index: int = 0
     local_host: bool = False
+    # Rewrite-only: set on the owner of a Domino Effect bonus shot specifically
+    # (creatures/runtime.py's _fire_momentum_shot), so a kill credited to one
+    # doesn't re-trigger another Domino Effect shot (see _start_death). Not
+    # part of `to_legacy()`/`from_legacy()` - it's a same-tick anti-recursion
+    # guard, not run state that needs to survive a save/replay round-trip.
+    via_domino_effect: bool = False
 
     @classmethod
     def none(cls) -> OwnerRef:

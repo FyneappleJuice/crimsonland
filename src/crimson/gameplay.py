@@ -176,6 +176,7 @@ class GameplayState(msgspec.Struct):
     test_mode_fork_spawn_timer: float = 5.0
     test_mode_bonus_cycle: int = 0
     test_mode_shotgun_dropped: bool = False
+    test_mode_starting_perks_granted: bool = False
     # Not native: when set, the random bonus picker (bonuses/selection.py) spends
     # the native drop table's one dead-space slot on a rewrite-only bonus
     # (Fork Shot / Blade) instead of rerolling. Fork default: on, so both drop
@@ -1094,6 +1095,12 @@ def player_update(
     # Native clears `reload_active` whenever the cooldown/timer gates are open,
     # even if ammo is empty and perk firing paths can still proceed.
     if fire_gate_open_pre_reload:
+        # Rewrite-only: Pendulum flips its damage/fire-rate phase exactly on
+        # this reload-complete transition - covers both a natural empty-clip
+        # reload and a forced manual one, since both set reload_active via the
+        # same player_start_reload().
+        if player.weapon.reload_active and perk_active(player, PerkId.PENDULUM):
+            player.pendulum_phase = not player.pendulum_phase
         player.weapon.reload_active = False
 
     swapped_alt_weapon = False

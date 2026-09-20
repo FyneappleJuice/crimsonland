@@ -113,6 +113,12 @@ class PerkId(IntEnum):
     FREE_ROUNDS = 78
     STEADY_HANDS = 79
     ADRENALINE_RUSH = 80
+    PENDULUM = 81
+    BANE_OF_LEGENDS = 82
+    SOUL_TETHER = 83
+    DIAMOND_FLASK = 84
+    LIKE_CLOCKWORK = 85
+    HOLLOW_FORM = 86
 
 
 class PerkMeta(msgspec.Struct, frozen=True):
@@ -626,7 +632,7 @@ _PERK_TABLE = [
     PerkMeta(
         perk_id=PerkId.COUP_DE_GRACE,
         name="The Closer",
-        description="Something in you can't stand watching an enemy limp along on fumes. It's gotta stop, right now. So anything clinging to its last sliver of health gets finished off completely -- unfortunately for it.",
+        description="Something in you can't stand watching an enemy limp along on fumes. It's gotta stop, right now. So anything clinging to its last sliver of health gets finished off completely. Unfortunate, but necessary.",
         flags=PERK_DEFAULT_FLAGS,
         prereq=(),
     ),
@@ -647,7 +653,7 @@ _PERK_TABLE = [
     PerkMeta(
         perk_id=PerkId.COLD_SNAP,
         name="Deep Freeze",
-        description="Your critical hits have picked up a nasty new habit: they freeze solid on contact. Total, immediate, unnecessarily aggressive frost. You didn't train for this. It just started happening one day.",
+        description="Something about your critical hits just isn't right anymore. They don't wound, they freeze solid, on the spot, no warmup required. You've stopped asking why.",
         flags=PERK_DEFAULT_FLAGS,
         prereq=(),
     ),
@@ -661,14 +667,14 @@ _PERK_TABLE = [
     PerkMeta(
         perk_id=PerkId.OVERDUE,
         name="Statistically Speaking",
-        description="Miss five crits in a row and something in you finally snaps. Not angry-snaps. Overdue-snaps. The next five seconds of critical hits come back scorching hot, like the universe felt guilty and overcompensated.",
+        description="You keep track of every crit that doesn't land. Miss five in a row and something changes: for the next five seconds, every crit you do land comes back scorching hot, like it was making up for lost time.",
         flags=PERK_DEFAULT_FLAGS,
         prereq=(),
     ),
     PerkMeta(
         perk_id=PerkId.KINETIC_DISCIPLINE,
         name="Full Steam Ahead",
-        description="You get a little obsessive about holding a straight line. The longer you commit, the harder you hit -- like you're building up a full head of steam. Turn, stop, or so much as flinch, and poof. Right back to square one.",
+        description="You get a little obsessive about holding a straight line. The longer you commit, the harder you hit, like you're building up a full head of steam. Turn, stop, or so much as flinch, though, and poof. Right back to square one.",
         flags=PERK_DEFAULT_FLAGS,
         prereq=(),
     ),
@@ -688,8 +694,50 @@ _PERK_TABLE = [
     ),
     PerkMeta(
         perk_id=PerkId.ADRENALINE_RUSH,
-        name="Spite",
-        description="Getting hurt doesn't scare you. It just makes you MAD. For the next five seconds, every shot you fire lands that much harder -- purely, unapologetically, out of spite.",
+        name="Chip on Your Shoulder",
+        description="Getting hurt just makes you meaner. For the next five seconds, every shot you fire lands like it's got something to prove.",
+        flags=PERK_DEFAULT_FLAGS,
+        prereq=(),
+    ),
+    PerkMeta(
+        perk_id=PerkId.PENDULUM,
+        name="Mood Swing",
+        description="Your gun can't settle on a personality. Every clip it swings between hitting harder and shooting faster, and it never asks your permission. Reload early, though, and you get to make the call yourself.",
+        flags=PERK_DEFAULT_FLAGS,
+        prereq=(),
+    ),
+    PerkMeta(
+        perk_id=PerkId.BANE_OF_LEGENDS,
+        name="Taste of Blood",
+        description="You pull every punch until you draw blood. Normally your hits land soft, but the second something actually dies, all that restraint goes out the window for a few seconds.",
+        flags=PERK_DEFAULT_FLAGS,
+        prereq=(),
+    ),
+    PerkMeta(
+        perk_id=PerkId.SOUL_TETHER,
+        name="Rainy Day Fund",
+        description="You've never let a good thing go to waste. Healing that would overflow past full gets tucked away as a shield instead, though it won't stay in savings if you stop making deposits.",
+        flags=PERK_DEFAULT_FLAGS,
+        prereq=(),
+    ),
+    PerkMeta(
+        perk_id=PerkId.DIAMOND_FLASK,
+        name="Double or Nothing",
+        description="You never take the first answer luck gives you. You ask twice, and keep whichever roll you like better. Get greedy enough to land both, though, and the payout doubles right along with your nerve.",
+        flags=PERK_DEFAULT_FLAGS,
+        prereq=(),
+    ),
+    PerkMeta(
+        perk_id=PerkId.LIKE_CLOCKWORK,
+        name="Short Fuse",
+        description="Everything you own that runs on a timer just got impatient. Whatever used to take its sweet time now can't wait around. It happens twice as often, whether you like it or not.",
+        flags=PERK_DEFAULT_FLAGS,
+        prereq=(),
+    ),
+    PerkMeta(
+        perk_id=PerkId.HOLLOW_FORM,
+        name="Stunt Double",
+        description="You've got someone who does the dangerous work so you don't have to. Every so often they step in wearing your face, empty the clip at whatever's closest for a second, and slip out before anyone realizes the swap.",
         flags=PERK_DEFAULT_FLAGS,
         prereq=(),
     ),

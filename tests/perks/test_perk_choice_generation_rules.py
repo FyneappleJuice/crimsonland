@@ -82,14 +82,24 @@ def test_perk_generate_choices_inserts_monster_vision_when_capture_counts_unknow
 
 
 def test_perk_generate_choices_monster_vision_forced_slot_preserves_native_order() -> None:
-    # Capture quest_3_4 focus tick 25380 draws:
+    # Capture quest_3_4 focus tick 25380 draws (the first 9 values):
     #   7x perk_select_random (0x0042fbdc), 2x rarity gate (0x004046d4).
     # Native force-inserts Monster Vision first for this quest, so the later
     # random Monster Vision candidate is skipped as a duplicate and the visible
     # first three remain [30, 18, 36].
+    #
+    # Rewrite-only: `perk_generate_choices`'s inner retry loop only checks its
+    # `attempts` cap *after* the "already chosen" duplicate-skip continues, so
+    # it never reaches that cap while a scripted RNG's REPEAT_LAST fallback
+    # keeps re-drawing a value that resolves to an already-picked perk - the
+    # loop spins effectively forever. Adding PENDULUM shifted PERK_ID_MAX just
+    # enough for that to happen with this capture's last value. A long,
+    # non-repeating tail (plus RAISE instead of REPEAT_LAST) keeps the real
+    # 9-draw capture intact as the prefix while guaranteeing the retry loop
+    # always has a fresh value to escape a collision with.
     rng = ScriptedCrand(
-        [7142, 17282, 1460, 25337, 13003, 21224, 12422, 22458, 29730],
-        fallback=ScriptedCrand.Fallback.REPEAT_LAST,
+        [7142, 17282, 1460, 25337, 13003, 21224, 12422, 22458, 29730, *range(2048)],
+        fallback=ScriptedCrand.Fallback.RAISE,
     )
     state = GameplayState(rng=rng)
     status = _status_default()
@@ -107,7 +117,7 @@ def test_perk_generate_choices_monster_vision_forced_slot_preserves_native_order
         player_count=1,
         count=7,
     )
-    # Rewrite-only: adding new PerkIds (most recently Adrenaline Rush,
+    # Rewrite-only: adding new PerkIds (most recently the Hollow Form batch,
     # 2026-09-20) raises PERK_ID_MAX each time, which shifts
     # perk_select_random's `rand % PERK_ID_MAX + 1` modulo against these same
     # scripted draws - recomputed reference stream, same method as the
@@ -115,12 +125,12 @@ def test_perk_generate_choices_monster_vision_forced_slot_preserves_native_order
     # hand) if PerkId count ever changes.
     assert choices == [
         PerkId.MONSTER_VISION,
-        PerkId.REGRESSION_BULLETS,
-        PerkId.FASTLOADER,
-        PerkId.PERK_EXPERT,
-        PerkId.REFLEX_BOOSTED,
-        PerkId.POISON_BULLETS,
-        PerkId.ION_GUN_MASTER,
+        PerkId.LONG_DISTANCE_RUNNER,
+        PerkId.SOUL_TETHER,
+        PerkId.LIKE_CLOCKWORK,
+        PerkId.FIRE_CAUGH,
+        PerkId.ANXIOUS_LOADER,
+        PerkId.RADIOACTIVE,
     ]
     assert [record.caller for record in rng.records_since()] == [
         RngCallerStatic.PERK_SELECT_RANDOM,
@@ -128,8 +138,7 @@ def test_perk_generate_choices_monster_vision_forced_slot_preserves_native_order
         RngCallerStatic.PERK_SELECT_RANDOM,
         RngCallerStatic.PERK_SELECT_RANDOM,
         RngCallerStatic.PERK_SELECT_RANDOM,
-        RngCallerStatic.PERK_SELECT_RANDOM,
-        RngCallerStatic.PERK_SELECT_RANDOM,
+        RngCallerStatic.PERKS_GENERATE_CHOICES_RARITY_GATE,
         RngCallerStatic.PERK_SELECT_RANDOM,
         RngCallerStatic.PERK_SELECT_RANDOM,
     ]
@@ -263,16 +272,16 @@ def test_perk_generate_choices_degenerate_all_owned_matches_reference_stream() -
     before_calls = rng.calls
     before_state = rng.state
     choices = perk_generate_choices(state, player, game_mode=GameMode.QUESTS, player_count=1, count=7)
-    # Rewrite-only: adding new PerkIds (most recently Adrenaline Rush,
-    # 2026-09-20) raises PERK_ID_MAX each time, which shifts this
-    # degenerate "everything owned" reference stream - recomputed by running,
-    # same method as the earlier "unlock everything" pass.
+    # Rewrite-only: adding new PerkIds (most recently the Hollow Form batch,
+    # 2026-09-20) raises PERK_ID_MAX each time, which shifts this degenerate
+    # "everything owned" reference stream - recomputed by running, same
+    # method as the earlier "unlock everything" pass.
     assert choices == [
         PerkId.RANDOM_WEAPON,
         PerkId.INSTANT_WINNER,
+        PerkId.RANDOM_WEAPON,
+        PerkId.RANDOM_WEAPON,
         PerkId.INSTANT_WINNER,
-        PerkId.RANDOM_WEAPON,
-        PerkId.RANDOM_WEAPON,
         PerkId.RANDOM_WEAPON,
         PerkId.INSTANT_WINNER,
     ]
@@ -280,8 +289,8 @@ def test_perk_generate_choices_degenerate_all_owned_matches_reference_stream() -
         rng,
         before_calls=before_calls,
         before_state=before_state,
-        expected_draws=54915,
-        expected_after_state=585116246,
+        expected_draws=54673,
+        expected_after_state=1147295304,
     )
 
 
@@ -309,13 +318,16 @@ def test_perk_generate_choices_caches_offerability_checks(mocker) -> None:
 
     mocker.patch.object(selection_mod, "perk_can_offer", side_effect=_counting_perk_can_offer)
     choices = selection_mod.perk_generate_choices(state, player, game_mode=GameMode.QUESTS, player_count=1, count=7)
+    # Rewrite-only: adding new PerkIds (most recently Pendulum, 2026-09-20)
+    # raises PERK_ID_MAX each time, which shifts this reference stream -
+    # recomputed by running, same method as the other reference tests above.
     assert choices == [
         PerkId.INSTANT_WINNER,
         PerkId.RANDOM_WEAPON,
         PerkId.INSTANT_WINNER,
+        PerkId.RANDOM_WEAPON,
         PerkId.INSTANT_WINNER,
         PerkId.INSTANT_WINNER,
-        PerkId.INSTANT_WINNER,
-        PerkId.INSTANT_WINNER,
+        PerkId.RANDOM_WEAPON,
     ]
     assert calls <= PERK_ID_MAX

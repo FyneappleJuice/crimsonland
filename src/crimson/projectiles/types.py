@@ -121,15 +121,17 @@ class Projectile(msgspec.Struct):
     # ramp / not a plasma bolt.
     energy_heat_mult: float = 1.0
     # Rewrite-only: outgoing crit multiplier stamped at spawn from the firing
-    # weapon's archetype crit chance (weapon_runtime/crit.py). Always applied
-    # at hit time (compensation factor on a miss, compensation*2 on a crit) so
-    # DPS averages stay anchored to the pre-crit baseline.
+    # weapon's archetype crit chance (weapon_runtime/crit.py) - 1.0 on a miss,
+    # CRIT_MULTIPLIER (plus any perk bonus) on a crit. DPS neutrality is baked
+    # into the weapon's own damage_scale (weapons.py) instead of into this
+    # multiplier, so a plain miss is exactly 1.0 here.
     crit_mult: float = 1.0
     # Rewrite-only: whether this specific pellet actually rolled a crit (not
-    # just "crit_mult != 1.0", which is also true on a plain miss thanks to
-    # the compensation factor). Only stamped true for the player's own direct
-    # trigger-pull (weapon_runtime/fire.py's primary pellet loop); everything
-    # else defaults false. Consumed by Cold Snap's on-crit freeze.
+    # just "crit_mult != 1.0" - a non-crit shot can still carry a nonzero
+    # multiplier here from a perk like Pendulum's damage-phase bonus). Only
+    # stamped true for the player's own direct trigger-pull
+    # (weapon_runtime/fire.py's primary pellet loop); everything else defaults
+    # false. Consumed by Cold Snap's on-crit freeze.
     did_crit: bool = False
     # Rewrite-only: extra full-damage targets this bolt punches through before it
     # stops (Weapon Power Up for kinetic lead). 0 = native stop-on-first-hit.

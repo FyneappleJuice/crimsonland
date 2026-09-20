@@ -7,6 +7,7 @@ from ...rng_caller_static import RngCallerStatic
 from ...sim.state_types import PlayerState
 from ..helpers import perk_active
 from ..ids import PerkId
+from ..impl.like_clockwork import like_clockwork_rate_mult
 from ..runtime.effects_context import PerksUpdateEffectsCtx
 from ..runtime.hook_types import PerkHooks
 
@@ -44,7 +45,8 @@ def _select_jinxed_accident_target(ctx: PerksUpdateEffectsCtx) -> PlayerState:
 def update_jinxed_timer(ctx: PerksUpdateEffectsCtx) -> None:
     timer = f32(float(ctx.state.jinxed_timer))
     if timer >= 0.0:
-        ctx.state.jinxed_timer = x87_pc24_sub(timer, f32(float(ctx.dt)))
+        rate_mult = like_clockwork_rate_mult(ctx.players[0]) if ctx.players else 1.0
+        ctx.state.jinxed_timer = x87_pc24_sub(timer, f32(float(ctx.dt) * rate_mult))
 
 
 def update_jinxed(ctx: PerksUpdateEffectsCtx) -> None:

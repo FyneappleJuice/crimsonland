@@ -9,6 +9,7 @@ from ...projectiles.types import ProjectileTemplateId
 from ...rng_caller_static import RngCallerStatic
 from ..helpers import perk_active
 from ..ids import PerkId
+from ..impl.like_clockwork import like_clockwork_rate_mult
 from ..runtime.hook_types import PerkHooks
 from ..runtime.player_tick_context import PlayerPerkTickCtx
 
@@ -20,7 +21,7 @@ def tick_man_bomb(ctx: PlayerPerkTickCtx) -> None:
 
     ctx.player.man_bomb_timer = x87_pc24_add(
         float(ctx.player.man_bomb_timer),
-        float(ctx.dt),
+        float(ctx.dt) * like_clockwork_rate_mult(ctx.perk_player),
     )
     if ctx.player.man_bomb_timer > ctx.state.perk_intervals.man_bomb:
         owner = ctx.owner_ref_for_player_projectiles(ctx.state, ctx.player.index)

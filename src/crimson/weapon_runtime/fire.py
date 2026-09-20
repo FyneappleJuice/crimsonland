@@ -23,6 +23,7 @@ from ..math_parity import (
 )
 from ..perks import PerkId
 from ..perks.helpers import perk_active
+from ..perks.impl.pendulum import pendulum_damage_mult, pendulum_fire_rate_mult
 from ..progression import refresh_player_stats
 from ..player_damage import PlayerDeathRuntime
 from ..projectiles.runtime import SecondarySpawnSpec
@@ -328,6 +329,12 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
     cooldown_mult = float(perk_player.stats.shot_cooldown_mult)
     if cooldown_mult != 1.0:
         shot_cooldown = float(f32(float(shot_cooldown) * cooldown_mult))
+    # Rewrite-only: Pendulum's fire-rate phase - conditional on which half of
+    # the cycle is active, so it can't fold into the static shot_cooldown_mult
+    # stat like Fastshot/Sharpshooter above.
+    pendulum_rate_mult = pendulum_fire_rate_mult(state, player)
+    if pendulum_rate_mult != 1.0:
+        shot_cooldown = float(f32(float(shot_cooldown) * pendulum_rate_mult))
     player.weapon.shot_cooldown = max(0.0, float(f32(float(shot_cooldown))))
 
     aim = input_state.aim
@@ -431,6 +438,13 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
         if float(player.overdue_window_timer) > 0.0:
             overdue_bonus_crit_mult = OVERDUE_BONUS_CRIT_MULT
 
+    # Rewrite-only: Pendulum's damage-phase bonus, baked into crit_mult
+    # alongside the crit roll below so it applies regardless of crit outcome.
+    pendulum_dmg_mult = pendulum_damage_mult(state, player)
+
+    # Rewrite-only: Diamond Flask - crit chance rolls twice (Lucky).
+    diamond_flask_lucky = perk_active(perk_player, PerkId.DIAMOND_FLASK)
+
     match recipe.mode:
         case PrimaryPelletsMode(type_id=type_id, count=count, jitter=jitter_rule, speed_scale=speed_rule):
             if type_id is None:
@@ -490,8 +504,9 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
                     weapon_id,
                     force_crit=death_wish_force_crit,
                     bonus_crit_mult=overdue_bonus_crit_mult,
+                    lucky=diamond_flask_lucky,
                 )
-                state.projectiles.entries[int(proj_id)].crit_mult = pellet_crit_mult
+                state.projectiles.entries[int(proj_id)].crit_mult = pellet_crit_mult * pendulum_dmg_mult
                 state.projectiles.entries[int(proj_id)].did_crit = pellet_did_crit
                 if pellet_did_crit:
                     player.overdue_streak = 0

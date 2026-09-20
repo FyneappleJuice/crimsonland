@@ -13,7 +13,6 @@ from crimson.weapon_runtime.crit import (
     CRIT_CHANCE_BY_ARCHETYPE,
     CRIT_MULTIPLIER,
     crit_chance_for_weapon,
-    crit_damage_compensation,
     roll_crit_mult,
 )
 from crimson.weapon_runtime.tags import WeaponArchetype
@@ -47,38 +46,31 @@ def test_crit_chance_by_archetype_covers_every_archetype() -> None:
         assert archetype in CRIT_CHANCE_BY_ARCHETYPE
 
 
-@pytest.mark.parametrize("chance", [0.0, 0.05, 0.10, 0.15, 0.20])
-def test_compensation_keeps_the_expected_hit_at_exactly_1x(chance: float) -> None:
-    compensation = crit_damage_compensation(chance)
-    expected_value = (1.0 - chance) * compensation + chance * compensation * CRIT_MULTIPLIER
-    assert expected_value == pytest.approx(1.0, rel=1e-9)
-
-
 def test_roll_crit_mult_only_ever_returns_two_values() -> None:
-    compensation = crit_damage_compensation(crit_chance_for_weapon(WeaponId.ASSAULT_RIFLE))
     seen = {round(roll_crit_mult(WeaponId.ASSAULT_RIFLE), 9) for _ in range(2000)}
-    assert seen == {round(compensation, 9), round(compensation * CRIT_MULTIPLIER, 9)}
+    assert seen == {round(1.0, 9), round(CRIT_MULTIPLIER, 9)}
 
 
 def test_roll_crit_mult_matches_the_archetype_chance_over_many_rolls() -> None:
-    compensation = crit_damage_compensation(crit_chance_for_weapon(WeaponId.ASSAULT_RIFLE))
-    crit_value = compensation * CRIT_MULTIPLIER
     n = 20_000
-    crits = sum(1 for _ in range(n) if roll_crit_mult(WeaponId.ASSAULT_RIFLE) == pytest.approx(crit_value))
+    crits = sum(1 for _ in range(n) if roll_crit_mult(WeaponId.ASSAULT_RIFLE) == pytest.approx(CRIT_MULTIPLIER))
     # Rifle = 20% chance; a 20000-sample binomial has a tiny window around 0.20.
     assert 0.18 < crits / n < 0.22
 
 
-def test_roll_crit_mult_is_always_compensation_only_at_zero_chance() -> None:
+def test_roll_crit_mult_is_always_one_at_zero_chance() -> None:
     # Utility archetype (0% chance, e.g. shelved Shrinkifier 5K / Plague Spreader).
     for _ in range(200):
         assert roll_crit_mult(WeaponId.SHRINKIFIER_5K) == pytest.approx(1.0)
 
 
-def test_average_damage_over_many_shots_matches_the_pre_crit_baseline() -> None:
-    """The whole point of the compensation factor: fire enough shots and the
-    average damage-per-hit should converge back to the un-crit baseline,
-    not just the per-hit expected-value algebra checked above."""
+def test_average_damage_over_many_shots_matches_the_scaled_up_no_crit_hit() -> None:
+    """Neutrality now lives in weapons.py's WEAPON_TABLE (each crit-eligible
+    weapon's damage_scale is pre-shrunk by /(1 + chance)), not in a runtime
+    compensation factor. So a real average over many rolled shots should land
+    at `(a single crit_mult=1.0 hit) * (1 + chance)` - scaling the (already
+    shrunk) baseline back up by the same headroom that was baked out of it -
+    not at the raw baseline itself."""
 
     def fire_once(crit_mult: float) -> float:
         creature = _creature(pos=Vec2(30.0, 0.0), hp=100_000.0)
@@ -103,11 +95,13 @@ def test_average_damage_over_many_shots_matches_the_pre_crit_baseline() -> None:
 
     baseline = fire_once(1.0)
     assert baseline > 0.0
+    chance = crit_chance_for_weapon(WeaponId.ASSAULT_RIFLE)
+    expected_average = baseline * (1.0 + chance)
 
     n = 5000
     total = sum(fire_once(roll_crit_mult(WeaponId.ASSAULT_RIFLE)) for _ in range(n))
     average = total / n
-    assert average == pytest.approx(baseline, rel=0.03)
+    assert average == pytest.approx(expected_average, rel=0.03)
 
 
 def test_crit_mult_on_the_projectile_scales_the_recorded_hit() -> None:
@@ -146,7 +140,7 @@ def test_flamethrower_and_arc_gun_have_zero_crit_chance() -> None:
     assert crit_chance_for_weapon(WeaponId.HR_FLAMER) == 0.0
     assert crit_chance_for_weapon(WeaponId.BUBBLEGUN) == 0.0
     assert crit_chance_for_weapon(WeaponId.RAYGUN) == 0.0
-    # At 0% chance, roll_crit_mult can only ever return the (here, 1.0) compensation.
+    # At 0% chance, roll_crit_mult always returns 1.0 - no crit is possible.
     assert all(roll_crit_mult(WeaponId.FLAMETHROWER) == 1.0 for _ in range(200))
     assert all(roll_crit_mult(WeaponId.RAYGUN) == 1.0 for _ in range(200))
 

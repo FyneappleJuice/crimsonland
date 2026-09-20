@@ -140,6 +140,53 @@ _EXPLOSIVE_PAYLOAD_SCALE_STRENGTH = 0.5  # 0 = flat for every weapon, 1 = full d
 # Weapons with damage_scale <= 0 (Shrinkifier 5k, Plague Spreader Gun - pure
 # utility, no direct damage) don't get an explosion at all.
 
+# Rewrite-only: weapons.py's WEAPON_TABLE now bakes crit-DPS-neutrality
+# straight into damage_scale (see the comment above WEAPON_TABLE there), which
+# would otherwise quietly shift every one of these ratios and the "Pistol is
+# exactly the reference scale" invariant above. This snapshot holds each
+# affected weapon's *original*, pre-compensation damage_scale so Explosive
+# Payload's blast calibration stays exactly as tuned, independent of that
+# rebalance. Weapons not listed here were never adjusted (damage_scale <= 0
+# or 0% crit chance), so their live table value is already the native one.
+_EXPLOSIVE_PAYLOAD_NATIVE_DAMAGE_SCALE: dict[WeaponId, float] = {
+    WeaponId.PISTOL: 4.1,
+    WeaponId.ASSAULT_RIFLE: 1.0,
+    WeaponId.SHOTGUN: 1.2,
+    WeaponId.SAWED_OFF_SHOTGUN: 1.0,
+    WeaponId.SUBMACHINE_GUN: 1.0,
+    WeaponId.GAUSS_GUN: 1.0,
+    WeaponId.MEAN_MINIGUN: 1.0,
+    WeaponId.PLASMA_RIFLE: 5.0,
+    WeaponId.MULTI_PLASMA: 1.0,
+    WeaponId.PLASMA_MINIGUN: 2.1,
+    WeaponId.ROCKET_LAUNCHER: 1.0,
+    WeaponId.SEEKER_ROCKETS: 1.0,
+    WeaponId.PLASMA_SHOTGUN: 1.0,
+    WeaponId.MINI_ROCKET_SWARMERS: 1.0,
+    WeaponId.ROCKET_MINIGUN: 1.0,
+    WeaponId.PULSE_GUN: 1.0,
+    WeaponId.JACKHAMMER: 1.0,
+    WeaponId.ION_RIFLE: 3.0,
+    WeaponId.ION_MINIGUN: 1.4,
+    WeaponId.ION_CANNON: 16.7,
+    WeaponId.BLADE_GUN: 11.0,
+    WeaponId.SPIDER_PLASMA: 0.5,
+    WeaponId.EVIL_SCYTHE: 1.0,
+    WeaponId.PLASMA_CANNON: 28.0,
+    WeaponId.SPLITTER_GUN: 6.0,
+    WeaponId.GAUSS_SHOTGUN: 1.0,
+    WeaponId.ION_SHOTGUN: 1.0,
+    WeaponId.TENET_GUN: 4.1,
+    WeaponId.RAINBOW_GUN: 1.0,
+    WeaponId.FIRE_BULLETS: 0.25,
+}
+
+
+def _native_damage_scale_for_type_id(type_id: int) -> float:
+    entry = weapon_entry_for_projectile_type_id(ProjectileTemplateId(type_id))
+    override = _EXPLOSIVE_PAYLOAD_NATIVE_DAMAGE_SCALE.get(entry.weapon_id)
+    return float(override) if override is not None else float(entry.damage_scale)
+
 
 def _explosive_payload_blast_scale(weapon_damage_scale: float) -> float:
     weapon_damage_scale = float(weapon_damage_scale)
@@ -377,7 +424,7 @@ class ProjectilePool:
             if not proj.is_rocket:
                 return
             proj.is_rocket = False
-            blast_scale = _explosive_payload_blast_scale(_damage_scale(int(proj.type_id)))
+            blast_scale = _explosive_payload_blast_scale(_native_damage_scale_for_type_id(int(proj.type_id)))
             if blast_scale <= 0.0:
                 return  # utility weapons (0 damage_scale) don't get a blast
             from ..types import SecondaryProjectileTypeId

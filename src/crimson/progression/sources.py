@@ -177,6 +177,15 @@ PERK_MECHANICAL: dict[PerkId, str] = {
     PerkId.FREE_ROUNDS: "a private per-shot roll to skip the ammo cost entirely",
     PerkId.STEADY_HANDS: "bonus damage to targets still near full health",
     PerkId.ADRENALINE_RUSH: "losing health opens a timed bonus-damage window",
+    PerkId.PENDULUM: (
+        "alternates a damage/fire-rate bonus each reload; Fire Bullets and Weapon "
+        "Power Up snapshot whichever phase was active when picked up"
+    ),
+    PerkId.BANE_OF_LEGENDS: "a flat damage penalty offset by a bonus window opened on kill",
+    PerkId.SOUL_TETHER: "overheal converts to a decaying shield that absorbs damage before health",
+    PerkId.DIAMOND_FLASK: "crit chance rolls twice, with a further bonus if both rolls succeed",
+    PerkId.LIKE_CLOCKWORK: "doubles the rate of every periodic perk-proc timer",
+    PerkId.HOLLOW_FORM: "a snapshot clone periodically holds fire on the nearest enemy for 1 second",
 }
 
 

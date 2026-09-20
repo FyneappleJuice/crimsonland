@@ -15,6 +15,7 @@ from ..math_parity import NATIVE_HALF_PI, f32, x87_pc24_add, x87_pc24_div, x87_p
 from ..owner_ref import OwnerRef
 from ..perks import PerkId
 from ..perks.helpers import perk_active
+from ..perks.impl.bane_of_legends import BANE_OF_LEGENDS_KILL_BONUS, BANE_OF_LEGENDS_PENALTY
 from ..progression import PlayerStats, resolve_team_stats
 from ..rng_caller_static import RngCallerStatic
 from ..sim.state_types import PlayerState
@@ -385,6 +386,11 @@ def creature_apply_damage(
                 and float(shooter.adrenaline_rush_window_timer) > 0.0
             ):
                 ctx.damage = f32(float(ctx.damage) * (1.0 + ADRENALINE_RUSH_BONUS))
+            if perk_active(shooter, PerkId.BANE_OF_LEGENDS):
+                bane_mult = 1.0 - BANE_OF_LEGENDS_PENALTY
+                if float(shooter.bane_of_legends_timer) > 0.0:
+                    bane_mult *= 1.0 + BANE_OF_LEGENDS_KILL_BONUS
+                ctx.damage = f32(float(ctx.damage) * bane_mult)
 
     if ctx.damage_type in (
         CreatureDamageType.BULLET,

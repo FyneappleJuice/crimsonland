@@ -8,6 +8,7 @@ from grim.geom import Vec2
 from ..creatures.damage_runtime import CreatureDamageRuntime
 from ..math_parity import f32, x87_pc24_sub
 from ..perks.helpers import perk_active
+from ..perks.ids import PerkId
 from ..sim.state_types import BonusPickupEvent, GameplayState, PlayerState
 from ..test_mode import test_mode_enabled
 from ..weapons import WeaponId
@@ -26,12 +27,18 @@ _TEST_MODE_BONUS_SPAWN_INTERVAL = 5.0
 _TEST_MODE_BONUS_CYCLE: tuple[BonusId, ...] = ()
 # Weapons dropped once near spawn on a fresh test run. Empty = none.
 _TEST_MODE_WEAPON_DROPS: tuple[tuple[float, WeaponId], ...] = ()
+# Perks granted once, for free, at the start of a fresh test run. Empty = none.
+# Only safe for perks with no apply_handler (pure stat/effects-step perks) -
+# this sets perk_counts directly, skipping whatever an apply_handler would
+# normally do on a real pick (e.g. Infernal Contract's health drop).
+_TEST_MODE_STARTING_PERKS: tuple[PerkId, ...] = ()
 
 
 def update_test_mode_fork_spawner(
     state: GameplayState,
     dt: float,
     *,
+    players: Sequence[PlayerState] = (),
     world_width: float = 1024.0,
     world_height: float = 1024.0,
 ) -> None:
@@ -53,6 +60,14 @@ def update_test_mode_fork_spawner(
         for offset, weapon_id in _TEST_MODE_WEAPON_DROPS:
             drop = state.bonus_pool.spawn_forced_at_pos(Vec2(cx, cy - offset), bonus_id=BonusId.WEAPON)
             drop.amount = int(weapon_id)
+
+    # One-time: hand every player the test perks outright, so a fresh run
+    # doesn't need to level up into them first.
+    if not state.test_mode_starting_perks_granted:
+        state.test_mode_starting_perks_granted = True
+        for player in players:
+            for perk_id in _TEST_MODE_STARTING_PERKS:
+                player.perk_counts[int(perk_id)] = 1
 
     if not _TEST_MODE_BONUS_CYCLE:
         return
@@ -179,7 +194,7 @@ def bonus_update(
 ) -> list[BonusPickupEvent]:
     """Advance world bonuses and global timers (subset of `bonus_update`)."""
 
-    update_test_mode_fork_spawner(state, dt, world_width=world_width, world_height=world_height)
+    update_test_mode_fork_spawner(state, dt, players=players, world_width=world_width, world_height=world_height)
 
     pickups = bonus_telekinetic_update(
         state,

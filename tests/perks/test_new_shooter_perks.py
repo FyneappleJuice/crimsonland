@@ -29,8 +29,9 @@ from crimson.projectiles.runtime.projectile_pool import COLD_SNAP_FREEZE_DURATIO
 from crimson.sim.input import PlayerInput
 from crimson.sim.state_types import PlayerState
 from crimson.weapon_runtime import WeaponFireCtx, fire_weapon
+from crimson.weapon_runtime.assign import weapon_assign_player
 from crimson.weapon_runtime.fire import DEATH_WISH_HEALTH_THRESHOLD, OVERDUE_STREAK_THRESHOLD
-from crimson.weapons import WEAPON_BY_ID, WeaponId
+from crimson.weapons import WEAPON_BY_ID, WeaponId, weapon_entry_for_projectile_type_id
 from grim.geom import Vec2
 from grim.rand import Crand
 from tests.support.factories import make_creature_state, make_projectile_update_options
@@ -166,8 +167,8 @@ def test_overdue_opens_a_window_on_the_triggering_shot() -> None:
     assert player.overdue_streak == 0
     assert player.overdue_window_timer == pytest.approx(5.0)
 
-    # Plain forced crit (no streak bonus) would be compensation * 2.0; the
-    # boosted one should be strictly larger.
+    # Plain forced crit (no streak bonus) would just be CRIT_MULTIPLIER (2.0);
+    # the boosted one should be strictly larger.
     plain_state = GameplayState()
     plain_player = PlayerState(index=0, pos=Vec2(), health=DEATH_WISH_HEALTH_THRESHOLD)
     plain_player.perk_counts[int(PerkId.DEATH_WISH)] = 1
@@ -215,11 +216,13 @@ def test_overdue_streak_increments_on_non_crits_and_resets_on_a_natural_crit() -
 # --- Momentum ---------------------------------------------------------
 
 
-def test_momentum_fires_a_shot_at_the_nearest_other_creature_on_kill() -> None:
+def _kill_setup(*, weapon_id: WeaponId, momentum: bool) -> tuple[GameplayState, PlayerState, CreaturePool]:
     state = GameplayState()
     state.bonus_spawn_guard = True
     player = PlayerState(index=0, pos=Vec2())
-    player.perk_counts[int(PerkId.MOMENTUM)] = 1
+    if momentum:
+        player.perk_counts[int(PerkId.MOMENTUM)] = 1
+    weapon_assign_player(player, weapon_id, state=state)
 
     pool = CreaturePool()
     dying = pool.entries[0]
@@ -240,11 +243,58 @@ def test_momentum_fires_a_shot_at_the_nearest_other_creature_on_kill() -> None:
     near.pos = Vec2(50.0, 0.0)
     near.hp = 100.0
 
+    return state, player, pool
+
+
+def test_momentum_fires_a_shot_using_the_players_actual_weapon() -> None:
+    # Rewrite-only: Domino Effect fires through the real fire_weapon() path
+    # now (a snapshot of the killer, same approach as Hollow Form's clone),
+    # not a hardcoded flat Pistol projectile - verify the spawned shot's
+    # type actually matches whatever weapon the killer had equipped.
+    state, player, pool = _kill_setup(weapon_id=WeaponId.ASSAULT_RIFLE, momentum=True)
     pool.handle_death(0, state=state, players=[player], rng=state.rng, world_width=1024.0, world_height=1024.0, fx_queue=None)
 
     spawned = list(state.projectiles.iter_active())
     assert len(spawned) == 1
-    assert_float_close(spawned[0].angle, 0.0)  # points straight at `near`, not `far`
+    assert spawned[0].owner.player_index() == 0
+    assert weapon_entry_for_projectile_type_id(spawned[0].type_id).weapon_id == WeaponId.ASSAULT_RIFLE
+
+
+def test_momentum_shot_carries_the_half_damage_penalty() -> None:
+    from crimson.creatures.runtime import MOMENTUM_DAMAGE_MULT
+
+    # 0% crit chance (UTILITY archetype) keeps crit_mult deterministic, so the
+    # only thing touching it is Domino Effect's own penalty.
+    state, player, pool = _kill_setup(weapon_id=WeaponId.SHRINKIFIER_5K, momentum=True)
+    pool.handle_death(0, state=state, players=[player], rng=state.rng, world_width=1024.0, world_height=1024.0, fx_queue=None)
+
+    spawned = list(state.projectiles.iter_active())
+    assert len(spawned) == 1
+    assert_float_close(spawned[0].crit_mult, MOMENTUM_DAMAGE_MULT)
+
+
+def test_momentum_fires_exactly_one_rocket_from_a_swarmer_dump_weapon() -> None:
+    # Regression: Mini-Rocket Swarmers' SwarmerDumpMode reads ammo directly as
+    # "how many rockets to dump this call" - a full-clip snapshot (5 ammo)
+    # turned one kill's bonus shot into a 5-rocket, full-damage barrage, since
+    # those rockets land in the secondary pool the old code never touched.
+    from crimson.creatures.runtime import MOMENTUM_DAMAGE_MULT
+    from crimson.weapon_runtime.crit import CRIT_MULTIPLIER
+
+    state, player, pool = _kill_setup(weapon_id=WeaponId.MINI_ROCKET_SWARMERS, momentum=True)
+    assert player.weapon.clip_size > 1  # sanity: a full clip would be more than one rocket
+    pool.handle_death(0, state=state, players=[player], rng=state.rng, world_width=1024.0, world_height=1024.0, fx_queue=None)
+
+    assert not any(entry.active for entry in state.projectiles.entries)
+    secondary = [entry for entry in state.secondary_projectiles.entries if entry.active]
+    assert len(secondary) == 1
+    # This weapon has a nonzero (5%) crit chance, so the raw multiplier before
+    # the penalty is either 1.0 or CRIT_MULTIPLIER depending on that private
+    # roll - assert the penalty is applied to whichever one it was, rather
+    # than assuming a non-crit (which makes this flaky under full-suite RNG
+    # state instead of a fresh interpreter).
+    ratio = float(secondary[0].crit_mult) / MOMENTUM_DAMAGE_MULT
+    assert ratio == pytest.approx(1.0) or ratio == pytest.approx(CRIT_MULTIPLIER)
 
 
 def test_momentum_does_nothing_without_the_perk() -> None:
@@ -268,6 +318,35 @@ def test_momentum_does_nothing_without_the_perk() -> None:
     pool.handle_death(0, state=state, players=[player], rng=state.rng, world_width=1024.0, world_height=1024.0, fx_queue=None)
 
     assert len(list(state.projectiles.iter_active())) == 0
+
+
+def test_momentum_shot_does_not_chain_off_its_own_kill() -> None:
+    # A Domino Effect shot's owner is tagged (OwnerRef.via_domino_effect) so
+    # that if it kills something, that kill doesn't spawn another free shot.
+    state, player, pool = _kill_setup(weapon_id=WeaponId.PISTOL, momentum=True)
+    pool.handle_death(0, state=state, players=[player], rng=state.rng, world_width=1024.0, world_height=1024.0, fx_queue=None)
+
+    spawned = [entry for entry in state.projectiles.entries if entry.active]
+    assert len(spawned) == 1
+    assert spawned[0].owner.via_domino_effect is True
+
+    # Simulate that shot landing a killing blow on `near`.
+    near = pool.entries[2]
+    near.hp = 0.0
+    near.max_hp = 100.0
+    near.lifecycle_stage = CREATURE_LIFECYCLE_ALIVE
+    near.last_hit_owner = spawned[0].owner
+
+    far = pool.entries[3]
+    far.active = True
+    far.pos = Vec2(300.0, 0.0)
+    far.hp = 100.0
+    far.max_hp = 100.0
+
+    before_count = sum(1 for entry in state.projectiles.entries if entry.active)
+    pool.handle_death(2, state=state, players=[player], rng=state.rng, world_width=1024.0, world_height=1024.0, fx_queue=None)
+    after_count = sum(1 for entry in state.projectiles.entries if entry.active)
+    assert after_count == before_count  # no new chained shot
 
 
 # --- Cold Snap ---------------------------------------------------------

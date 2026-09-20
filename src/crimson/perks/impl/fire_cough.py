@@ -14,6 +14,7 @@ from ...projectiles.types import ProjectileTemplateId
 from ...rng_caller_static import RngCallerStatic
 from ..helpers import perk_active
 from ..ids import PerkId
+from ..impl.like_clockwork import like_clockwork_rate_mult
 from ..runtime.hook_types import PerkHooks
 from ..runtime.player_tick_context import PlayerPerkTickCtx
 
@@ -23,7 +24,10 @@ def tick_fire_cough(ctx: PlayerPerkTickCtx) -> None:
         ctx.player.fire_cough_timer = 0.0
         return
 
-    ctx.player.fire_cough_timer = x87_pc24_add(ctx.player.fire_cough_timer, ctx.dt)
+    ctx.player.fire_cough_timer = x87_pc24_add(
+        ctx.player.fire_cough_timer,
+        ctx.dt * like_clockwork_rate_mult(ctx.perk_player),
+    )
     if ctx.player.fire_cough_timer <= ctx.state.perk_intervals.fire_cough:
         return
 

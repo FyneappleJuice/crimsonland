@@ -164,6 +164,32 @@ class PlayerState(msgspec.Struct):
     # player actually loses health (weapon_runtime/../player_damage.py).
     adrenaline_rush_window_timer: float = 0.0
 
+    # Rewrite-only: Pendulum - flips each time a reload completes (natural or
+    # forced). False = damage phase, True = fire-rate phase. The snapshot
+    # field freezes whichever phase was active when a Fire Bullets / Weapon
+    # Power Up bonus was granted, for that bonus's whole duration.
+    pendulum_phase: bool = False
+    pendulum_snapshot_phase: bool = False
+
+    # Rewrite-only: Bane of Legends - counts down from 5.0 after a kill; the
+    # +30% bonus is active while this is > 0 (creatures/runtime.py sets it).
+    bane_of_legends_timer: float = 0.0
+
+    # Rewrite-only: Soul Tether - overheal-turned-shield. Absorbed before HP
+    # in player_damage.py; degenerates 5s after last gaining any shield.
+    soul_tether_shield: float = 0.0
+    soul_tether_decay_delay_timer: float = 0.0
+
+    # Rewrite-only: Hollow Form - hollow_form_timer counts down to the next
+    # clone spawn. When it fires, hollow_form_snapshot holds a frozen copy of
+    # the player (weapon, perks, active powerup timers) that stands at
+    # hollow_form_pos and fires on its own for hollow_form_active_timer
+    # seconds (perks/impl/hollow_form.py), then the snapshot is cleared.
+    hollow_form_timer: float = 0.0
+    hollow_form_active_timer: float = 0.0
+    hollow_form_snapshot: PlayerState | None = None
+    hollow_form_pos: Vec2 = Vec2()
+
     speed_bonus_timer: float = 0.0
     shield_timer: float = 0.0
     fire_bullets_timer: float = 0.0

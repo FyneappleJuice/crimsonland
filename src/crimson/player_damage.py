@@ -15,6 +15,7 @@ from grim.sfx_map import SfxId
 from .math_parity import f32, x87_pc24_add, x87_pc24_mul, x87_pc24_sub
 from .perks import PerkId
 from .perks.helpers import perk_active
+from .perks.impl.soul_tether import soul_tether_absorb
 from .progression import refresh_player_stats
 from .rng_caller_static import RngCallerStatic
 from .sim.state_types import GameplayState, PlayerState
@@ -126,7 +127,9 @@ def player_take_damage(
             if (state.rng.rand_tagged(RngCallerStatic.PLAYER_TAKE_DAMAGE_HIGHLANDER) % 10) == 0:
                 player.health = 0.0
         else:
-            player.health = x87_pc24_sub(f32(player.health), damage_scaled)
+            # Rewrite-only: Soul Tether's shield absorbs before health does.
+            remaining_damage = soul_tether_absorb(player, float(damage_scaled))
+            player.health = x87_pc24_sub(f32(player.health), f32(remaining_damage))
 
         if floor > 0.0:
             player.health = max(float(floor), float(player.health))
@@ -203,5 +206,7 @@ def player_take_projectile_damage(state: GameplayState, player: PlayerState, dam
     if float(player.shield_timer) > 0.0:
         return 0.0
 
+    # Rewrite-only: Soul Tether's shield absorbs before health does.
+    dmg = soul_tether_absorb(player, dmg)
     player.health -= dmg
     return dmg

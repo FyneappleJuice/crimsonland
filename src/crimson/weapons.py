@@ -104,6 +104,20 @@ class Weapon(msgspec.Struct, frozen=True):
     damage_scale: float
     pellet_count: int
 
+# Rewrite-only: every crit-eligible weapon's damage_scale below is baked-down
+# from its original native value by /(1 + weapon_runtime.crit's per-archetype
+# crit chance) - e.g. Pistol's native 4.1 -> 3.727... at 10% crit chance -
+# so that adding crit chance as a mechanic didn't silently buff every
+# weapon's average DPS. This replaces an earlier runtime "compensation"
+# multiplier that did the same cancellation on every hit instead of once,
+# here, in the table. See tests/weapons/test_damage_scale_crit_baseline.py,
+# which recomputes these from the live archetype table and fails if either
+# drifts out of sync with the other.
+#
+# Explosive Payload's blast-scale calibration intentionally keeps its own,
+# separate snapshot of the *original* (pre-compensation) values
+# (projectiles/runtime/projectile_pool.py's _EXPLOSIVE_PAYLOAD_NATIVE_DAMAGE_SCALE)
+# so this rebalance doesn't quietly shift its tuning.
 WEAPON_TABLE = [
     Weapon(
         weapon_id=WeaponId.PISTOL,
@@ -118,7 +132,7 @@ WEAPON_TABLE = [
         icon_index=0,
         flags=5,
         travel_budget=55,
-        damage_scale=4.1,
+        damage_scale=3.7272727272727266,
         pellet_count=1,
     ),
     Weapon(
@@ -134,7 +148,7 @@ WEAPON_TABLE = [
         icon_index=1,
         flags=1,
         travel_budget=50,
-        damage_scale=1.0,
+        damage_scale=0.8333333333333334,
         pellet_count=1,
     ),
     Weapon(
@@ -150,7 +164,7 @@ WEAPON_TABLE = [
         icon_index=2,
         flags=1,
         travel_budget=60,
-        damage_scale=1.2,
+        damage_scale=1.1428571428571428,
         pellet_count=12,
     ),
     Weapon(
@@ -166,7 +180,7 @@ WEAPON_TABLE = [
         icon_index=3,
         flags=1,
         travel_budget=45,
-        damage_scale=1.0,
+        damage_scale=0.9523809523809523,
         pellet_count=12,
     ),
     Weapon(
@@ -182,7 +196,7 @@ WEAPON_TABLE = [
         icon_index=4,
         flags=5,
         travel_budget=45,
-        damage_scale=1.0,
+        damage_scale=0.9523809523809523,
         pellet_count=1,
     ),
     Weapon(
@@ -198,7 +212,7 @@ WEAPON_TABLE = [
         icon_index=5,
         flags=1,
         travel_budget=215,
-        damage_scale=1.0,
+        damage_scale=0.8333333333333334,
         pellet_count=1,
     ),
     Weapon(
@@ -214,7 +228,7 @@ WEAPON_TABLE = [
         icon_index=6,
         flags=3,
         travel_budget=45,
-        damage_scale=1.0,
+        damage_scale=0.9523809523809523,
         pellet_count=1,
     ),
     Weapon(
@@ -246,7 +260,7 @@ WEAPON_TABLE = [
         icon_index=8,
         flags=None,
         travel_budget=30,
-        damage_scale=5.0,
+        damage_scale=4.166666666666667,
         pellet_count=1,
     ),
     Weapon(
@@ -262,7 +276,7 @@ WEAPON_TABLE = [
         icon_index=9,
         flags=None,
         travel_budget=45,
-        damage_scale=1.0,
+        damage_scale=0.9523809523809523,
         pellet_count=3,
     ),
     Weapon(
@@ -278,7 +292,7 @@ WEAPON_TABLE = [
         icon_index=10,
         flags=None,
         travel_budget=35,
-        damage_scale=2.1,
+        damage_scale=2.0,
         pellet_count=1,
     ),
     Weapon(
@@ -294,7 +308,7 @@ WEAPON_TABLE = [
         icon_index=11,
         flags=8,
         travel_budget=45,
-        damage_scale=1.0,
+        damage_scale=0.8695652173913044,
         pellet_count=1,
     ),
     Weapon(
@@ -310,7 +324,7 @@ WEAPON_TABLE = [
         icon_index=12,
         flags=8,
         travel_budget=45,
-        damage_scale=1.0,
+        damage_scale=0.8333333333333334,
         pellet_count=1,
     ),
     Weapon(
@@ -326,7 +340,7 @@ WEAPON_TABLE = [
         icon_index=13,
         flags=None,
         travel_budget=45,
-        damage_scale=1.0,
+        damage_scale=0.9523809523809523,
         pellet_count=14,
     ),
     Weapon(
@@ -374,7 +388,7 @@ WEAPON_TABLE = [
         icon_index=16,
         flags=8,
         travel_budget=45,
-        damage_scale=1.0,
+        damage_scale=0.9523809523809523,
         pellet_count=1,
     ),
     Weapon(
@@ -390,7 +404,7 @@ WEAPON_TABLE = [
         icon_index=17,
         flags=8,
         travel_budget=45,
-        damage_scale=1.0,
+        damage_scale=0.9523809523809523,
         pellet_count=1,
     ),
     Weapon(
@@ -406,7 +420,7 @@ WEAPON_TABLE = [
         icon_index=18,
         flags=8,
         travel_budget=20,
-        damage_scale=1.0,
+        damage_scale=0.9523809523809523,
         pellet_count=1,
     ),
     Weapon(
@@ -422,7 +436,7 @@ WEAPON_TABLE = [
         icon_index=19,
         flags=1,
         travel_budget=45,
-        damage_scale=1.0,
+        damage_scale=0.9523809523809523,
         pellet_count=4,
     ),
     Weapon(
@@ -438,7 +452,7 @@ WEAPON_TABLE = [
         icon_index=20,
         flags=8,
         travel_budget=15,
-        damage_scale=3.0,
+        damage_scale=2.5,
         pellet_count=1,
     ),
     Weapon(
@@ -454,7 +468,7 @@ WEAPON_TABLE = [
         icon_index=21,
         flags=8,
         travel_budget=20,
-        damage_scale=1.4,
+        damage_scale=1.3333333333333333,
         pellet_count=1,
     ),
     Weapon(
@@ -470,7 +484,7 @@ WEAPON_TABLE = [
         icon_index=22,
         flags=None,
         travel_budget=10,
-        damage_scale=16.7,
+        damage_scale=14.521739130434783,
         pellet_count=1,
     ),
     Weapon(
@@ -502,7 +516,7 @@ WEAPON_TABLE = [
         icon_index=24,
         flags=8,
         travel_budget=20,
-        damage_scale=11.0,
+        damage_scale=9.166666666666668,
         pellet_count=1,
     ),
     Weapon(
@@ -518,7 +532,7 @@ WEAPON_TABLE = [
         icon_index=25,
         flags=8,
         travel_budget=10,
-        damage_scale=0.5,
+        damage_scale=0.4166666666666667,
         pellet_count=1,
     ),
     Weapon(
@@ -539,7 +553,7 @@ WEAPON_TABLE = [
         icon_index=25,
         flags=None,
         travel_budget=45,
-        damage_scale=1.0,
+        damage_scale=0.8333333333333334,
         pellet_count=1,
     ),
     Weapon(
@@ -555,7 +569,7 @@ WEAPON_TABLE = [
         icon_index=25,
         flags=None,
         travel_budget=10,
-        damage_scale=28.0,
+        damage_scale=24.347826086956523,
         pellet_count=1,
     ),
     Weapon(
@@ -571,7 +585,7 @@ WEAPON_TABLE = [
         icon_index=28,
         flags=None,
         travel_budget=30,
-        damage_scale=6.0,
+        damage_scale=5.0,
         pellet_count=1,
     ),
     Weapon(
@@ -587,7 +601,7 @@ WEAPON_TABLE = [
         icon_index=30,
         flags=1,
         travel_budget=45,
-        damage_scale=1.0,
+        damage_scale=0.9523809523809523,
         pellet_count=1,
     ),
     Weapon(
@@ -603,7 +617,7 @@ WEAPON_TABLE = [
         icon_index=31,
         flags=1,
         travel_budget=45,
-        damage_scale=1.0,
+        damage_scale=0.9523809523809523,
         pellet_count=8,
     ),
     Weapon(
@@ -670,7 +684,7 @@ WEAPON_TABLE = [
         icon_index=0,
         flags=5,
         travel_budget=55,
-        damage_scale=4.1,
+        damage_scale=3.7272727272727266,
         pellet_count=1,
     ),
     Weapon(
@@ -718,7 +732,7 @@ WEAPON_TABLE = [
         icon_index=42,
         flags=8,
         travel_budget=10,
-        damage_scale=1.0,
+        damage_scale=0.8333333333333334,
         pellet_count=1,
     ),
     Weapon(
@@ -750,7 +764,7 @@ WEAPON_TABLE = [
         icon_index=44,
         flags=1,
         travel_budget=60,
-        damage_scale=0.25,
+        damage_scale=0.23809523809523808,
         pellet_count=1,
     ),
     Weapon(

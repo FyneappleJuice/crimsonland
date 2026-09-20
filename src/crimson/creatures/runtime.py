@@ -25,6 +25,7 @@ from ..bonuses import BonusId
 from ..bonuses.pool import BONUS_SPAWN_MARGIN
 from ..effects import EffectPool, FxQueue, FxQueueRotated
 from ..gameplay import (
+    _aim_heading_from_aim_point_native,
     _award_experience_once_from_reward,
     award_experience,
     award_experience_from_reward,
@@ -48,6 +49,7 @@ from ..math_parity import (
 from ..owner_ref import OwnerRef
 from ..perks import PerkId
 from ..perks.helpers import perk_active
+from ..perks.impl.bane_of_legends import BANE_OF_LEGENDS_WINDOW_DURATION
 from ..player_damage import PlayerDeathRuntime, player_take_damage
 from ..projectiles.types import ProjectileTemplateId
 from ..rng_caller_static import RngCallerStatic
@@ -237,6 +239,13 @@ def _owner_to_player_index(owner: OwnerRef) -> int | None:
     return owner.player_index()
 
 
+# Rewrite-only: Domino Effect's free shot is fired from a full snapshot of
+# the killer (weapon, perks, active powerup timers) the same way Hollow
+# Form's clone is - real fire_weapon(), not a flat placeholder projectile -
+# but at half damage, since it's a freebie riding on a kill you already got.
+MOMENTUM_DAMAGE_MULT = 0.5
+
+
 def _fire_momentum_shot(
     pool: "CreaturePool",
     dead_creature: "CreatureState",
@@ -244,6 +253,7 @@ def _fire_momentum_shot(
     dying_idx: int,
     killer: PlayerState,
     state: GameplayState,
+    players: list[PlayerState] | None = None,
 ) -> None:
     nearest_idx: int | None = None
     nearest_dist = None
@@ -262,16 +272,59 @@ def _fire_momentum_shot(
         return
 
     target = pool._entries[nearest_idx]
-    angle = math.atan2(float(target.pos.y) - dy0, float(target.pos.x) - dx0)
+
+    from ..sim.input import PlayerInput
+    from ..weapon_runtime import WeaponFireCtx, fire_weapon
+
+    clone = msgspec.structs.replace(
+        killer,
+        weapon=msgspec.structs.replace(
+            killer.weapon,
+            # Exactly one shot's worth, not a full clip: some weapons (Mini-
+            # Rocket Swarmers' SwarmerDumpMode) dump their *entire* clip as
+            # rockets in a single fire_weapon() call, keyed directly off this
+            # ammo value - a full clip here would turn "one bonus shot" into
+            # "unload the whole magazine" for those weapons.
+            ammo=1.0,
+            reload_active=False,
+            reload_timer=0.0,
+            shot_cooldown=0.0,
+        ),
+    )
+    clone.pos = dead_creature.pos
+    clone.aim = target.pos
+    # Not a plain atan2: aim_heading feeds the muzzle-position formula
+    # (native_fire_muzzle_pos), which uses this specific fpatan(pos - aim) -
+    # HALF_PI convention - see gameplay.py's _aim_heading_from_aim_point_native.
+    clone.aim_heading = _aim_heading_from_aim_point_native(clone.pos, target.pos)
+
+    before_active = {i for i, entry in enumerate(state.projectiles.entries) if entry.active}
+    before_secondary_active = {i for i, entry in enumerate(state.secondary_projectiles.entries) if entry.active}
     try:
-        state.projectiles.spawn(
-            pos=dead_creature.pos,
-            angle=angle,
-            type_id=ProjectileTemplateId.PISTOL,
-            owner=OwnerRef.from_player(int(killer.index)),
+        fire_weapon(
+            WeaponFireCtx(
+                player=clone,
+                input_state=PlayerInput(aim=target.pos, fire_down=True),
+                dt=0.016,
+                state=state,
+                creatures=pool._entries,
+                players=players if players is not None else [killer],
+            ),
         )
     except Exception:
-        pass
+        return
+    for i, entry in enumerate(state.projectiles.entries):
+        if entry.active and i not in before_active:
+            entry.crit_mult = float(entry.crit_mult) * MOMENTUM_DAMAGE_MULT
+            # Tag the owner (not the projectile) so a kill this shot lands
+            # carries the flag all the way to creature.last_hit_owner, which
+            # is exactly what _start_death checks - no need to plumb a new
+            # field through the whole hit-resolution call chain.
+            entry.owner = msgspec.structs.replace(entry.owner, via_domino_effect=True)
+    for i, entry in enumerate(state.secondary_projectiles.entries):
+        if entry.active and i not in before_secondary_active:
+            entry.crit_mult = float(entry.crit_mult) * MOMENTUM_DAMAGE_MULT
+            entry.owner = msgspec.structs.replace(entry.owner, via_domino_effect=True)
 
 
 def pack_bonus_on_death_args(bonus_id: BonusId, amount_override: int) -> int:
@@ -1995,9 +2048,20 @@ class CreaturePool:
             )
 
         # Rewrite-only: Momentum - a kill fires a free shot at the nearest
-        # other living creature, from wherever the kill happened.
-        if killer is not None and perk_active(killer, PerkId.MOMENTUM):
-            _fire_momentum_shot(self, creature, dying_idx=int(idx), killer=killer, state=state)
+        # other living creature, from wherever the kill happened. Guarded
+        # against a Domino Effect shot killing something and re-triggering
+        # another one (see OwnerRef.via_domino_effect).
+        if (
+            killer is not None
+            and perk_active(killer, PerkId.MOMENTUM)
+            and not creature.last_hit_owner.via_domino_effect
+        ):
+            _fire_momentum_shot(self, creature, dying_idx=int(idx), killer=killer, state=state, players=players)
+
+        # Rewrite-only: Bane of Legends - a kill opens/refreshes the 5s
+        # bonus-damage window (perks/impl/bane_of_legends.py ticks it down).
+        if killer is not None and perk_active(killer, PerkId.BANE_OF_LEGENDS):
+            killer.bane_of_legends_timer = BANE_OF_LEGENDS_WINDOW_DURATION
 
         return CreatureDeath(
             index=int(idx),

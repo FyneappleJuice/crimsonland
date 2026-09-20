@@ -9,6 +9,7 @@ from grim.rand import CrandLike
 
 from ..effects import FxQueue
 from ..math_parity import f32
+from ..perks.impl.pendulum import pendulum_snapshot_on_bonus_pickup
 from ..projectiles.types import ProjectileHit
 from ..rng_caller_static import RngCallerStatic
 from .apply_context import BonusApplyCtx, bonus_apply_seconds
@@ -20,6 +21,10 @@ class LargeHitDecalRuntime(msgspec.Struct):
 
 
 def apply_fire_bullets(ctx: BonusApplyCtx) -> None:
+    # Rewrite-only: Pendulum snapshots whichever phase is active right now, so
+    # a reload mid-buff can't change what this pickup is worth.
+    pendulum_snapshot_on_bonus_pickup(ctx.player)
+
     should_register = float(ctx.player.fire_bullets_timer) <= 0.0
     if len(ctx.players) > 1:
         should_register = (

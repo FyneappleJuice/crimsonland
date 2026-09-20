@@ -110,6 +110,10 @@ def draw_world(
             draw_freeze_overlay(render_ctx, ctx=draw_ctx)
         with profile_pass("players_alive"):
             draw_players(render_ctx, ctx=draw_ctx, alive=True)
+            # Not native: Hollow Form's clone, drawn dimmed right after the
+            # real players so it layers on top of dead-player corpses but
+            # under projectiles/effects like everything else here.
+            draw_hollow_form_clones(render_ctx, ctx=draw_ctx)
             # Not native: red health ring + clip count anchored to the player,
             # replacing the top-of-screen heart / health bar / ammo pips.
             draw_players_status(
@@ -265,6 +269,25 @@ def draw_players(render_ctx: WorldRenderCtx, *, ctx: WorldDrawContext, alive: bo
         if not alive and player.health > 0.0:
             continue
         draw_player(render_ctx, player, ctx=ctx)
+
+
+# Not native: Hollow Form's clone renders as the same trooper sprite, dimmed
+# so it still reads as an apparition rather than a second real player.
+_HOLLOW_FORM_CLONE_ALPHA_MULT = 0.65
+
+
+def draw_hollow_form_clones(render_ctx: WorldRenderCtx, *, ctx: WorldDrawContext) -> None:
+    ghost_ctx: WorldDrawContext | None = None
+    for player in render_ctx.frame.players:
+        snapshot = player.hollow_form_snapshot
+        if snapshot is None:
+            continue
+        if ghost_ctx is None:
+            ghost_ctx = msgspec.structs.replace(
+                ctx,
+                entity_alpha=ctx.entity_alpha * _HOLLOW_FORM_CLONE_ALPHA_MULT,
+            )
+        draw_player(render_ctx, snapshot, ctx=ghost_ctx)
 
 
 def iter_active_creature_overlay_pass(creatures: Sequence[CreatureState]) -> Iterator[CreatureState]:

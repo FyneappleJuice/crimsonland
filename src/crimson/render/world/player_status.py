@@ -90,6 +90,19 @@ def draw_player_status(
             col = rl.Color(210, 30, 30, int(225 * a))
         rl.draw_ring(center, r_in, r_out, start, end, _RING_SEGMENTS, col)
 
+    # Not native: Soul Tether's shield, overlaid on the same ring in blue.
+    # Values above 100 just read as a full loop - the number itself is
+    # uncapped, only the ring display saturates.
+    shield = float(player.soul_tether_shield)
+    if shield > 0.0:
+        shield_ratio = clamp(shield / 100.0, 0.0, 1.0)
+        shield_start = -90.0
+        shield_end = shield_start + 360.0 * shield_ratio
+        rl.draw_ring(
+            center, r_in, r_out, shield_start, shield_end, _RING_SEGMENTS,
+            rl.Color(60, 150, 255, int(210 * a)),
+        )
+
     # Current clip ammo, upper-right of the player.
     font = render_ctx.frame.resources.small_font
     ammo = max(0, int(float(player.weapon.ammo)))

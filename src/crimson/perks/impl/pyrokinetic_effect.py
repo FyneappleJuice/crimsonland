@@ -4,6 +4,7 @@ from ...math_parity import f32, x87_pc24_mul, x87_pc24_sub
 from ...rng_caller_static import RngCallerStatic
 from ..helpers import perk_active
 from ..ids import PerkId
+from ..impl.like_clockwork import like_clockwork_rate_mult
 from ..runtime.effects_context import PerksUpdateEffectsCtx
 from ..runtime.hook_types import PerkHooks
 
@@ -25,7 +26,7 @@ def update_pyrokinetic(ctx: PerksUpdateEffectsCtx) -> None:
         creature = ctx.creatures[target]
         creature.collision_timer = x87_pc24_sub(
             f32(float(creature.collision_timer)),
-            f32(float(ctx.dt)),
+            f32(float(ctx.dt) * like_clockwork_rate_mult(player)),
         )
         if creature.collision_timer < 0.0:
             creature.collision_timer = 0.5

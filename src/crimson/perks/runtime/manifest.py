@@ -5,6 +5,7 @@ from __future__ import annotations
 from ..ids import PerkId
 from ..impl.adrenaline_rush import HOOKS as ADRENALINE_RUSH_HOOKS
 from ..impl.ammo_maniac import HOOKS as AMMO_MANIAC_HOOKS
+from ..impl.bane_of_legends import HOOKS as BANE_OF_LEGENDS_HOOKS
 from ..impl.bandage import HOOKS as BANDAGE_HOOKS
 from ..impl.breathing_room import HOOKS as BREATHING_ROOM_HOOKS
 from ..impl.death_clock import HOOKS as DEATH_CLOCK_HOOKS
@@ -13,6 +14,7 @@ from ..impl.fatal_lottery import HOOKS as FATAL_LOTTERY_HOOKS
 from ..impl.final_revenge import HOOKS as FINAL_REVENGE_HOOKS
 from ..impl.fire_cough import HOOKS as FIRE_COUGH_HOOKS
 from ..impl.grim_deal import HOOKS as GRIM_DEAL_HOOKS
+from ..impl.hollow_form import HOOKS as HOLLOW_FORM_HOOKS
 from ..impl.hot_tempered import HOOKS as HOT_TEMPERED_HOOKS
 from ..impl.infernal_contract import HOOKS as INFERNAL_CONTRACT_HOOKS
 from ..impl.instant_winner import HOOKS as INSTANT_WINNER_HOOKS
@@ -29,6 +31,7 @@ from ..impl.pyrokinetic_effect import HOOKS as PYROKINETIC_HOOKS
 from ..impl.random_weapon import HOOKS as RANDOM_WEAPON_HOOKS
 from ..impl.reflex_boosted import HOOKS as REFLEX_BOOSTED_HOOKS
 from ..impl.regeneration_effect import HOOKS as REGENERATION_HOOKS
+from ..impl.soul_tether import HOOKS as SOUL_TETHER_HOOKS
 from ..impl.thick_skinned import HOOKS as THICK_SKINNED_HOOKS
 from ..impl.thick_skinned import PLUS_HOOKS as THICK_SKINNED_PLUS_HOOKS
 from .apply_context import PerkApplyHandler
@@ -65,6 +68,9 @@ PERK_HOOKS_IN_ORDER: tuple[PerkHooks, ...] = (
     OVERDUE_HOOKS,
     KINETIC_DISCIPLINE_HOOKS,
     ADRENALINE_RUSH_HOOKS,
+    BANE_OF_LEGENDS_HOOKS,
+    HOLLOW_FORM_HOOKS,
+    SOUL_TETHER_HOOKS,
 )
 
 
