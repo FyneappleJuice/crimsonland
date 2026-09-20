@@ -118,7 +118,7 @@ def perk_generate_choices(
     flamethrower_id = WeaponId.FLAMETHROWER
 
     pyromaniac_allowed = player_weapon_id == flamethrower_id
-    if not state.preserve_bugs and int(player_count) > 1:
+    if int(player_count) > 1:
         pyromaniac_allowed = False
         source_players = players if players is not None else [player]
         for source_player in source_players:
@@ -128,12 +128,25 @@ def perk_generate_choices(
                 pyromaniac_allowed = True
                 break
 
+    # Rewrite-only: pick directly from the offerable perks instead of rolling
+    # against the full 1..PERK_ID_MAX range and rejecting misses. Native
+    # `rand() % PERK_ID_MAX` makes every offer roll sensitive to the *total*
+    # perk count, so adding or removing any PerkId - even one unrelated to
+    # what's actually being offered - reshuffles every future roll (see
+    # [[project-codebase-optimization-audit]]; this is exactly what broke the
+    # RNG-reference tests below whenever the roster changed). Picking
+    # uniformly from the already-eligible list removes that dependency
+    # without changing the fairness of the pick: every offerable perk was
+    # already equally likely to survive the native reject loop, so skipping
+    # the guaranteed-wasted rolls on ineligible ids doesn't favor any of the
+    # eligible ones over another.
+    _eligible_indices = [i for i, ok in enumerate(offerable_mask) if ok]
+
     def _select_random_offer() -> PerkId:
-        for _ in range(1000):
-            perk_index = state.rng.rand_tagged(RngCallerStatic.PERK_SELECT_RANDOM) % PERK_ID_MAX + 1
-            if offerable_mask[perk_index]:
-                return PerkId(perk_index)
-        return PerkId.INSTANT_WINNER
+        if not _eligible_indices:
+            return PerkId.INSTANT_WINNER
+        pick = state.rng.rand_tagged(RngCallerStatic.PERK_SELECT_RANDOM) % len(_eligible_indices)
+        return PerkId(_eligible_indices[pick])
 
     # `perks_generate_choices` always fills a fixed array of 7 entries, even if the UI
     # only shows 5/6 (Perk Expert/Master). Preserve RNG consumption by generating the
@@ -151,6 +164,22 @@ def perk_generate_choices(
         attempts = 0
         while True:
             attempts += 1
+
+            # Bugfix: every rejection below used to `continue` unconditionally,
+            # which meant a scenario where every possible draw is rejected for
+            # the same reason (e.g. Pyromaniac is the only eligible perk and
+            # it's blocked, or the only eligible perk is already chosen this
+            # batch) span the loop forever - none of those `continue`s ever
+            # reached the old attempts cap that lived further down. Checking
+            # the cap first, unconditionally, guarantees termination; falling
+            # back to the always-safe, always-stackable Instant Winner (rather
+            # than accepting whatever was last rejected) matches the same
+            # fallback `_select_random_offer`/`perk_select_random` already use
+            # when they can't find anything valid either.
+            if attempts > 29_999:
+                perk_id = PerkId.INSTANT_WINNER
+                break
+
             perk_id = _select_random_offer()
 
             # Native gates this on player-1 weapon only. In default mode, allow
@@ -178,7 +207,7 @@ def perk_generate_choices(
             if perk_id in choices[:choice_index]:
                 continue
 
-            if stackable or int(player_perk_counts[int(perk_id)]) < 1 or attempts > 29_999:
+            if stackable or int(player_perk_counts[int(perk_id)]) < 1:
                 break
 
         choices[choice_index] = perk_id
