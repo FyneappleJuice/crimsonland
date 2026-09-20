@@ -2,7 +2,21 @@ from __future__ import annotations
 
 from enum import IntEnum
 
-
+# Every member below is a real native return address, used to replay/verify
+# the original binary's exact `crt_rand()` call order for ported systems.
+#
+# Rewrite-only (non-ported) content should NOT add new members here. A
+# `REWRITE_*` synthetic-caller-id convention used to exist for this, but it
+# bought new content a parity-grade byte-exactness tax (a shared, position-
+# sensitive rng stream) it never needed - adding or removing a PerkId, for
+# example, has nothing to do with a rewrite-only perk's own dice rolls, yet
+# threading them through this same stream made every such roll sensitive to
+# unrelated changes elsewhere. New content that needs randomness should use
+# its own private `random.Random(<seed>)` instance instead (see
+# `_EVASION_RNG` in creatures/rarity.py, `_CRIT_RNG` in weapon_runtime/crit.py,
+# or `_HOLLOW_FORM_RNG` in perks/impl/hollow_form.py for the pattern) - it
+# stays perfectly deterministic and replayable on its own, without being
+# entangled with everything else.
 class RngCallerStatic(IntEnum):
     BONUS_PICK_RANDOM_TYPE_ROLL = 0x004124A5
     BONUS_PICK_RANDOM_TYPE_ENERGIZER = 0x004124D6
@@ -389,16 +403,6 @@ class RngCallerStatic(IntEnum):
     WEAPON_PICK_RANDOM_AVAILABLE_REROLL_PICK = 0x00452CFA
 
     GAME_FRAME_UPDATE_DISCARDED = 0x0040CAC7
-
-    # Synthetic caller ids reserve the high range so they cannot be
-    # mistaken for native return addresses from the main executable.
-    REWRITE_JINXED_ACCIDENT_TARGET_PICK = 0xF1000001
-    REWRITE_STATS_MENU_EASTER_ROLL = 0xF1000006
-    REWRITE_STATS_MENU_EASTER_TEXT_X = 0xF1000007
-    REWRITE_MAPS_NONNATIVE_BONUS_PICK = 0xF1000008
-    REWRITE_ARC_GUN_CHAIN_PICK = 0xF1000009
-    REWRITE_MONSTER_AFFIX_PICK = 0xF1000010
-    REWRITE_HIT_LIST_MARK_PICK = 0xF1000011
 
 
 __all__ = ["RngCallerStatic"]

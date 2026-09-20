@@ -18,7 +18,6 @@ from enum import IntEnum
 
 import msgspec
 
-from ..rng_caller_static import RngCallerStatic
 from .damage_types import CreatureDamageType
 
 # All resistable damage types, for affixes that touch every bucket at once
@@ -38,6 +37,10 @@ _ALL_DAMAGE_TYPES: tuple[int, ...] = (
 # never shifts the replay-tracked state.rng stream (see the Tenet Gun /
 # crit.py precedent).
 _EVASION_RNG = random.Random(0x1D0DE)
+# Not native: which affixes a monster rolls is new content with no native
+# sequence to match, so it gets its own private stream instead of consuming
+# the shared lockstep rng (see docs/design/monster-rarity.md).
+_AFFIX_PICK_RNG = random.Random(0xA5717)
 EVASIVE_DODGE_CHANCE = 0.35
 IRONHIDE_CAP_FRACTION = 0.08
 OVERSHIELD_HIT_COUNT = 3
@@ -187,7 +190,7 @@ def _eligible(tier: int, xp: int) -> list[int]:
     return out
 
 
-def roll_affixes(tier: int, xp: int, rng) -> tuple[int, ...]:
+def roll_affixes(tier: int, xp: int) -> tuple[int, ...]:
     want = _TIER_AFFIX_COUNT.get(int(tier), 0)
     pool = _eligible(int(tier), int(xp))
     chosen: list[int] = []
@@ -195,7 +198,7 @@ def roll_affixes(tier: int, xp: int, rng) -> tuple[int, ...]:
     guard = 0
     while len(chosen) < want and pool and guard < 64:
         guard += 1
-        pick = pool[int(rng.rand_tagged(RngCallerStatic.REWRITE_MONSTER_AFFIX_PICK)) % len(pool)]
+        pick = _AFFIX_PICK_RNG.choice(pool)
         if pick in chosen:
             continue
         spec = AFFIXES[pick]
@@ -271,7 +274,7 @@ def _resist(init, damage_type: int, mult: float) -> None:
     d[int(damage_type)] = d.get(int(damage_type), 1.0) * mult
 
 
-def apply_rarity(init, *, tier: int, player_experience: int, rng) -> None:
+def apply_rarity(init, *, tier: int, player_experience: int) -> None:
     """Mutate a survival CreatureInit: apply tier bump + rolled affixes."""
     tier = int(tier)
     if tier <= 0:
@@ -284,7 +287,7 @@ def apply_rarity(init, *, tier: int, player_experience: int, rng) -> None:
     speed = float(init.move_speed or 1.0)
     contact = float(init.contact_damage or 0.0)
 
-    affixes = roll_affixes(tier, xp, rng)
+    affixes = roll_affixes(tier, xp)
     reward_mult = _TIER_REWARD_MULT[tier]
     threat = 0
     for aid in affixes:

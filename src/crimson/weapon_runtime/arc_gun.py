@@ -15,6 +15,7 @@ for the renderer to draw for ``ARC_BOLT_LIFETIME`` seconds.
 """
 
 import math
+import random as _random
 
 from grim.geom import Vec2
 from grim.sfx_map import SfxId
@@ -22,8 +23,12 @@ from grim.sfx_map import SfxId
 from ..creatures.damage_types import CreatureDamageType
 from ..math_parity import native_fire_muzzle_pos
 from ..owner_ref import OwnerRef
-from ..rng_caller_static import RngCallerStatic
 from ..sim.state_types import ArcGunState, PlayerState
+
+# Not native: which nearby target the chain jumps to next is rewrite-only
+# content with no native sequence to match, so it gets its own private
+# stream instead of consuming the shared lockstep rng.
+_ARC_CHAIN_RNG = _random.Random(0xACC4A1)
 
 ARC_MAX_RANGE = 430.0
 # The primary target must be this close to the cursor - the arc "forms near the
@@ -91,7 +96,7 @@ def _pick_primary(creatures, *, cursor: Vec2, player_pos: Vec2, max_range: float
     return best_idx
 
 
-def _pick_chain(creatures, *, from_x: float, from_y: float, used: set[int], rng) -> int:
+def _pick_chain(creatures, *, from_x: float, from_y: float, used: set[int]) -> int:
     candidates: list[int] = []
     for idx, creature in enumerate(creatures):
         if idx in used or not creature.active or float(creature.hp) <= 0.0:
@@ -100,8 +105,7 @@ def _pick_chain(creatures, *, from_x: float, from_y: float, used: set[int], rng)
             candidates.append(idx)
     if not candidates:
         return -1
-    pick = int(rng.rand_tagged(RngCallerStatic.REWRITE_ARC_GUN_CHAIN_PICK)) % len(candidates)
-    return candidates[pick]
+    return _ARC_CHAIN_RNG.choice(candidates)
 
 
 def update_arc_gun(
@@ -109,7 +113,6 @@ def update_arc_gun(
     creatures,
     dt: float,
     *,
-    rng,
     creature_damage_runtime,
 ) -> None:
     dt = float(dt)
@@ -167,7 +170,7 @@ def update_arc_gun(
                 )
 
             prev_x, prev_y = cx, cy
-            cur = _pick_chain(creatures, from_x=cx, from_y=cy, used=used, rng=rng)
+            cur = _pick_chain(creatures, from_x=cx, from_y=cy, used=used)
 
         arc.chain = chain
         arc.bolt_timer = ARC_BOLT_LIFETIME

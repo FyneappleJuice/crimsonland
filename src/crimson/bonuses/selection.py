@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import random as _random
 from typing import TYPE_CHECKING
 
 from ..game_modes import GameMode
@@ -75,6 +76,11 @@ _NONNATIVE_BONUS_POOL: tuple[BonusId, ...] = (
     BonusId.ION_OVERLOAD,
 )
 
+# Not native: which rewrite-only bonus fills that dead slot has no native
+# sequence to match, so it gets its own private stream instead of consuming
+# the shared lockstep rng.
+_MAPS_BONUS_RNG = _random.Random(0xBADD5107)
+
 
 def bonus_pick_random_type(pool: BonusPool, state: GameplayState, players: list[PlayerState]) -> BonusId:
     has_fire_bullets_drop = any(entry.bonus_id == BonusId.FIRE_BULLETS and not entry.picked for entry in pool.entries)
@@ -109,10 +115,7 @@ def bonus_pick_random_type(pool: BonusPool, state: GameplayState, players: list[
                     # uniformly (a small extra RNG draw - Maps has no parity
                     # requirement).
                     if state.fork_bonus_in_pool and bonus_value == 15:
-                        pick = state.rng.rand_tagged(
-                            RngCallerStatic.REWRITE_MAPS_NONNATIVE_BONUS_PICK,
-                        ) % len(_NONNATIVE_BONUS_POOL)
-                        bonus_value = int(_NONNATIVE_BONUS_POOL[pick])
+                        bonus_value = int(_MAPS_BONUS_RNG.choice(_NONNATIVE_BONUS_POOL))
                     else:
                         bonus_value = int(BonusId.UNUSED)
                     break

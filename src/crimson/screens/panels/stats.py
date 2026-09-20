@@ -1,18 +1,17 @@
 from __future__ import annotations
 
 import datetime as dt
+import random as _random
 
 from grim.assets import TextureId
 from grim.audio import play_music, play_sfx, stop_music, update_audio
 from grim.fonts.small import draw_small_text
 from grim.geom import Vec2
-from grim.rand import CrandLike
 from grim.raylib_api import rl
 from grim.sfx_map import SfxId
 from grim.terrain_render import GroundRenderer
 
 from ...game.types import GameState
-from ...rng_caller_static import RngCallerStatic
 from ...ui.menu_panel import draw_classic_menu_panel
 from ...ui.perk_menu import UiButtonState, button_draw, button_update, button_width
 from ..assets import require_runtime_resources
@@ -65,11 +64,15 @@ _STATS_EASTER_TRIGGER_ROLL = 3
 _STATS_EASTER_TEXT = "Orbes Volantes Exstare"
 _STATS_EASTER_TEXT_Y = 5.0
 
+# Not native: a purely cosmetic hidden easter egg, so it gets its own private
+# stream instead of consuming the shared lockstep rng.
+_STATS_EASTER_RNG = _random.Random(0xE47E88)
 
-def _stats_menu_easter_roll(current_roll: int, *, rng: CrandLike) -> int:
+
+def _stats_menu_easter_roll(current_roll: int) -> int:
     if int(current_roll) != _STATS_EASTER_ROLL_UNSET:
         return int(current_roll)
-    return int(rng.rand_tagged(RngCallerStatic.REWRITE_STATS_MENU_EASTER_ROLL) % 32)
+    return _STATS_EASTER_RNG.randrange(32)
 
 
 def _is_orbes_volantes_day(today: dt.date) -> bool:
@@ -202,7 +205,6 @@ class StatisticsMenuView:
             update_audio(self.state.audio, dt)
         self.state.stats_menu_easter_egg_roll = _stats_menu_easter_roll(
             self.state.stats_menu_easter_egg_roll,
-            rng=self.state.rng,
         )
         if self._ground is not None:
             self._ground.process_pending()
@@ -338,7 +340,7 @@ class StatisticsMenuView:
             and int(self.state.stats_menu_easter_egg_roll) == _STATS_EASTER_TRIGGER_ROLL
         ):
             self.state.stats_menu_easter_egg_roll = _STATS_EASTER_ROLL_UNSET
-            x = float(self.state.rng.rand_tagged(RngCallerStatic.REWRITE_STATS_MENU_EASTER_TEXT_X) % 64 + 16)
+            x = float(_STATS_EASTER_RNG.randrange(64) + 16)
             draw_small_text(font, _STATS_EASTER_TEXT, Vec2(x, _STATS_EASTER_TEXT_Y), rl.Color(51, 255, 153, 128))
 
         # Buttons.

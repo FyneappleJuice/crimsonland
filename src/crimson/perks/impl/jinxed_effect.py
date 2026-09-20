@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import random as _random
+
 from grim.sfx_map import SfxId
 
 from ...math_parity import f32, x87_pc24_add, x87_pc24_mul, x87_pc24_sub
@@ -10,6 +12,11 @@ from ..ids import PerkId
 from ..impl.like_clockwork import like_clockwork_rate_mult
 from ..runtime.effects_context import PerksUpdateEffectsCtx
 from ..runtime.hook_types import PerkHooks
+
+# Not native: which co-op player an accident targets has no native sequence
+# to match (native Jinxed only ever targets player 0), so it gets its own
+# private stream instead of consuming the shared lockstep rng.
+_JINXED_TARGET_RNG = _random.Random(0x11B0E5)
 
 
 def _award_experience_once_from_reward(*, player: PlayerState, reward_value: float) -> int:
@@ -35,11 +42,7 @@ def _select_jinxed_accident_target(ctx: PerksUpdateEffectsCtx) -> PlayerState:
     if len(alive_players) == 1:
         return alive_players[0]
 
-    pick = (
-        ctx.state.rng.rand_tagged(RngCallerStatic.REWRITE_JINXED_ACCIDENT_TARGET_PICK)
-        % len(alive_players)
-    )
-    return alive_players[pick]
+    return _JINXED_TARGET_RNG.choice(alive_players)
 
 
 def update_jinxed_timer(ctx: PerksUpdateEffectsCtx) -> None:

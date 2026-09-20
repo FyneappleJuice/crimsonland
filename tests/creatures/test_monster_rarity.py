@@ -157,17 +157,17 @@ def _plain_init(**overrides) -> "CreatureInit":
 
 
 def test_glass_frame_penalizes_damage_resist_and_speed(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(R, "roll_affixes", lambda tier, xp, rng: (R.AffixId.GLASS_FRAME,))
+    monkeypatch.setattr(R, "roll_affixes", lambda tier, xp: (R.AffixId.GLASS_FRAME,))
     init = _plain_init()
-    R.apply_rarity(init, tier=1, player_experience=0, rng=_LcgRng(1))
+    R.apply_rarity(init, tier=1, player_experience=0)
     assert init.move_speed == pytest.approx(1.6)
     assert init.damage_taken_mult_by_type[int(CreatureDamageType.BULLET)] == pytest.approx(1.4)
 
 
 def test_feralization_boosts_reward_speed_and_contact(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(R, "roll_affixes", lambda tier, xp, rng: (R.AffixId.FERALIZATION,))
+    monkeypatch.setattr(R, "roll_affixes", lambda tier, xp: (R.AffixId.FERALIZATION,))
     init = _plain_init(contact_damage=5.0)
-    R.apply_rarity(init, tier=2, player_experience=0, rng=_LcgRng(1))
+    R.apply_rarity(init, tier=2, player_experience=0)
     assert init.move_speed == pytest.approx(2.5)
     assert init.contact_damage == pytest.approx(10.0)
     expected_reward = 10.0 * R._TIER_REWARD_MULT[2] * 3.0 * (1.0 + R._THREAT_REWARD_PER_POINT * 3)
@@ -400,9 +400,9 @@ def test_feasting_heals_the_creature_from_contact_damage_it_deals() -> None:
 
 
 def test_on_death_affix_tints_red_regardless_of_tier(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(R, "roll_affixes", lambda tier, xp, rng: (R.AffixId.DETONATING,))
+    monkeypatch.setattr(R, "roll_affixes", lambda tier, xp: (R.AffixId.DETONATING,))
     init = _plain_init()
-    R.apply_rarity(init, tier=3, player_experience=0, rng=_LcgRng(1))  # Apex tier -> gold normally
+    R.apply_rarity(init, tier=3, player_experience=0)  # Apex tier -> gold normally
     expected_r, expected_g, expected_b = R.DEATH_AFFIX_COLOR
     assert init.tint[0] == pytest.approx((expected_r / 255.0) * 0.55 + 1.0 * 0.45)
     assert init.tint[1] == pytest.approx((expected_g / 255.0) * 0.55 + 1.0 * 0.45)
@@ -410,9 +410,9 @@ def test_on_death_affix_tints_red_regardless_of_tier(monkeypatch: pytest.MonkeyP
 
 
 def test_no_on_death_affix_keeps_the_tier_colour(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(R, "roll_affixes", lambda tier, xp, rng: (R.AffixId.OVERGROWN,))
+    monkeypatch.setattr(R, "roll_affixes", lambda tier, xp: (R.AffixId.OVERGROWN,))
     init = _plain_init()
-    R.apply_rarity(init, tier=3, player_experience=0, rng=_LcgRng(1))  # Apex tier -> gold
+    R.apply_rarity(init, tier=3, player_experience=0)  # Apex tier -> gold
     expected_r, expected_g, expected_b = R.RARITY_COLOR[3]
     assert init.tint[0] == pytest.approx((expected_r / 255.0) * 0.55 + 1.0 * 0.45)
     assert init.tint[1] == pytest.approx((expected_g / 255.0) * 0.55 + 1.0 * 0.45)

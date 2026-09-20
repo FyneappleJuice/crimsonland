@@ -1386,7 +1386,7 @@ def build_survival_spawn_creature(pos: Vec2, rng: CrandLike, *, player_experienc
         if c.health is not None:
             c.max_health = c.health
         if tier > 0:
-            _rarity.apply_rarity(c, tier=tier, player_experience=xp, rng=rng)
+            _rarity.apply_rarity(c, tier=tier, player_experience=xp)
 
     if c.tint is not None:
         tint_r, tint_g, tint_b, tint_a = c.tint

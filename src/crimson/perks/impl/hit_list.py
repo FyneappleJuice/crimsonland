@@ -10,10 +10,15 @@ soon as none is active and an Apex monster exists to pick from.
 
 The kill-side bonus increment lives in creatures/runtime.py's death handler
 (same hook Momentum/Bane of Legends use); this file only rolls the mark.
+
+The mark pick uses its own private rng (no native sequence to match) instead
+of the shared lockstep stream, so adding/removing PerkIds or other rewrite
+content never shifts this draw's position.
 """
 
+import random as _random
+
 from ...creatures.rarity import MonsterRarity
-from ...rng_caller_static import RngCallerStatic
 from ..helpers import perk_active
 from ..ids import PerkId
 from ..runtime.effects_context import PerksUpdateEffectsCtx
@@ -21,6 +26,8 @@ from ..runtime.hook_types import PerkHooks
 
 HIT_LIST_BONUS_PER_KILL = 0.01
 HIT_LIST_MAX_BONUS = 0.30
+
+_HIT_LIST_RNG = _random.Random(0x817157)
 
 
 def update_hit_list_mark(ctx: PerksUpdateEffectsCtx) -> None:
@@ -39,8 +46,7 @@ def update_hit_list_mark(ctx: PerksUpdateEffectsCtx) -> None:
             candidates.append(creature)
 
     if candidates:
-        roll = ctx.state.rng.rand_tagged(RngCallerStatic.REWRITE_HIT_LIST_MARK_PICK)
-        candidates[roll % len(candidates)].hit_list_marked = True
+        _HIT_LIST_RNG.choice(candidates).hit_list_marked = True
 
 
 HOOKS = PerkHooks(

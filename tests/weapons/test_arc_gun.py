@@ -40,7 +40,7 @@ def _rng() -> ScriptedCrand:
 
 
 def _resolve(player: PlayerState, creatures, runtime) -> None:
-    update_arc_gun([player], creatures, 0.016, rng=_rng(), creature_damage_runtime=runtime)
+    update_arc_gun([player], creatures, 0.016, creature_damage_runtime=runtime)
 
 
 def test_weapon_is_the_arc_gun() -> None:
@@ -169,6 +169,6 @@ def test_bolt_ages_out() -> None:
     _resolve(player, [], None)
     assert player.arc_gun.bolt_timer > 0.0
 
-    update_arc_gun([player], [], ARC_BOLT_LIFETIME + 0.01, rng=_rng(), creature_damage_runtime=None)
+    update_arc_gun([player], [], ARC_BOLT_LIFETIME + 0.01, creature_damage_runtime=None)
     assert player.arc_gun.bolt_timer == 0.0
     assert player.arc_gun.chain == []

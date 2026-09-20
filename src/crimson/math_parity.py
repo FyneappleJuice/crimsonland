@@ -1,6 +1,31 @@
 from __future__ import annotations
 
-"""Float/trig helpers for native gameplay math parity."""
+"""Float/trig helpers for native gameplay math parity.
+
+`f32()` and the `x87_pc24_*` family exist to reproduce one specific quirk of
+the original binary: it ran on an x87 FPU with the precision-control bits set
+to 24-bit (single precision) mode, so the CPU rounded the result of *every*
+arithmetic op down to float32 before it fed into the next one. Chaining a few
+operations together leaves a distinct rounding fingerprint that plain float64
+math doesn't reproduce - these helpers exist to match that fingerprint, not
+because they're more "correct" (ordinary float64 arithmetic is strictly more
+accurate; this deliberately throws precision away to match old hardware).
+
+That means these helpers only earn their keep when there is original-binary
+behavior to match. Rewrite-only (non-ported) content - a new perk's damage
+math, a new affix's numbers, anything with no native counterpart - should
+just use plain Python floats instead of reaching for `f32()`/`x87_pc24_*`
+out of habit. There's no original computation to reproduce, so wrapping it
+only adds noise. This mirrors the same reasoning `rng_caller_static.py`
+gives for not minting new `REWRITE_*` caller ids on the shared rng stream:
+new content shouldn't be entangled with parity machinery it doesn't need.
+
+Existing rewrite-only code that already uses these helpers was left alone
+when this note was added (2026-09-20) - simplifying it retroactively would
+change already-tuned numbers by tiny amounts, which deserves its own explicit
+decision rather than riding along with a docs-only change. This note only
+governs new code going forward.
+"""
 
 import math
 import struct

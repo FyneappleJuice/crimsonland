@@ -507,7 +507,6 @@ class WorldState(msgspec.Struct):
             self.players,
             self.creatures.entries,
             dt,
-            rng=self.state.rng,
             creature_damage_runtime=step_runtime,
         )
         if self.state.sfx_queue:
