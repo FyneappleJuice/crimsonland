@@ -117,20 +117,20 @@ def test_perk_generate_choices_monster_vision_forced_slot_preserves_native_order
         player_count=1,
         count=7,
     )
-    # Rewrite-only: adding new PerkIds (most recently the Hollow Form batch,
-    # 2026-09-20) raises PERK_ID_MAX each time, which shifts
-    # perk_select_random's `rand % PERK_ID_MAX + 1` modulo against these same
-    # scripted draws - recomputed reference stream, same method as the
-    # earlier "unlock everything" pass. Recompute again (by running, not by
-    # hand) if PerkId count ever changes.
+    # Rewrite-only: removing The Anchor (perk batch reverted, 2026-09-20)
+    # dropped PERK_ID_MAX back down, which shifts perk_select_random's
+    # `rand % PERK_ID_MAX + 1` modulo against these same scripted draws -
+    # recomputed reference stream, same method as the earlier "unlock
+    # everything" pass. Recompute again (by running, not by hand) if PerkId
+    # count ever changes.
     assert choices == [
         PerkId.MONSTER_VISION,
+        PerkId.REGRESSION_BULLETS,
+        PerkId.MR_MELEE,
+        PerkId.PLAGUEBEARER,
+        PerkId.STATIONARY_RELOADER,
+        PerkId.HOT_TEMPERED,
         PerkId.LONG_DISTANCE_RUNNER,
-        PerkId.SOUL_TETHER,
-        PerkId.LIKE_CLOCKWORK,
-        PerkId.FIRE_CAUGH,
-        PerkId.ANXIOUS_LOADER,
-        PerkId.RADIOACTIVE,
     ]
     assert [record.caller for record in rng.records_since()] == [
         RngCallerStatic.PERK_SELECT_RANDOM,
@@ -138,7 +138,8 @@ def test_perk_generate_choices_monster_vision_forced_slot_preserves_native_order
         RngCallerStatic.PERK_SELECT_RANDOM,
         RngCallerStatic.PERK_SELECT_RANDOM,
         RngCallerStatic.PERK_SELECT_RANDOM,
-        RngCallerStatic.PERKS_GENERATE_CHOICES_RARITY_GATE,
+        RngCallerStatic.PERK_SELECT_RANDOM,
+        RngCallerStatic.PERK_SELECT_RANDOM,
         RngCallerStatic.PERK_SELECT_RANDOM,
         RngCallerStatic.PERK_SELECT_RANDOM,
     ]
@@ -272,25 +273,25 @@ def test_perk_generate_choices_degenerate_all_owned_matches_reference_stream() -
     before_calls = rng.calls
     before_state = rng.state
     choices = perk_generate_choices(state, player, game_mode=GameMode.QUESTS, player_count=1, count=7)
-    # Rewrite-only: adding new PerkIds (most recently the Hollow Form batch,
-    # 2026-09-20) raises PERK_ID_MAX each time, which shifts this degenerate
-    # "everything owned" reference stream - recomputed by running, same
-    # method as the earlier "unlock everything" pass.
+    # Rewrite-only: removing The Anchor (perk batch reverted, 2026-09-20)
+    # dropped PERK_ID_MAX back down, which shifts this degenerate "everything
+    # owned" reference stream - recomputed by running, same method as the
+    # earlier "unlock everything" pass.
     assert choices == [
-        PerkId.RANDOM_WEAPON,
         PerkId.INSTANT_WINNER,
         PerkId.RANDOM_WEAPON,
-        PerkId.RANDOM_WEAPON,
         PerkId.INSTANT_WINNER,
-        PerkId.RANDOM_WEAPON,
+        PerkId.INSTANT_WINNER,
+        PerkId.INSTANT_WINNER,
+        PerkId.INSTANT_WINNER,
         PerkId.INSTANT_WINNER,
     ]
     assert_rng_progression(
         rng,
         before_calls=before_calls,
         before_state=before_state,
-        expected_draws=54673,
-        expected_after_state=1147295304,
+        expected_draws=54493,
+        expected_after_state=34078284,
     )
 
 
@@ -318,16 +319,16 @@ def test_perk_generate_choices_caches_offerability_checks(mocker) -> None:
 
     mocker.patch.object(selection_mod, "perk_can_offer", side_effect=_counting_perk_can_offer)
     choices = selection_mod.perk_generate_choices(state, player, game_mode=GameMode.QUESTS, player_count=1, count=7)
-    # Rewrite-only: adding new PerkIds (most recently Pendulum, 2026-09-20)
-    # raises PERK_ID_MAX each time, which shifts this reference stream -
+    # Rewrite-only: adding new PerkIds (most recently the Hit List batch,
+    # 2026-09-20) raises PERK_ID_MAX each time, which shifts this reference stream -
     # recomputed by running, same method as the other reference tests above.
     assert choices == [
         PerkId.INSTANT_WINNER,
         PerkId.RANDOM_WEAPON,
         PerkId.INSTANT_WINNER,
-        PerkId.RANDOM_WEAPON,
         PerkId.INSTANT_WINNER,
         PerkId.INSTANT_WINNER,
-        PerkId.RANDOM_WEAPON,
+        PerkId.INSTANT_WINNER,
+        PerkId.INSTANT_WINNER,
     ]
     assert calls <= PERK_ID_MAX

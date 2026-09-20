@@ -106,6 +106,8 @@ def draw_world(
             draw_players(render_ctx, ctx=draw_ctx, alive=False)
         with profile_pass("creatures"):
             draw_creatures(render_ctx, ctx=draw_ctx)
+            # Not native: The Hit List's marked-Apex indicator.
+            draw_hit_list_marker(render_ctx, ctx=draw_ctx)
         with profile_pass("freeze_overlay"):
             draw_freeze_overlay(render_ctx, ctx=draw_ctx)
         with profile_pass("players_alive"):
@@ -466,6 +468,28 @@ def draw_creatures(render_ctx: WorldRenderCtx, *, ctx: WorldDrawContext) -> None
             tint=tint,
             shadow=shadow,
         )
+
+
+def draw_hit_list_marker(render_ctx: WorldRenderCtx, *, ctx: WorldDrawContext) -> None:
+    """Not native: a pulsing marker above the single monster The Hit List has
+    currently marked (perks/impl/hit_list.py rolls the mark)."""
+
+    for creature in render_ctx.frame.creatures.entries:
+        if not creature.active or not creature.hit_list_marked:
+            continue
+        screen = render_ctx._world_to_screen_with(creature.pos, camera=ctx.camera, view_scale=ctx.view_scale)
+        size = float(creature.size) * ctx.scale
+        pulse = math.sin(float(rl.get_time()) * 6.0) * 0.5 + 0.5
+        y = screen.y - size * 0.6 - 10.0 * ctx.scale - pulse * 3.0 * ctx.scale
+        alpha = int(clamp(ctx.entity_alpha, 0.0, 1.0) * 255.0)
+        half = max(4.0, 6.0 * ctx.scale)
+        rl.draw_triangle(
+            rl.Vector2(screen.x - half, y - half * 1.6),
+            rl.Vector2(screen.x + half, y - half * 1.6),
+            rl.Vector2(screen.x, y),
+            rl.Color(255, 60, 60, alpha),
+        )
+        break  # only ever one mark active at a time
 
 
 def draw_freeze_overlay(render_ctx: WorldRenderCtx, *, ctx: WorldDrawContext) -> None:

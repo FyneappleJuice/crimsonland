@@ -22,7 +22,11 @@ from grim.math import clamp
 from grim.raylib_api import rl
 
 from ...bonuses.ids import BonusId
+from ...perks.helpers import perk_active
+from ...perks.ids import PerkId
+from ...perks.impl.delicate_watch import DELICATE_WATCH_BREAK_THRESHOLD
 from ...sim.state_types import PlayerState
+from ...weapon_runtime.fire import DEATH_WISH_HEALTH_THRESHOLD
 from .bonus_icons import (
     draw_blade_icon,
     draw_explosive_payload_icon,
@@ -46,6 +50,34 @@ _BONUS_ICON_GRID = 4
 # Small bump over the default 16px small-font cell for the on-player readouts
 # (clip ammo, power-up seconds).
 _HUD_TEXT_SCALE = 1.2
+
+
+def _draw_hp_threshold_tick(
+    center: rl.Vector2,
+    *,
+    r_in: float,
+    r_out: float,
+    health_value: float,
+    color: rl.Color,
+    scale: float,
+) -> None:
+    """Not native: a short radial tick on the health ring marking a specific
+    health value (e.g. an execute/crit threshold, or a perk's break point).
+
+    Uses the same clockwise-from-12-o'clock convention as the ring depletion
+    above (`start = -90 + 360 * ratio`).
+    """
+    ratio = clamp(float(health_value) / 100.0, 0.0, 1.0)
+    angle_rad = math.radians(-90.0 + 360.0 * ratio)
+    cos_a, sin_a = math.cos(angle_rad), math.sin(angle_rad)
+    inner = r_in - 3.0 * scale
+    outer = r_out + 3.0 * scale
+    rl.draw_line_ex(
+        rl.Vector2(center.x + cos_a * inner, center.y + sin_a * inner),
+        rl.Vector2(center.x + cos_a * outer, center.y + sin_a * outer),
+        max(1.5, 2.0 * scale),
+        color,
+    )
 
 
 def _bonus_icon_src(texture: rl.Texture, icon_id: int) -> rl.Rectangle:
@@ -89,6 +121,19 @@ def draw_player_status(
         else:
             col = rl.Color(210, 30, 30, int(225 * a))
         rl.draw_ring(center, r_in, r_out, start, end, _RING_SEGMENTS, col)
+
+    # Not native: threshold ticks for perks whose behavior flips at a specific
+    # health value, so the ring doubles as a readout of "how close am I."
+    if perk_active(player, PerkId.DEATH_WISH):
+        _draw_hp_threshold_tick(
+            center, r_in=r_in, r_out=r_out, health_value=DEATH_WISH_HEALTH_THRESHOLD,
+            color=rl.Color(255, 210, 60, int(230 * a)), scale=scale,
+        )
+    if perk_active(player, PerkId.DELICATE_WATCH):
+        _draw_hp_threshold_tick(
+            center, r_in=r_in, r_out=r_out, health_value=DELICATE_WATCH_BREAK_THRESHOLD,
+            color=rl.Color(140, 220, 255, int(230 * a)), scale=scale,
+        )
 
     # Not native: Soul Tether's shield, overlaid on the same ring in blue.
     # Values above 100 just read as a full loop - the number itself is

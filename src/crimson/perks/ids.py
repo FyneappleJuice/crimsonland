@@ -119,6 +119,9 @@ class PerkId(IntEnum):
     DIAMOND_FLASK = 84
     LIKE_CLOCKWORK = 85
     HOLLOW_FORM = 86
+    HIT_LIST = 87
+    DELICATE_WATCH = 88
+    HARVESTER_SCYTHE = 89
 
 
 class PerkMeta(msgspec.Struct, frozen=True):
@@ -738,6 +741,27 @@ _PERK_TABLE = [
         perk_id=PerkId.HOLLOW_FORM,
         name="Stunt Double",
         description="You've got someone who does the dangerous work so you don't have to. Every so often they step in wearing your face, empty the clip at whatever's closest for a second, and slip out before anyone realizes the swap.",
+        flags=PERK_DEFAULT_FLAGS,
+        prereq=(),
+    ),
+    PerkMeta(
+        perk_id=PerkId.HIT_LIST,
+        name="Personal Beef",
+        description="You've picked a favorite out of the crowd, whichever apex predator caught your eye first, and now it's personal. Settling the score makes your hits land harder, permanently, though only so much. There's always another name worth holding a grudge against.",
+        flags=PERK_DEFAULT_FLAGS,
+        prereq=(),
+    ),
+    PerkMeta(
+        perk_id=PerkId.DELICATE_WATCH,
+        name="Glass Jaw",
+        description="You hit like you've got something to prove, and it shows. The catch is you can't take a punch nearly as well, and one good hit is enough to rattle the confidence right out of you for good. You'll talk yourself into it again eventually.",
+        flags=PERK_DEFAULT_FLAGS,
+        prereq=(),
+    ),
+    PerkMeta(
+        perk_id=PerkId.HARVESTER_SCYTHE,
+        name="Critical Care",
+        description="Somehow, every critical hit doubles as first aid. It's not much, just enough to keep you standing a little longer than you should. Call it a professional courtesy between you and whatever you just shot.",
         flags=PERK_DEFAULT_FLAGS,
         prereq=(),
     ),

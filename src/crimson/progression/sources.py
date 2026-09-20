@@ -186,6 +186,9 @@ PERK_MECHANICAL: dict[PerkId, str] = {
     PerkId.DIAMOND_FLASK: "crit chance rolls twice, with a further bonus if both rolls succeed",
     PerkId.LIKE_CLOCKWORK: "doubles the rate of every periodic perk-proc timer",
     PerkId.HOLLOW_FORM: "a snapshot clone periodically holds fire on the nearest enemy for 1 second",
+    PerkId.HIT_LIST: "marks one Apex monster; killing it permanently grows a capped damage bonus",
+    PerkId.DELICATE_WATCH: "a damage bonus that breaks itself (and becomes re-offerable) at low health",
+    PerkId.HARVESTER_SCYTHE: "critical hits heal the player for a flat amount",
 }
 
 

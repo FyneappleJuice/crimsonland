@@ -23,6 +23,7 @@ from ..math_parity import (
 )
 from ..perks import PerkId
 from ..perks.helpers import perk_active
+from ..perks.impl.harvester_scythe import harvester_scythe_on_crit
 from ..perks.impl.pendulum import pendulum_damage_mult, pendulum_fire_rate_mult
 from ..progression import refresh_player_stats
 from ..player_damage import PlayerDeathRuntime
@@ -510,6 +511,7 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
                 state.projectiles.entries[int(proj_id)].did_crit = pellet_did_crit
                 if pellet_did_crit:
                     player.overdue_streak = 0
+                    harvester_scythe_on_crit(player)
                 else:
                     player.overdue_streak = int(player.overdue_streak) + 1
                 if weapon_id == WeaponId.TENET_GUN:

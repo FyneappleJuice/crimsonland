@@ -50,6 +50,7 @@ from ..owner_ref import OwnerRef
 from ..perks import PerkId
 from ..perks.helpers import perk_active
 from ..perks.impl.bane_of_legends import BANE_OF_LEGENDS_WINDOW_DURATION
+from ..perks.impl.hit_list import HIT_LIST_BONUS_PER_KILL, HIT_LIST_MAX_BONUS
 from ..player_damage import PlayerDeathRuntime, player_take_damage
 from ..projectiles.types import ProjectileTemplateId
 from ..rng_caller_static import RngCallerStatic
@@ -416,6 +417,11 @@ class CreatureState(msgspec.Struct):
     # Rewrite-only: Cold Snap freezes the target on a crit (weapon_runtime/
     # crit.py, projectiles/runtime/projectile_pool.py). > 0 blocks movement.
     crit_freeze_timer: float = 0.0
+
+    # Rewrite-only: The Hit List (perks/impl/hit_list.py) - True on the single
+    # Apex-tier monster currently marked. Killing it pays out the perk's
+    # damage bonus in _start_death below.
+    hit_list_marked: bool = False
 
 
 class CreatureDeath(msgspec.Struct, frozen=True):
@@ -2008,6 +2014,9 @@ class CreaturePool:
                     f32(float(child.contact_damage) * float(f32(0.7))),
                 )
                 child.lifecycle_stage = CREATURE_LIFECYCLE_ALIVE
+                # The parent may have carried a Hit List mark; a split child
+                # is a new target, not the one that was marked.
+                child.hit_list_marked = False
                 self._entries[child_idx] = child
                 self.spawned_count += 1
 
@@ -2062,6 +2071,15 @@ class CreaturePool:
         # bonus-damage window (perks/impl/bane_of_legends.py ticks it down).
         if killer is not None and perk_active(killer, PerkId.BANE_OF_LEGENDS):
             killer.bane_of_legends_timer = BANE_OF_LEGENDS_WINDOW_DURATION
+
+        # Rewrite-only: The Hit List - crossing off the marked Apex monster
+        # pays out a small permanent damage bonus, capped (perks/impl/hit_list.py
+        # rolls the mark; creatures/damage.py applies the bonus on hit).
+        if killer is not None and perk_active(killer, PerkId.HIT_LIST) and creature.hit_list_marked:
+            killer.hit_list_bonus = min(
+                HIT_LIST_MAX_BONUS,
+                float(killer.hit_list_bonus) + HIT_LIST_BONUS_PER_KILL,
+            )
 
         return CreatureDeath(
             index=int(idx),

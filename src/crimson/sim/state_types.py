@@ -190,6 +190,11 @@ class PlayerState(msgspec.Struct):
     hollow_form_snapshot: PlayerState | None = None
     hollow_form_pos: Vec2 = Vec2()
 
+    # Rewrite-only: The Hit List - permanent damage bonus, +HIT_LIST_BONUS_PER_KILL
+    # per marked-Apex kill, capped at HIT_LIST_MAX_BONUS (perks/impl/hit_list.py,
+    # creatures/runtime.py's death handler).
+    hit_list_bonus: float = 0.0
+
     speed_bonus_timer: float = 0.0
     shield_timer: float = 0.0
     fire_bullets_timer: float = 0.0

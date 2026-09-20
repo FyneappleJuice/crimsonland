@@ -16,6 +16,7 @@ from ..owner_ref import OwnerRef
 from ..perks import PerkId
 from ..perks.helpers import perk_active
 from ..perks.impl.bane_of_legends import BANE_OF_LEGENDS_KILL_BONUS, BANE_OF_LEGENDS_PENALTY
+from ..perks.impl.delicate_watch import DELICATE_WATCH_BONUS
 from ..progression import PlayerStats, resolve_team_stats
 from ..rng_caller_static import RngCallerStatic
 from ..sim.state_types import PlayerState
@@ -391,6 +392,10 @@ def creature_apply_damage(
                 if float(shooter.bane_of_legends_timer) > 0.0:
                     bane_mult *= 1.0 + BANE_OF_LEGENDS_KILL_BONUS
                 ctx.damage = f32(float(ctx.damage) * bane_mult)
+            if perk_active(shooter, PerkId.DELICATE_WATCH):
+                ctx.damage = f32(float(ctx.damage) * (1.0 + DELICATE_WATCH_BONUS))
+            if perk_active(shooter, PerkId.HIT_LIST) and float(shooter.hit_list_bonus) > 0.0:
+                ctx.damage = f32(float(ctx.damage) * (1.0 + float(shooter.hit_list_bonus)))
 
     if ctx.damage_type in (
         CreatureDamageType.BULLET,

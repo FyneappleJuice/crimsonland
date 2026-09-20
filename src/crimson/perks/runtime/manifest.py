@@ -9,11 +9,13 @@ from ..impl.bane_of_legends import HOOKS as BANE_OF_LEGENDS_HOOKS
 from ..impl.bandage import HOOKS as BANDAGE_HOOKS
 from ..impl.breathing_room import HOOKS as BREATHING_ROOM_HOOKS
 from ..impl.death_clock import HOOKS as DEATH_CLOCK_HOOKS
+from ..impl.delicate_watch import HOOKS as DELICATE_WATCH_HOOKS
 from ..impl.evil_eyes_effect import HOOKS as EVIL_EYES_HOOKS
 from ..impl.fatal_lottery import HOOKS as FATAL_LOTTERY_HOOKS
 from ..impl.final_revenge import HOOKS as FINAL_REVENGE_HOOKS
 from ..impl.fire_cough import HOOKS as FIRE_COUGH_HOOKS
 from ..impl.grim_deal import HOOKS as GRIM_DEAL_HOOKS
+from ..impl.hit_list import HOOKS as HIT_LIST_HOOKS
 from ..impl.hollow_form import HOOKS as HOLLOW_FORM_HOOKS
 from ..impl.hot_tempered import HOOKS as HOT_TEMPERED_HOOKS
 from ..impl.infernal_contract import HOOKS as INFERNAL_CONTRACT_HOOKS
@@ -71,6 +73,8 @@ PERK_HOOKS_IN_ORDER: tuple[PerkHooks, ...] = (
     BANE_OF_LEGENDS_HOOKS,
     HOLLOW_FORM_HOOKS,
     SOUL_TETHER_HOOKS,
+    HIT_LIST_HOOKS,
+    DELICATE_WATCH_HOOKS,
 )
 
 
