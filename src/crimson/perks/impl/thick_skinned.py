@@ -14,11 +14,19 @@ def apply_thick_skinned(ctx: PerkApplyCtx) -> None:
         if player.health > 0.0:
             # Native computes `h - h * 0.33333334f` and stores f32. Its `= 1.0`
             # clamp only fires when the result is <= 0, which cannot happen for
-            # positive health - dead code, so no floor here.
+            # positive health - dead code there, but rewrite-only Thick
+            # Skinned++ stacks this cut a second time, so the floor below is
+            # what actually keeps a double-cut from a very low starting HP
+            # from being the thing that kills the player.
             health = f32(player.health)
-            player.health = x87_pc24_sub(
-                health,
-                x87_pc24_mul(health, _THICK_SKINNED_FRACTION),
+            player.health = max(
+                1.0,
+                float(
+                    x87_pc24_sub(
+                        health,
+                        x87_pc24_mul(health, _THICK_SKINNED_FRACTION),
+                    ),
+                ),
             )
 
 

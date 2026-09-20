@@ -3,6 +3,7 @@ from __future__ import annotations
 """Single source of truth for perk hook ownership and dispatch ordering."""
 
 from ..ids import PerkId
+from ..impl.adrenaline_rush import HOOKS as ADRENALINE_RUSH_HOOKS
 from ..impl.ammo_maniac import HOOKS as AMMO_MANIAC_HOOKS
 from ..impl.bandage import HOOKS as BANDAGE_HOOKS
 from ..impl.breathing_room import HOOKS as BREATHING_ROOM_HOOKS
@@ -16,11 +17,13 @@ from ..impl.hot_tempered import HOOKS as HOT_TEMPERED_HOOKS
 from ..impl.infernal_contract import HOOKS as INFERNAL_CONTRACT_HOOKS
 from ..impl.instant_winner import HOOKS as INSTANT_WINNER_HOOKS
 from ..impl.jinxed_effect import HOOKS as JINXED_HOOKS
+from ..impl.kinetic_discipline import HOOKS as KINETIC_DISCIPLINE_HOOKS
 from ..impl.lean_mean_exp_machine_effect import HOOKS as LEAN_MEAN_EXP_MACHINE_HOOKS
 from ..impl.lifeline_50_50 import HOOKS as LIFELINE_50_50_HOOKS
 from ..impl.living_fortress import HOOKS as LIVING_FORTRESS_HOOKS
 from ..impl.man_bomb import HOOKS as MAN_BOMB_HOOKS
 from ..impl.my_favourite_weapon import HOOKS as MY_FAVOURITE_WEAPON_HOOKS
+from ..impl.overdue_window import HOOKS as OVERDUE_HOOKS
 from ..impl.plaguebearer import HOOKS as PLAGUEBEARER_HOOKS
 from ..impl.pyrokinetic_effect import HOOKS as PYROKINETIC_HOOKS
 from ..impl.random_weapon import HOOKS as RANDOM_WEAPON_HOOKS
@@ -59,6 +62,9 @@ PERK_HOOKS_IN_ORDER: tuple[PerkHooks, ...] = (
     BANDAGE_HOOKS,
     MY_FAVOURITE_WEAPON_HOOKS,
     PLAGUEBEARER_HOOKS,
+    OVERDUE_HOOKS,
+    KINETIC_DISCIPLINE_HOOKS,
+    ADRENALINE_RUSH_HOOKS,
 )
 
 

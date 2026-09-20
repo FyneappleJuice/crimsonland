@@ -14,7 +14,9 @@ def apply_infernal_contract(ctx: PerkApplyCtx) -> None:
     contract_players = ctx.players[:2] if ctx.state.preserve_bugs else ctx.players
     for player in contract_players:
         if player.health > 0.0:
-            player.health = f32(0.1)
+            # Rewrite-only: floored at 1.0 (was a flat 0.1) so this
+            # self-inflicted, non-enemy cost is never itself lethal.
+            player.health = f32(1.0)
 
 
 HOOKS = PerkHooks(

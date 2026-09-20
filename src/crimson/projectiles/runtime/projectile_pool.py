@@ -25,6 +25,7 @@ from ...math_parity import (
 )
 from ...owner_ref import OwnerRef
 from ...perks import PerkId
+from ...perks.helpers import perk_active
 from ...progression import resolve_team_stats
 from ...rng_caller_static import RngCallerStatic
 from ...weapons import WeaponId, weapon_entry_for_projectile_type_id
@@ -99,6 +100,9 @@ _FORK_SHOT_ANGLE_RAD = 1.0471976
 # Fork children fired off a shotgun deal half damage - shotguns already put a
 # lot of pellets on target, so a full-power fork off each one is too much.
 _FORK_SHOT_SHOTGUN_DAMAGE_MULT = 0.5
+
+# Rewrite-only: Cold Snap - how long a crit freezes its target (seconds).
+COLD_SNAP_FREEZE_DURATION = 1.0
 # `Projectile.reserved` (native "unused" field, offset 0x28) doubles as fork
 # state: 0 = normal, 1 = has forked / is a plain fork child, 2 = fork child
 # that carries the shotgun damage penalty.
@@ -232,6 +236,7 @@ class ProjectilePool:
         entry.reserved = 0.0
         entry.energy_heat_mult = 1.0
         entry.crit_mult = 1.0
+        entry.did_crit = False
         entry.pierce_left = 0.0
         entry.speed_scale = 1.0
         entry.travel_budget = float(travel_budget)
@@ -665,6 +670,15 @@ class ProjectilePool:
                     if proj.crit_mult != 1.0:
                         # Crit compensation/multiplier, stamped on the bolt when it was fired.
                         damage_amount = float(f32(float(damage_amount) * float(proj.crit_mult)))
+                    if proj.did_crit:
+                        # Rewrite-only: Cold Snap - a real crit (not just the
+                        # compensation-only multiplier) freezes the target.
+                        shooter_index = proj.owner.player_index()
+                        if shooter_index is not None and 0 <= shooter_index < len(players):
+                            shooter = players[shooter_index]
+                            perk_shooter = players[0] if runtime_state.preserve_bugs and players else shooter
+                            if perk_active(perk_shooter, PerkId.COLD_SNAP):
+                                creature.crit_freeze_timer = COLD_SNAP_FREEZE_DURATION
 
                     did_pierce = False
                     if damage_amount > 0.0 and creature.hp > 0.0:

@@ -10,6 +10,7 @@ not to perfectly match every edge case in `creature_update_all`.
 See: `docs/creatures/update.md`.
 """
 
+import math
 import random as _random
 from collections.abc import Callable, Sequence
 
@@ -236,6 +237,43 @@ def _owner_to_player_index(owner: OwnerRef) -> int | None:
     return owner.player_index()
 
 
+def _fire_momentum_shot(
+    pool: "CreaturePool",
+    dead_creature: "CreatureState",
+    *,
+    dying_idx: int,
+    killer: PlayerState,
+    state: GameplayState,
+) -> None:
+    nearest_idx: int | None = None
+    nearest_dist = None
+    dx0, dy0 = float(dead_creature.pos.x), float(dead_creature.pos.y)
+    for other_idx, other in enumerate(pool._entries):
+        if other_idx == dying_idx or not other.active or float(other.hp) <= 0.0:
+            continue
+        dist = x87_pc24_hypot(
+            f32(float(other.pos.x) - dx0),
+            f32(float(other.pos.y) - dy0),
+        )
+        if nearest_dist is None or dist < nearest_dist:
+            nearest_dist = dist
+            nearest_idx = other_idx
+    if nearest_idx is None:
+        return
+
+    target = pool._entries[nearest_idx]
+    angle = math.atan2(float(target.pos.y) - dy0, float(target.pos.x) - dx0)
+    try:
+        state.projectiles.spawn(
+            pos=dead_creature.pos,
+            angle=angle,
+            type_id=ProjectileTemplateId.PISTOL,
+            owner=OwnerRef.from_player(int(killer.index)),
+        )
+    except Exception:
+        pass
+
+
 def pack_bonus_on_death_args(bonus_id: BonusId, amount_override: int) -> int:
     """Native `link_index` encoding for BONUS_ON_DEATH carriers: low i16 holds
     the bonus id, high i16 the amount/duration override (-1 = default)."""
@@ -321,6 +359,10 @@ class CreatureState(msgspec.Struct):
     affix_lunge_timer: float = 0.0
     affix_lunge_active: float = 0.0
     affix_lob_timer: float = 0.0
+
+    # Rewrite-only: Cold Snap freezes the target on a crit (weapon_runtime/
+    # crit.py, projectiles/runtime/projectile_pool.py). > 0 blocks movement.
+    crit_freeze_timer: float = 0.0
 
 
 class CreatureDeath(msgspec.Struct, frozen=True):
@@ -1297,8 +1339,13 @@ class CreaturePool:
                         # Do not run `_tick_dead` immediately here.
                         pass
 
+            # Rewrite-only: Cold Snap - a crit freezes the target solid, same
+            # full-incapacitation shape as the native Evil Eyes freeze below.
+            if creature.crit_freeze_timer > 0.0:
+                creature.crit_freeze_timer = max(0.0, float(creature.crit_freeze_timer) - float(dt))
+
             frozen_by_evil_eyes = idx in evil_targets
-            if frozen_by_evil_eyes:
+            if frozen_by_evil_eyes or creature.crit_freeze_timer > 0.0:
                 # Native branch (`creature_update_all`, around 0x0042665f): when the
                 # current creature is the Evil Eyes target, the update path jumps to
                 # the loop tail before cooldown/interaction/ranged logic.
@@ -1679,6 +1726,7 @@ class CreaturePool:
         entry.affix_lunge_timer = 0.0
         entry.affix_lunge_active = 0.0
         entry.affix_lob_timer = 0.0
+        entry.crit_freeze_timer = 0.0
 
         entry.bonus_id = init.bonus_id
         entry.bonus_duration_override = (
@@ -1945,6 +1993,11 @@ class CreaturePool:
                 world_width=world_width,
                 world_height=world_height,
             )
+
+        # Rewrite-only: Momentum - a kill fires a free shot at the nearest
+        # other living creature, from wherever the kill happened.
+        if killer is not None and perk_active(killer, PerkId.MOMENTUM):
+            _fire_momentum_shot(self, creature, dying_idx=int(idx), killer=killer, state=state)
 
         return CreatureDeath(
             index=int(idx),

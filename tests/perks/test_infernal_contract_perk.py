@@ -21,14 +21,16 @@ def test_infernal_contract_grants_levels_and_sets_low_health() -> None:
     assert owner.level == 8
     assert perk_state.pending_count == 3
     assert perk_state.choices_dirty is True
-    assert owner.health == f32(0.1)
-    assert other.health == f32(0.1)
+    # Rewrite-only: floored at 1.0 (was a flat 0.1) so this self-inflicted,
+    # non-enemy cost is never itself lethal.
+    assert owner.health == f32(1.0)
+    assert other.health == f32(1.0)
 
 
 def test_infernal_contract_player_scope_follows_bug_mode() -> None:
     for preserve_bugs, expected_health in (
-        (True, (f32(0.1), f32(0.1), 60.0)),
-        (False, (f32(0.1), f32(0.1), f32(0.1))),
+        (True, (f32(1.0), f32(1.0), 60.0)),
+        (False, (f32(1.0), f32(1.0), f32(1.0))),
     ):
         state = GameplayState(preserve_bugs=preserve_bugs)
         players = [

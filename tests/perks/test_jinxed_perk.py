@@ -128,6 +128,31 @@ def test_perks_update_effects_jinxed_accident_damages_player_and_spawns_fx() -> 
     ]
 
 
+def test_perks_update_effects_jinxed_accident_never_kills_the_player() -> None:
+    # Rewrite-only: a self-inflicted, non-enemy cost must never be the thing
+    # that kills the player, so it floors at 1.0 instead of going lethal.
+    dt = 0.2
+
+    state = GameplayState()
+    state.rng = ScriptedCrand(
+        [
+            3,  # accident roll
+            0,  # timer roll
+        ],
+        fallback=ScriptedCrand.Fallback.REPEAT_LAST,
+    )
+    state.bonuses.freeze = 1.0
+
+    player = PlayerState(index=0, pos=Vec2(10.0, 20.0), health=3.0)
+    player.perk_counts[int(PerkId.JINXED)] = 1
+
+    fx_queue = FxQueue(capacity=8, max_count=8)
+
+    perks_update_effects(state, [player], dt, creatures=[], fx_queue=fx_queue)
+
+    assert player.health == 1.0
+
+
 def test_perks_update_effects_jinxed_default_accident_can_hit_other_alive_players() -> None:
     dt = 0.2
 

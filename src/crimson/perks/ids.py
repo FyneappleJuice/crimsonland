@@ -100,6 +100,20 @@ class PerkId(IntEnum):
     TOUGH_RELOADER_PLUS = 68
     THICK_SKINNED_PLUS = 69
 
+    # Rewrite-only: brand-new perks (not tiers of anything), mined from D2/D3
+    # unique-item research. Names are working placeholders, expected to change.
+    AMMO_SHIELD = 70
+    COUP_DE_GRACE = 71
+    DEATH_WISH = 72
+    MOMENTUM = 73
+    COLD_SNAP = 74
+    DESPERATION = 75
+    OVERDUE = 76
+    KINETIC_DISCIPLINE = 77
+    FREE_ROUNDS = 78
+    STEADY_HANDS = 79
+    ADRENALINE_RUSH = 80
+
 
 class PerkMeta(msgspec.Struct, frozen=True):
     perk_id: PerkId
@@ -600,6 +614,84 @@ _PERK_TABLE = [
         description="Your skin thickens further still. Trade another third of your health for another third off incoming damage.",
         flags=PERK_DEFAULT_FLAGS,
         prereq=(PerkId.THICK_SKINNED,),
+    ),
+    # --- Rewrite-only: new perks (name placeholders, TBD) --------------
+    PerkMeta(
+        perk_id=PerkId.AMMO_SHIELD,
+        name="Ammo Insurance",
+        description="Your ammo hates seeing you get hurt. HATES it. So now, whenever you'd take damage, a few rounds throw themselves in the way instead. Heroic, really. Also, kind of expensive.",
+        flags=PERK_DEFAULT_FLAGS,
+        prereq=(),
+    ),
+    PerkMeta(
+        perk_id=PerkId.COUP_DE_GRACE,
+        name="The Closer",
+        description="Something in you can't stand watching an enemy limp along on fumes. It's gotta stop, right now. So anything clinging to its last sliver of health gets finished off completely -- unfortunately for it.",
+        flags=PERK_DEFAULT_FLAGS,
+        prereq=(),
+    ),
+    PerkMeta(
+        perk_id=PerkId.DEATH_WISH,
+        name="Nothing to Lose",
+        description="Once your health bottoms out, something in you just stops caring. About missing, about dying, about a lot of things really. Every shot you fire from here on out is a critical hit. Fear does wonders for your aim.",
+        flags=PERK_DEFAULT_FLAGS,
+        prereq=(),
+    ),
+    PerkMeta(
+        perk_id=PerkId.MOMENTUM,
+        name="Domino Effect",
+        description="You can't stop once you get going. One kill and something in you needs another, immediately, whether you meant to or not. A free shot flies out at whatever's closest. You didn't ask it to. It happened anyway.",
+        flags=PERK_DEFAULT_FLAGS,
+        prereq=(),
+    ),
+    PerkMeta(
+        perk_id=PerkId.COLD_SNAP,
+        name="Deep Freeze",
+        description="Your critical hits have picked up a nasty new habit: they freeze solid on contact. Total, immediate, unnecessarily aggressive frost. You didn't train for this. It just started happening one day.",
+        flags=PERK_DEFAULT_FLAGS,
+        prereq=(),
+    ),
+    PerkMeta(
+        perk_id=PerkId.DESPERATION,
+        name="Survival Instinct",
+        description="Something primal kicks in once things get dicey, and it does NOT want to die today. The lower your health drops, the less incoming damage actually gets through. Logic has left the building.",
+        flags=PERK_DEFAULT_FLAGS,
+        prereq=(),
+    ),
+    PerkMeta(
+        perk_id=PerkId.OVERDUE,
+        name="Statistically Speaking",
+        description="Miss five crits in a row and something in you finally snaps. Not angry-snaps. Overdue-snaps. The next five seconds of critical hits come back scorching hot, like the universe felt guilty and overcompensated.",
+        flags=PERK_DEFAULT_FLAGS,
+        prereq=(),
+    ),
+    PerkMeta(
+        perk_id=PerkId.KINETIC_DISCIPLINE,
+        name="Full Steam Ahead",
+        description="You get a little obsessive about holding a straight line. The longer you commit, the harder you hit -- like you're building up a full head of steam. Turn, stop, or so much as flinch, and poof. Right back to square one.",
+        flags=PERK_DEFAULT_FLAGS,
+        prereq=(),
+    ),
+    PerkMeta(
+        perk_id=PerkId.FREE_ROUNDS,
+        name="Five Finger Discount",
+        description="Every so often, a bullet just doesn't get charged to your clip. You didn't do anything. You definitely didn't do anything. Nobody's checking the register anyway.",
+        flags=PERK_DEFAULT_FLAGS,
+        prereq=(),
+    ),
+    PerkMeta(
+        perk_id=PerkId.STEADY_HANDS,
+        name="Cheap Shot",
+        description="You've got zero patience for enemies that haven't earned their scars yet. Anything still sitting near full health gets hit that much harder. Gotta soften them up somehow, right?",
+        flags=PERK_DEFAULT_FLAGS,
+        prereq=(),
+    ),
+    PerkMeta(
+        perk_id=PerkId.ADRENALINE_RUSH,
+        name="Spite",
+        description="Getting hurt doesn't scare you. It just makes you MAD. For the next five seconds, every shot you fire lands that much harder -- purely, unapologetically, out of spite.",
+        flags=PERK_DEFAULT_FLAGS,
+        prereq=(),
     ),
 ]
 

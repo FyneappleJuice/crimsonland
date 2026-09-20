@@ -51,7 +51,7 @@ def test_perk_selection_pick_infernal_contract_adds_pending_perks() -> None:
 
     assert picked == PerkId.INFERNAL_CONTRACT
     assert player.level == 4
-    assert player.health == f32(0.1)
+    assert player.health == f32(1.0)
     assert perk_state.pending_count == 3
     assert perk_state.choices_dirty is True
 

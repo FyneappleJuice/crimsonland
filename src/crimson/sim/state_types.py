@@ -150,6 +150,20 @@ class PlayerState(msgspec.Struct):
     living_fortress_timer: float = 0.0
     fire_cough_timer: float = 0.0
 
+    # Rewrite-only: Overdue's consecutive-non-crit counter (weapon_runtime/crit.py)
+    # and the bonus-crit-damage window it opens once the streak hits threshold.
+    overdue_streak: int = 0
+    overdue_window_timer: float = 0.0
+
+    # Rewrite-only: Kinetic Discipline - continuous ramp (0-1) that builds while
+    # moving in a sustained, roughly-straight line and decays otherwise.
+    kinetic_charge: float = 0.0
+    kinetic_prev_heading: float = 0.0
+
+    # Rewrite-only: Adrenaline Rush's bonus-damage window, opened whenever the
+    # player actually loses health (weapon_runtime/../player_damage.py).
+    adrenaline_rush_window_timer: float = 0.0
+
     speed_bonus_timer: float = 0.0
     shield_timer: float = 0.0
     fire_bullets_timer: float = 0.0

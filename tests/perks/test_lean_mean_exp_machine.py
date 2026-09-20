@@ -32,8 +32,8 @@ def test_lean_mean_exp_machine_plus_adds_a_second_larger_trickle() -> None:
 
     perks_update_effects(state, [player], 0.3)  # crosses the 0.25s tick once
 
-    # Base (1 copy * 10) + Plus (1 copy * 20) on the same tick = 30, not 10.
-    assert player.experience == 30
+    # Base max(20, 1*10) + Plus max(40, 1*20) on the same tick = 60.
+    assert player.experience == 60
 
 
 def test_lean_mean_exp_machine_tick_awards_only_player0_in_multiplayer() -> None:
@@ -74,4 +74,4 @@ def test_perk_effect_timers_keep_native_36hz_cadence() -> None:
     perks_update_effects(state, [player], 1.0 / 36.0)
 
     assert state.lean_mean_exp_timer == 0.25
-    assert player.experience == 10
+    assert player.experience == 20  # max(20, 1 copy * 10)

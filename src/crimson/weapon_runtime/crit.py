@@ -66,10 +66,33 @@ def roll_crit_mult(weapon_id: WeaponId) -> float:
     return compensation
 
 
+def roll_primary_crit(
+    weapon_id: WeaponId,
+    *,
+    force_crit: bool = False,
+    bonus_crit_mult: float = 0.0,
+) -> tuple[float, bool]:
+    """Like `roll_crit_mult`, but also reports whether this particular roll
+    crit (needed by perks that react to a real crit landing, e.g. Cold Snap's
+    freeze) and lets a caller force/boost the roll (Death Wish, Overdue).
+
+    Scoped to the player's own direct trigger-pull (fire.py's primary pellet
+    loop) only - not threaded through every crit call site, since none of the
+    perks that need this act on bonus-spawned projectiles.
+    """
+    chance = crit_chance_for_weapon(weapon_id)
+    compensation = crit_damage_compensation(chance)
+    is_crit = force_crit or (chance > 0.0 and _CRIT_RNG.random() < chance)
+    if is_crit:
+        return compensation * (CRIT_MULTIPLIER + bonus_crit_mult), True
+    return compensation, False
+
+
 __all__ = [
     "CRIT_CHANCE_BY_ARCHETYPE",
     "CRIT_MULTIPLIER",
     "crit_chance_for_weapon",
     "crit_damage_compensation",
     "roll_crit_mult",
+    "roll_primary_crit",
 ]

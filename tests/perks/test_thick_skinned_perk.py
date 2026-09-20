@@ -30,16 +30,16 @@ def test_thick_skinned_rounds_multiply_before_health_subtraction() -> None:
     assert player.health == 17.004650115966797
 
 
-def test_thick_skinned_has_no_health_floor() -> None:
-    # Native's `= 1.0` clamp is dead code: it only fires when `h - h/3 <= 0`,
-    # which cannot happen for positive health. At 0.1 HP (e.g. after Infernal
-    # Contract) the perk reduces health rather than healing to 1.0.
+def test_thick_skinned_floors_at_one_hp() -> None:
+    # Rewrite-only: a self-inflicted, non-enemy cost must never be the thing
+    # that kills the player, so very low HP (e.g. after Infernal Contract)
+    # floors at 1.0 instead of cutting further.
     state = GameplayState()
-    player = PlayerState(index=0, pos=Vec2(), health=0.1)
+    player = PlayerState(index=0, pos=Vec2(), health=1.0)
 
     perk_apply(state, [player], PerkId.THICK_SKINNED)
 
-    assert 0.0 < player.health < 0.1
+    assert player.health == 1.0
 
 
 def test_thick_skinned_skips_dead_players() -> None:

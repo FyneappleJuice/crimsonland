@@ -125,6 +125,12 @@ class Projectile(msgspec.Struct):
     # at hit time (compensation factor on a miss, compensation*2 on a crit) so
     # DPS averages stay anchored to the pre-crit baseline.
     crit_mult: float = 1.0
+    # Rewrite-only: whether this specific pellet actually rolled a crit (not
+    # just "crit_mult != 1.0", which is also true on a plain miss thanks to
+    # the compensation factor). Only stamped true for the player's own direct
+    # trigger-pull (weapon_runtime/fire.py's primary pellet loop); everything
+    # else defaults false. Consumed by Cold Snap's on-crit freeze.
+    did_crit: bool = False
     # Rewrite-only: extra full-damage targets this bolt punches through before it
     # stops (Weapon Power Up for kinetic lead). 0 = native stop-on-first-hit.
     pierce_left: float = 0.0

@@ -60,7 +60,12 @@ def test_final_revenge_triggers_explosion_damage_on_death() -> None:
     assert SfxId.SHOCKWAVE in events.sfx
 
 
-def test_final_revenge_triggers_from_player_update_damage_same_step() -> None:
+def test_ammunition_within_floor_prevents_final_revenge_from_player_update() -> None:
+    # Rewrite-only: Ammunition Within's cost is floored at 1.0 HP (a
+    # self-inflicted, non-enemy cost must never be the thing that kills the
+    # player - see player_damage.player_take_damage's `floor` param), so it
+    # can no longer be the trigger for Final Revenge's on-death hook even
+    # when fired from deep inside player_update in the same step.
     world_size = 1024.0
     world = WorldState.build(
         world_size=world_size,
@@ -90,9 +95,9 @@ def test_final_revenge_triggers_from_player_update_damage_same_step() -> None:
         perk_progression_enabled=False,
     )
 
-    assert player.health < 0.0
-    assert events.sfx.count(SfxId.EXPLOSION_LARGE) == 1
-    assert events.sfx.count(SfxId.SHOCKWAVE) == 1
+    assert player.health == 1.0
+    assert events.sfx.count(SfxId.EXPLOSION_LARGE) == 0
+    assert events.sfx.count(SfxId.SHOCKWAVE) == 0
 
 
 def test_final_revenge_runs_before_later_creature_slots_update() -> None:

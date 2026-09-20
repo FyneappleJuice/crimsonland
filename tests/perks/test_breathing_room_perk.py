@@ -38,11 +38,22 @@ def test_perk_apply_breathing_room_reduces_health_and_starts_creature_death_stag
 
 def test_perk_apply_breathing_room_rounds_each_native_float_operation() -> None:
     state = GameplayState()
+    player = PlayerState(index=0, pos=Vec2(), health=25.506977081298828)
+
+    perk_apply(state, [player], PerkId.BREATHING_ROOM)
+
+    assert player.health == f32(8.502325057983398)
+
+
+def test_perk_apply_breathing_room_never_kills_the_player() -> None:
+    # Rewrite-only: a self-inflicted, non-enemy cost must never be the thing
+    # that kills the player - it floors at 1.0 instead of the raw 1/3 cut.
+    state = GameplayState()
     player = PlayerState(index=0, pos=Vec2(), health=1.0)
 
     perk_apply(state, [player], PerkId.BREATHING_ROOM)
 
-    assert player.health == f32(0.3333333134651184)
+    assert player.health == 1.0
 
 
 def test_perk_apply_breathing_room_rounds_creature_lifecycle_store() -> None:

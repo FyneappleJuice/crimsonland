@@ -24,6 +24,18 @@ from .runtime import CreatureState
 from .spawn import CreatureFlags, CreatureTypeId
 
 
+# Rewrite-only: new shooter-perk tuning (weapon_runtime research batch).
+COUP_DE_GRACE_HP_FRACTION = 0.07
+STEADY_HANDS_HP_FRACTION = 0.90
+STEADY_HANDS_BONUS = 0.50
+# Kinetic Discipline's continuous charge (perks/impl/kinetic_discipline.py,
+# 0-1) scales up to this much bonus damage at full charge.
+KINETIC_DISCIPLINE_MAX_BONUS = 0.30
+# Adrenaline Rush's timed window (opened in player_damage.py whenever the
+# player actually loses health) grants this flat bonus while it's open.
+ADRENALINE_RUSH_BONUS = 0.25
+
+
 def _any_player_has_perk(players: list[PlayerState], perk_id: PerkId) -> bool:
     return any(perk_active(player, perk_id) for player in players)
 
@@ -351,6 +363,28 @@ def creature_apply_damage(
         resist = monster_affix_on_hit(creature, int(ctx.damage_type), float(ctx.damage))
         if resist != 1.0:
             ctx.damage = f32(float(ctx.damage) * resist)
+
+    # Rewrite-only: shooter build-perk dynamic damage adjustments. Resolved to
+    # the actual firing player (not the "any player owns it" native-quirk
+    # pattern above) since none of these are ported native content.
+    if float(ctx.damage) > 0.0 and float(creature.max_hp) > 0.0:
+        shooter_idx = ctx.owner.player_index()
+        shooter = ctx.players[shooter_idx] if shooter_idx is not None and 0 <= shooter_idx < len(ctx.players) else None
+        if shooter is not None:
+            hp_frac = float(creature.hp) / float(creature.max_hp)
+            if perk_active(shooter, PerkId.COUP_DE_GRACE) and hp_frac <= COUP_DE_GRACE_HP_FRACTION:
+                ctx.damage = f32(max(float(ctx.damage), float(creature.hp)))
+            elif perk_active(shooter, PerkId.STEADY_HANDS) and hp_frac >= STEADY_HANDS_HP_FRACTION:
+                ctx.damage = f32(float(ctx.damage) * (1.0 + STEADY_HANDS_BONUS))
+            if perk_active(shooter, PerkId.KINETIC_DISCIPLINE) and float(shooter.kinetic_charge) > 0.0:
+                ctx.damage = f32(
+                    float(ctx.damage) * (1.0 + KINETIC_DISCIPLINE_MAX_BONUS * float(shooter.kinetic_charge)),
+                )
+            if (
+                perk_active(shooter, PerkId.ADRENALINE_RUSH)
+                and float(shooter.adrenaline_rush_window_timer) > 0.0
+            ):
+                ctx.damage = f32(float(ctx.damage) * (1.0 + ADRENALINE_RUSH_BONUS))
 
     if ctx.damage_type in (
         CreatureDamageType.BULLET,

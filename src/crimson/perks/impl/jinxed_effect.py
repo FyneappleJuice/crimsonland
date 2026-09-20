@@ -61,7 +61,9 @@ def update_jinxed(ctx: PerksUpdateEffectsCtx) -> None:
         == 3
     ):
         player = _select_jinxed_accident_target(ctx)
-        player.health = x87_pc24_sub(f32(float(player.health)), f32(5.0))
+        # Rewrite-only: the accident is a self-inflicted, non-enemy cost, so it
+        # must never be the thing that actually kills the player.
+        player.health = max(1.0, float(x87_pc24_sub(f32(float(player.health)), f32(5.0))))
         if ctx.fx_queue is not None:
             ctx.fx_queue.add_random(
                 pos=player.pos,

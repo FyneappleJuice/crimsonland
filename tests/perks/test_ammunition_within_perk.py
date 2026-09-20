@@ -35,6 +35,30 @@ def test_ammunition_within_fires_during_reload_and_costs_health() -> None:
     assert player.weapon.ammo == -1
 
 
+def test_ammunition_within_never_kills_the_player() -> None:
+    # Rewrite-only: a self-inflicted, non-enemy cost must never be the thing
+    # that kills the player, so it floors at 1.0 instead of going lethal.
+    state = GameplayState(rng=ScriptedCrand(0, fallback=ScriptedCrand.Fallback.REPEAT_LAST))
+    player = PlayerState(index=0, pos=Vec2(), health=1.0, experience=1)
+    player.perk_counts[int(PerkId.AMMUNITION_WITHIN)] = 1
+    player.weapon.weapon_id = WeaponId.PISTOL
+    player.weapon.ammo = 0
+    player.weapon.reload_active = True
+    player.weapon.reload_timer = 0.5
+
+    fire_weapon(
+        WeaponFireCtx(
+            player=player,
+            input_state=PlayerInput(aim=Vec2(10.0, 0.0), fire_down=True),
+            dt=0.016,
+            state=state,
+        ),
+    )
+
+    assert player.health == 1.0
+    assert any(entry.active for entry in state.projectiles.entries)
+
+
 def test_ammunition_within_fires_during_manual_reload_when_ammo_remaining() -> None:
     state = GameplayState(rng=ScriptedCrand(0, fallback=ScriptedCrand.Fallback.REPEAT_LAST))
     player = PlayerState(index=0, pos=Vec2(), health=10.0, experience=1)

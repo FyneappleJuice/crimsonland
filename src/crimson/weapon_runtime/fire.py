@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import random as _random
 from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
@@ -31,7 +32,7 @@ from ..sim.input import PlayerInput
 from ..sim.state_types import GameplayState, PlayerState
 from ..weapons import WEAPON_TABLE, WeaponId, weapon_entry_for_projectile_type_id
 from .assign import player_start_reload, weapon_entry
-from .crit import roll_crit_mult
+from .crit import roll_crit_mult, roll_primary_crit
 from .fire_recipes import (
     ArcStrikeMode,
     MaskCenteredJitter,
@@ -57,6 +58,18 @@ if TYPE_CHECKING:
     from ..creatures.runtime import CreatureState
 
 WEAPON_COUNT_SIZE = max(int(entry.weapon_id) for entry in WEAPON_TABLE) + 1
+
+# Rewrite-only: Death Wish / Overdue tuning (health is a 0-100 value).
+DEATH_WISH_HEALTH_THRESHOLD = 15.0
+OVERDUE_STREAK_THRESHOLD = 5
+OVERDUE_WINDOW_DURATION = 5.0  # seconds the bonus stays up once the streak triggers it
+OVERDUE_BONUS_CRIT_MULT = 1.0  # added to CRIT_MULTIPLIER on every crit during the window
+
+# Rewrite-only: Free Rounds - a private per-shot roll (build variance, not run
+# state, same reasoning as crit.py's own private RNG) for skipping this shot's
+# ammo cost entirely.
+FREE_ROUNDS_CHANCE = 0.15
+_FREE_ROUNDS_RNG = _random.Random(0xF6EED5)
 
 # Not native: Plasma Overload bonus (bonuses/plasma_overload.py) - twin bolts
 # fired side-by-side on the same heading, `_PLASMA_OVERLOAD_LATERAL_SPACING`
@@ -262,7 +275,12 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
             ammo_class = int(weapon.ammo_class) if weapon.ammo_class is not None else 0
 
             reload_time = float(weapon.reload_time)
-            factor = 4.0 if ammo_class == 1 else 200.0
+            # Rewrite-only: the native 200x factor made this perk a trap
+            # outside the 2-3 weapons that got the cheap 4x rate (e.g. a
+            # Pistol shot cost 240 XP - many kills' worth). Toned down to 20x
+            # so it's usable across the roster without removing the cliff
+            # (ammo_class 1 weapons still fire it the cheapest).
+            factor = 4.0 if ammo_class == 1 else 20.0
             player.experience = int(float(player.experience) - reload_time * factor)
             if player.experience < 0:
                 player.experience = 0
@@ -279,6 +297,7 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
                 dt=dt,
                 players=players,
                 death_runtime=player_death_runtime,
+                floor=1.0,
             )
     pellet_count = int(weapon.pellet_count)
     fire_bullets_weapon = weapon_entry_for_projectile_type_id(ProjectileTemplateId.FIRE_BULLETS)
@@ -396,6 +415,22 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
             reflex_boost=reflex_boost_active,
         )
 
+    # Rewrite-only: Death Wish / Overdue only touch the player's own direct
+    # trigger-pull (PrimaryPelletsMode below), computed once per fire_weapon
+    # call rather than per pellet.
+    death_wish_force_crit = perk_active(perk_player, PerkId.DEATH_WISH) and float(
+        player.health,
+    ) <= DEATH_WISH_HEALTH_THRESHOLD
+    overdue_bonus_crit_mult = 0.0
+    if perk_active(perk_player, PerkId.OVERDUE):
+        if int(player.overdue_streak) >= OVERDUE_STREAK_THRESHOLD:
+            # Streak just broke the threshold: open (or refresh) the window
+            # instead of boosting only this one roll.
+            player.overdue_streak = 0
+            player.overdue_window_timer = OVERDUE_WINDOW_DURATION
+        if float(player.overdue_window_timer) > 0.0:
+            overdue_bonus_crit_mult = OVERDUE_BONUS_CRIT_MULT
+
     match recipe.mode:
         case PrimaryPelletsMode(type_id=type_id, count=count, jitter=jitter_rule, speed_scale=speed_rule):
             if type_id is None:
@@ -451,7 +486,17 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
                 )
                 if energy_heat_mult != 1.0:
                     state.projectiles.entries[int(proj_id)].energy_heat_mult = float(energy_heat_mult)
-                state.projectiles.entries[int(proj_id)].crit_mult = roll_crit_mult(weapon_id)
+                pellet_crit_mult, pellet_did_crit = roll_primary_crit(
+                    weapon_id,
+                    force_crit=death_wish_force_crit,
+                    bonus_crit_mult=overdue_bonus_crit_mult,
+                )
+                state.projectiles.entries[int(proj_id)].crit_mult = pellet_crit_mult
+                state.projectiles.entries[int(proj_id)].did_crit = pellet_did_crit
+                if pellet_did_crit:
+                    player.overdue_streak = 0
+                else:
+                    player.overdue_streak = int(player.overdue_streak) + 1
                 if weapon_id == WeaponId.TENET_GUN:
                     state.projectiles.entries[int(proj_id)].tenet_reverse = True
                 if explosive_payload_active and pellet_index == explosive_pellet_index:
@@ -661,7 +706,11 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
         # Not native: Plasma Overload bonus also gets the free-ammo treatment,
         # same as Fire Bullets/Reflex Boost - no ammo cost, so it can never
         # trigger a reload either.
-        player.weapon.ammo = float(player.weapon.ammo) - float(ammo_cost)
+        # Rewrite-only: Free Rounds - a private roll to skip this shot's ammo
+        # cost outright.
+        free_round = perk_active(perk_player, PerkId.FREE_ROUNDS) and _FREE_ROUNDS_RNG.random() < FREE_ROUNDS_CHANCE
+        if not free_round:
+            player.weapon.ammo = float(player.weapon.ammo) - float(ammo_cost)
     reload_start_gate_open = bool(player.weapon.reload_timer <= 0.0)
     if force_pre_swap_fire_gate:
         # Alt-weapon same-tick fire uses the pre-swap gate (reload_timer==0) for

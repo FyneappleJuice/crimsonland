@@ -27,6 +27,12 @@ _PLAYER_PAIN_SFX: tuple[SfxId, ...] = (
 )
 _PLAYER_DEATH_SFX: tuple[SfxId, ...] = (SfxId.TROOPER_DIE_01, SfxId.TROOPER_DIE_02)
 
+# Rewrite-only: new perk tuning (weapon_runtime research batch).
+DESPERATION_MAX_REDUCTION = 0.5
+AMMO_SHIELD_DAMAGE_REDUCTION = 0.3
+AMMO_SHIELD_AMMO_COST = 1.0
+ADRENALINE_RUSH_WINDOW_DURATION = 5.0
+
 
 class PlayerDeathRuntime(msgspec.Struct):
     def on_player_lethal(self, player: PlayerState, *, dt: float) -> None:
@@ -41,8 +47,14 @@ def player_take_damage(
     dt: float | None = None,
     players: Sequence[PlayerState] | None = None,
     death_runtime: PlayerDeathRuntime | None = None,
+    floor: float = 0.0,
 ) -> float:
-    """Apply damage to a player, returning the actual damage applied."""
+    """Apply damage to a player, returning the actual damage applied.
+
+    `floor` lower-bounds the resulting health (e.g. 1.0 for self-inflicted,
+    non-enemy costs like Ammunition Within, which must never be lethal on
+    their own). Real enemy damage always leaves it at the default of 0.0.
+    """
 
     raw_damage = float(f32(damage))
     if state.debug_god_mode:
@@ -79,6 +91,21 @@ def player_take_damage(
     if damage_taken_mult != 1.0:
         damage_scaled = float(f32(float(damage_scaled) * damage_taken_mult))
 
+    # Rewrite-only: Desperation - incoming damage drops as current health
+    # drops (health is a 0-100 value), up to DESPERATION_MAX_REDUCTION at 0 HP.
+    if perk_active(perk_player, PerkId.DESPERATION):
+        missing_frac = max(0.0, 1.0 - float(perk_player.health) / 100.0)
+        damage_scaled = float(
+            f32(float(damage_scaled) * (1.0 - DESPERATION_MAX_REDUCTION * missing_frac)),
+        )
+
+    # Rewrite-only: Ammo Shield - trades a flat ammo cost per hit for a cut to
+    # that hit's damage. The ammo cost floors at 0 regardless, so running dry
+    # doesn't cancel the damage reduction.
+    if perk_active(perk_player, PerkId.AMMO_SHIELD):
+        damage_scaled = float(f32(float(damage_scaled) * (1.0 - AMMO_SHIELD_DAMAGE_REDUCTION)))
+        perk_player.weapon.ammo = max(0.0, float(perk_player.weapon.ammo) - AMMO_SHIELD_AMMO_COST)
+
     dodged = False
     if perk_active(perk_player, PerkId.NINJA):
         if perk_active(perk_player, PerkId.DODGER):
@@ -100,6 +127,15 @@ def player_take_damage(
                 player.health = 0.0
         else:
             player.health = x87_pc24_sub(f32(player.health), damage_scaled)
+
+        if floor > 0.0:
+            player.health = max(float(floor), float(player.health))
+
+        # Rewrite-only: Adrenaline Rush - any actual health loss opens (or
+        # refreshes) a timed bonus-damage window. Keyed off the actual player
+        # who lost health, not the native perk_player bug-preserve quirk above.
+        if health_before - float(player.health) > 0.0 and perk_active(player, PerkId.ADRENALINE_RUSH):
+            player.adrenaline_rush_window_timer = ADRENALINE_RUSH_WINDOW_DURATION
 
     # Native routes exact-zero Highlander kills through the pain branch; default
     # rewrite mode treats `health == 0` as lethal here.

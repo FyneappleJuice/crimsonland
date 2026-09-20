@@ -165,6 +165,18 @@ PERK_MECHANICAL: dict[PerkId, str] = {
     PerkId.MR_MELEE_PLUS: "doubles the flat counterattack damage",
     PerkId.BONUS_MAGNET_PLUS: "raises the gated bonus-drop odds from 1-in-10 to 1-in-5",
     PerkId.TOUGH_RELOADER_PLUS: "cuts reload-time incoming damage further, from half to a quarter",
+    # --- Rewrite-only: new perks, all dynamic/conditional so hard-wired ---
+    PerkId.AMMO_SHIELD: "redirects a fraction of incoming damage into ammo drain",
+    PerkId.COUP_DE_GRACE: "guaranteed kill on enemies below a health-percent threshold",
+    PerkId.DEATH_WISH: "forces guaranteed crits while the player is at critically low health",
+    PerkId.MOMENTUM: "a kill fires a free shot at the nearest other creature",
+    PerkId.COLD_SNAP: "critical hits freeze the target in place for a duration",
+    PerkId.DESPERATION: "incoming damage scales down as the player's health drops",
+    PerkId.OVERDUE: "a streak of non-crits opens a timed bonus-crit-damage window",
+    PerkId.KINETIC_DISCIPLINE: "a continuous charge builds while moving in a straight line and buys ramping damage",
+    PerkId.FREE_ROUNDS: "a private per-shot roll to skip the ammo cost entirely",
+    PerkId.STEADY_HANDS: "bonus damage to targets still near full health",
+    PerkId.ADRENALINE_RUSH: "losing health opens a timed bonus-damage window",
 }
 
 

@@ -10,9 +10,12 @@ _BREATHING_ROOM_FRACTION = f32(0.6666667)
 
 def apply_breathing_room(ctx: PerkApplyCtx) -> None:
     for player in ctx.players:
-        health = f32(player.health)
-        reduction = x87_pc24_mul(health, _BREATHING_ROOM_FRACTION)
-        player.health = x87_pc24_sub(health, reduction)
+        if player.health > 0.0:
+            # Rewrite-only: a self-inflicted, non-enemy cost must never be the
+            # thing that kills the player.
+            health = f32(player.health)
+            reduction = x87_pc24_mul(health, _BREATHING_ROOM_FRACTION)
+            player.health = max(1.0, float(x87_pc24_sub(health, reduction)))
 
     frame_dt = f32(ctx.frame_dt())
     creatures = ctx.creatures
