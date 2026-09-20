@@ -316,6 +316,11 @@ class CreatureState(msgspec.Struct):
     affix_base_move_speed: float = 0.0
     affix_base_contact_damage: float = 0.0
     affix_regen_pause: float = 0.0
+    # -1 = not yet initialized (see Overshield in creatures/rarity.py).
+    affix_shield_hits: int = -1
+    affix_lunge_timer: float = 0.0
+    affix_lunge_active: float = 0.0
+    affix_lob_timer: float = 0.0
 
 
 class CreatureDeath(msgspec.Struct, frozen=True):
@@ -568,14 +573,25 @@ def _creature_interaction_contact_damage(ctx: _CreatureInteractionCtx) -> None:
         elif perk_active(perk_player, PerkId.VEINS_OF_POISON):
             creature.flags |= CreatureFlags.SELF_DAMAGE_TICK
 
+    dealt = float(creature.contact_damage)
     player_take_damage(
         ctx.state,
         ctx.player,
-        float(creature.contact_damage),
+        dealt,
         dt=ctx.dt,
         players=ctx.players,
         death_runtime=_CreatureInteractionPlayerDeathRuntime(ctx=ctx),
     )
+
+    # Rewrite-only: monster rarity affix - Feasting heals from contact damage dealt.
+    if creature.rarity and float(creature.max_hp) > 0.0:
+        from .rarity import FEASTING_HEAL_FRACTION, AffixId as _AffixId
+
+        if _AffixId.FEASTING in creature.affixes and float(creature.hp) < float(creature.max_hp):
+            creature.hp = min(
+                float(creature.max_hp),
+                float(creature.hp) + dealt * FEASTING_HEAL_FRACTION,
+            )
 
     if ctx.fx_queue is not None:
         push_dir = (ctx.player.pos - creature.pos).normalized()
@@ -1657,6 +1673,10 @@ class CreaturePool:
         entry.affix_base_move_speed = 0.0
         entry.affix_base_contact_damage = 0.0
         entry.affix_regen_pause = 0.0
+        entry.affix_shield_hits = -1
+        entry.affix_lunge_timer = 0.0
+        entry.affix_lunge_active = 0.0
+        entry.affix_lob_timer = 0.0
 
         entry.bonus_id = init.bonus_id
         entry.bonus_duration_override = (

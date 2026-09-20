@@ -13,12 +13,35 @@ affix list in that doc; the rest are staged behind the same registry.
 """
 
 import math
+import random
 from enum import IntEnum
 
 import msgspec
 
 from ..rng_caller_static import RngCallerStatic
 from .damage_types import CreatureDamageType
+
+# All resistable damage types, for affixes that touch every bucket at once
+# (Shelled, Glass).
+_ALL_DAMAGE_TYPES: tuple[int, ...] = (
+    CreatureDamageType.BULLET,
+    CreatureDamageType.MELEE,
+    CreatureDamageType.EXPLOSION,
+    CreatureDamageType.FIRE,
+    CreatureDamageType.ION,
+    CreatureDamageType.PLASMA,
+    CreatureDamageType.LIGHTNING,
+    CreatureDamageType.ENERGY,
+)
+
+# Presentation/build-variance roll, not core sim state - a private RNG so it
+# never shifts the replay-tracked state.rng stream (see the Tenet Gun /
+# crit.py precedent).
+_EVASION_RNG = random.Random(0x1D0DE)
+EVASIVE_DODGE_CHANCE = 0.35
+IRONHIDE_CAP_FRACTION = 0.08
+OVERSHIELD_HIT_COUNT = 3
+FRAG_DEATH_COUNT = 8
 
 # When False, build_survival_spawn_creature keeps the native colour-variant stat
 # overrides instead of this system (used by native-parity replay / spawn tests).
@@ -39,6 +62,10 @@ RARITY_LABEL = {1: "Tainted", 2: "Mutated", 3: "Apex"}
 # Outline / blend colour per tier (r, g, b).
 RARITY_COLOR = {1: (120, 180, 255), 2: (200, 90, 255), 3: (255, 205, 70)}
 
+# Warning tint for any monster carrying an on-death affix, overriding the tier
+# colour below (r, g, b).
+DEATH_AFFIX_COLOR = (230, 30, 30)
+
 _TIER_HP_MULT = {1: 1.5, 2: 2.5, 3: 6.0}
 _TIER_HP_FLAT = {1: 0.0, 2: 40.0, 3: 600.0}
 _TIER_SIZE_FLAT = {1: 0.0, 2: 10.0, 3: 18.0}
@@ -54,6 +81,15 @@ SWIFT_AURA_BONUS = 0.30
 VOLATILE_RADIUS = 130.0
 VOLATILE_DAMAGE = 60.0
 HATCHING_COUNT = 3
+
+TICK_RANGE = 100.0
+TICK_FRAC_PER_S = 0.05
+LUNGE_INTERVAL_S = 3.0
+LUNGE_DURATION_S = 0.4
+LUNGE_SPEED_BONUS = 3.0        # +300% -> 4x total during the dash window
+LUNGE_CONTACT_BONUS = 1.0      # +100% -> 2x total during the dash window
+ACID_LOB_INTERVAL_S = 2.0
+FEASTING_HEAL_FRACTION = 0.3
 
 
 # --- affix registry --------------------------------------------------------
@@ -75,8 +111,17 @@ class AffixId(IntEnum):
     SWIFT_AURA = 13
     DETONATING = 15
     HATCHING = 16
-    GOLDEN = 17
     BOUNTIFUL = 18
+    GLASS_FRAME = 19
+    FERALIZATION = 20
+    IRONHIDE = 21
+    EVASIVE = 22
+    OVERSHIELD = 23
+    FRAG_DEATH = 24
+    TICK_BLOODHUNGRY = 26
+    LUNGING = 28
+    ACID_LOB = 29
+    FEASTING = 30
 
 
 class AffixSpec(msgspec.Struct, frozen=True):
@@ -105,11 +150,28 @@ _SPECS = (
     AffixSpec(AffixId.SWIFT_AURA, "of Swiftness", "Haste Aura", True, 3, 12000, aura=True),
     AffixSpec(AffixId.DETONATING, "of Detonation", "Bomber", True, 3, 9000),
     AffixSpec(AffixId.HATCHING, "of the Swarm", "Hatch Death", True, 3, 12000),
-    AffixSpec(AffixId.GOLDEN, "of Riches", "Golden", True, 0, 0),
     AffixSpec(AffixId.BOUNTIFUL, "of Plenty", "Bountiful", True, 0, 0),
+    AffixSpec(AffixId.GLASS_FRAME, "of Glass", "Volatile Frame", True, 2, 6000),
+    AffixSpec(AffixId.FERALIZATION, "of Feralization", "Rabid", True, 3, 12000),
+    AffixSpec(AffixId.IRONHIDE, "Ironhide", "Bulwark", False, 3, 12000),
+    AffixSpec(AffixId.EVASIVE, "of Deflection", "Evasive", True, 2, 6000),
+    AffixSpec(AffixId.OVERSHIELD, "of the Barrier", "Overshield", True, 2, 12000),
+    AffixSpec(AffixId.FRAG_DEATH, "of Splintering", "Frag Death", True, 2, 10000),
+    AffixSpec(AffixId.TICK_BLOODHUNGRY, "of the Tick", "Bloodhungry", True, 2, 13000),
+    AffixSpec(AffixId.LUNGING, "Lunging", "Charger", False, 3, 5000),
+    AffixSpec(AffixId.ACID_LOB, "Spitting", "Acid Lob", False, 2, 5000),
+    AffixSpec(AffixId.FEASTING, "of Feasting", "Life Thief", True, 2, 13000),
 )
 
 AFFIXES: dict[int, AffixSpec] = {s.id: s for s in _SPECS}
+
+# Affixes that trigger something at the moment of death (apply_monster_death_affixes
+# below). A monster carrying any of these tints DEATH_AFFIX_COLOR instead of its
+# tier colour - a "this one does something when it dies" warning independent
+# of rarity tier.
+DEATH_AFFIX_IDS: frozenset[int] = frozenset(
+    {AffixId.DETONATING, AffixId.HATCHING, AffixId.BOUNTIFUL, AffixId.FRAG_DEATH}
+)
 
 
 def _eligible(tier: int, xp: int) -> list[int]:
@@ -171,8 +233,17 @@ AFFIX_BLURB: dict[int, str] = {
     AffixId.SWIFT_AURA: "aura: nearby allies +30% speed",
     AffixId.DETONATING: "explodes on death",
     AffixId.HATCHING: "hatches 3 crawlers on death",
-    AffixId.GOLDEN: "5x experience",
     AffixId.BOUNTIFUL: "always drops a power-up",
+    AffixId.GLASS_FRAME: "+40% damage taken, +60% move speed",
+    AffixId.FERALIZATION: "3x experience, +150% speed, +100% contact damage",
+    AffixId.IRONHIDE: "no single hit deals more than 8% of its max health",
+    AffixId.EVASIVE: "35% chance to fully dodge a bullet",
+    AffixId.OVERSHIELD: "shields the first 3 hits it takes",
+    AffixId.FRAG_DEATH: "fires a ring of shrapnel on death",
+    AffixId.TICK_BLOODHUNGRY: "heals while close to a player",
+    AffixId.LUNGING: "periodically dashes at 4x speed and 2x contact damage",
+    AffixId.ACID_LOB: "periodically lobs a projectile at a player",
+    AffixId.FEASTING: "heals from the contact damage it deals",
 }
 
 
@@ -244,21 +315,20 @@ def apply_rarity(init, *, tier: int, player_experience: int, rng) -> None:
         elif aid == AffixId.BLAST_PROOF:
             _resist(init, CreatureDamageType.EXPLOSION, 0.5)
         elif aid == AffixId.SHELLED:
-            for t in (
-                CreatureDamageType.BULLET,
-                CreatureDamageType.MELEE,
-                CreatureDamageType.EXPLOSION,
-                CreatureDamageType.FIRE,
-                CreatureDamageType.ION,
-                CreatureDamageType.PLASMA,
-                CreatureDamageType.LIGHTNING,
-                CreatureDamageType.ENERGY,
-            ):
+            for t in _ALL_DAMAGE_TYPES:
                 _resist(init, t, 0.55)
-        elif aid == AffixId.GOLDEN:
-            reward_mult *= 5.0
-        # REGENERATING / FROTHING / SWIFT_AURA / BARBED / DETONATING / HATCHING /
-        # BOUNTIFUL are handled at runtime (update_monster_affixes / death path).
+        elif aid == AffixId.GLASS_FRAME:
+            for t in _ALL_DAMAGE_TYPES:
+                _resist(init, t, 1.4)
+            speed *= 1.6
+        elif aid == AffixId.FERALIZATION:
+            reward_mult *= 3.0
+            speed *= 2.5
+            contact *= 2.0
+        # REGENERATING / FROTHING / SWIFT_AURA / DETONATING / HATCHING / BOUNTIFUL /
+        # IRONHIDE / EVASIVE / OVERSHIELD / FRAG_DEATH / TICK_BLOODHUNGRY / LUNGING /
+        # ACID_LOB / FEASTING are handled at runtime (update_monster_affixes /
+        # monster_affix_on_hit / death path / contact path).
 
     speed = min(speed, 4.5)
     reward = float(init.reward_value or 0.0) * reward_mult * (1.0 + _THREAT_REWARD_PER_POINT * threat)
@@ -272,8 +342,12 @@ def apply_rarity(init, *, tier: int, player_experience: int, rng) -> None:
     init.rarity = tier
     init.affixes = affixes
 
-    # Blend the sprite tint toward the tier colour.
-    cr, cg, cb = RARITY_COLOR[tier]
+    # Blend the sprite tint toward the tier colour - unless it rolled an
+    # on-death affix, in which case red overrides the tier colour entirely.
+    if any(a in DEATH_AFFIX_IDS for a in affixes):
+        cr, cg, cb = DEATH_AFFIX_COLOR
+    else:
+        cr, cg, cb = RARITY_COLOR[tier]
     base = init.tint or (1.0, 1.0, 1.0, 1.0)
     br = base[0] if base[0] is not None else 1.0
     bg = base[1] if base[1] is not None else 1.0
@@ -294,6 +368,36 @@ def _has(creature, aid: int) -> bool:
     return aid in creature.affixes
 
 
+def _nearest_player(pos, players):
+    best = None
+    best_dist = math.inf
+    for p in players:
+        if float(p.health) <= 0.0:
+            continue
+        d = math.hypot(float(p.pos.x) - float(pos.x), float(p.pos.y) - float(pos.y))
+        if d < best_dist:
+            best_dist = d
+            best = p
+    return best
+
+
+def _fire_acid_lob(state, creature, target, idx: int) -> None:
+    from ..owner_ref import OwnerRef
+    from ..projectiles.types import ProjectileTemplateId
+
+    angle = math.atan2(float(target.pos.y) - float(creature.pos.y), float(target.pos.x) - float(creature.pos.x))
+    try:
+        state.projectiles.spawn(
+            pos=creature.pos,
+            angle=angle,
+            type_id=ProjectileTemplateId.ION_RIFLE,
+            owner=OwnerRef.from_creature(idx),
+            hits_players=True,
+        )
+    except Exception:
+        pass
+
+
 def update_monster_affixes(players, creatures, dt: float, *, state) -> None:
     """Advance regen / frenzy / aura affixes. Called from WorldState.step."""
     dt = float(dt)
@@ -311,7 +415,7 @@ def update_monster_affixes(players, creatures, dt: float, *, state) -> None:
         if _has(c, AffixId.SWIFT_AURA):
             swift_sources.append((float(c.pos.x), float(c.pos.y)))
 
-    for c in entries:
+    for idx, c in enumerate(entries):
         if not c.active or not c.rarity:
             continue
         if float(c.hp) <= 0.0:
@@ -332,6 +436,17 @@ def update_monster_affixes(players, creatures, dt: float, *, state) -> None:
                     speed_mult += SWIFT_AURA_BONUS
                     break
 
+        if _has(c, AffixId.LUNGING):
+            if c.affix_lunge_active > 0.0:
+                c.affix_lunge_active = max(0.0, float(c.affix_lunge_active) - dt)
+                speed_mult += LUNGE_SPEED_BONUS
+                contact_mult += LUNGE_CONTACT_BONUS
+            else:
+                c.affix_lunge_timer = float(c.affix_lunge_timer) - dt
+                if c.affix_lunge_timer <= 0.0:
+                    c.affix_lunge_timer = LUNGE_INTERVAL_S
+                    c.affix_lunge_active = LUNGE_DURATION_S
+
         c.move_speed = min(4.5, float(c.affix_base_move_speed) * speed_mult)
         c.contact_damage = float(c.affix_base_contact_damage) * contact_mult
 
@@ -341,18 +456,60 @@ def update_monster_affixes(players, creatures, dt: float, *, state) -> None:
             elif float(c.hp) < float(c.max_hp):
                 c.hp = min(float(c.max_hp), float(c.hp) + float(c.max_hp) * REGEN_FRAC_PER_S * dt)
 
+        if (
+            _has(c, AffixId.TICK_BLOODHUNGRY)
+            and players
+            and float(c.max_hp) > 0.0
+            and float(c.hp) < float(c.max_hp)
+        ):
+            cx, cy = float(c.pos.x), float(c.pos.y)
+            for p in players:
+                if float(p.health) <= 0.0:
+                    continue
+                if math.hypot(cx - float(p.pos.x), cy - float(p.pos.y)) <= TICK_RANGE:
+                    c.hp = min(float(c.max_hp), float(c.hp) + float(c.max_hp) * TICK_FRAC_PER_S * dt)
+                    break
+
+        if _has(c, AffixId.ACID_LOB) and players:
+            c.affix_lob_timer = float(c.affix_lob_timer) - dt
+            if c.affix_lob_timer <= 0.0:
+                c.affix_lob_timer = ACID_LOB_INTERVAL_S
+                target = _nearest_player(c.pos, players)
+                if target is not None:
+                    _fire_acid_lob(state, c, target, idx)
+
 
 # --- runtime: on-hit (called from creatures/damage.py) ---------------
 
 
-def monster_affix_on_hit(creature, damage_type: int) -> float:
-    """Note the hit (regen pause) and return the resist multiplier for it."""
+def monster_affix_on_hit(creature, damage_type: int, damage_amount: float = 0.0) -> float:
+    """Note the hit (regen pause) and return the combined resist multiplier for it."""
     if AffixId.REGENERATING in creature.affixes:
         creature.affix_regen_pause = REGEN_PAUSE_S
+
+    mult = 1.0
     d = creature.damage_taken_mult_by_type
-    if not d:
-        return 1.0
-    return float(d.get(int(damage_type), 1.0))
+    if d:
+        mult *= float(d.get(int(damage_type), 1.0))
+
+    if AffixId.OVERSHIELD in creature.affixes:
+        if creature.affix_shield_hits < 0:
+            creature.affix_shield_hits = OVERSHIELD_HIT_COUNT
+        if creature.affix_shield_hits > 0:
+            creature.affix_shield_hits -= 1
+            return 0.0
+
+    if AffixId.EVASIVE in creature.affixes and int(damage_type) == int(CreatureDamageType.BULLET):
+        if _EVASION_RNG.random() < EVASIVE_DODGE_CHANCE:
+            return 0.0
+
+    if AffixId.IRONHIDE in creature.affixes and float(creature.max_hp) > 0.0 and damage_amount > 0.0:
+        cap = float(creature.max_hp) * IRONHIDE_CAP_FRACTION
+        effective = float(damage_amount) * mult
+        if effective > cap:
+            mult = cap / float(damage_amount)
+
+    return mult
 
 
 # --- runtime: on-death ----------------------------------------------
@@ -392,6 +549,27 @@ def apply_monster_death_affixes(
         except Exception:
             pass
 
+    if AffixId.FRAG_DEATH in affixes:
+        _death_frag(state, creature, idx=int(idx))
+
+
+def _death_frag(state, creature, *, idx: int) -> None:
+    from ..owner_ref import OwnerRef
+    from ..projectiles.types import ProjectileTemplateId
+
+    step = math.tau / FRAG_DEATH_COUNT
+    for i in range(FRAG_DEATH_COUNT):
+        try:
+            state.projectiles.spawn(
+                pos=creature.pos,
+                angle=i * step,
+                type_id=ProjectileTemplateId.PISTOL,
+                owner=OwnerRef.from_creature(idx),
+                hits_players=True,
+            )
+        except Exception:
+            pass
+
 
 def _death_explosion(pool, creature, *, state, players, detail_preset: int) -> None:
     from ..player_damage import player_take_damage
@@ -425,6 +603,8 @@ def _death_explosion(pool, creature, *, state, players, detail_preset: int) -> N
 
 
 def _death_hatch(pool, creature, *, rng) -> None:
+    from .lifecycle import CREATURE_LIFECYCLE_ALIVE
+
     base_speed = float(creature.affix_base_move_speed) or float(creature.move_speed)
     for i in range(HATCHING_COUNT):
         child_idx = pool._alloc_slot()
@@ -443,5 +623,11 @@ def _death_hatch(pool, creature, *, rng) -> None:
         child.affix_base_move_speed = 0.0
         child.affix_base_contact_damage = 0.0
         child.heading = float(creature.heading + (i - 1) * 0.7)
+        # The dying parent's lifecycle_stage is already decaying toward the
+        # corpse-fade/despawn state (see creature_handle_death); without this
+        # reset the copied child inherits that and is treated as an
+        # already-dead corpse the instant it spawns. Native's own
+        # split-on-death code (SPIDER_SP2, above) resets this the same way.
+        child.lifecycle_stage = CREATURE_LIFECYCLE_ALIVE
         pool._entries[child_idx] = child
         pool.spawned_count += 1

@@ -348,7 +348,7 @@ def creature_apply_damage(
     if creature.rarity:
         from .rarity import monster_affix_on_hit
 
-        resist = monster_affix_on_hit(creature, int(ctx.damage_type))
+        resist = monster_affix_on_hit(creature, int(ctx.damage_type), float(ctx.damage))
         if resist != 1.0:
             ctx.damage = f32(float(ctx.damage) * resist)
 
