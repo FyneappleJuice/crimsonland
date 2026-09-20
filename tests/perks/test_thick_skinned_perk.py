@@ -49,3 +49,31 @@ def test_thick_skinned_skips_dead_players() -> None:
     perk_apply(state, [player], PerkId.THICK_SKINNED)
 
     assert player.health == -5.0
+
+
+def test_thick_skinned_plus_cuts_the_remaining_health_by_a_further_third() -> None:
+    state = GameplayState()
+    player = PlayerState(index=0, pos=Vec2(), health=90.0)
+
+    perk_apply(state, [player], PerkId.THICK_SKINNED)
+    after_base = player.health  # 60.0
+    perk_apply(state, [player], PerkId.THICK_SKINNED_PLUS)
+
+    assert_float_close(
+        player.health,
+        x87_pc24_sub(after_base, x87_pc24_mul(after_base, f32(0.33333334))),
+    )
+    assert_float_close(player.health, 40.0)
+
+
+def test_thick_skinned_plus_composes_damage_reduction_multiplicatively() -> None:
+    from crimson.progression.sources import _THICK_SKINNED_DAMAGE_SCALE, resolve_player_stats
+
+    player = PlayerState(index=0, pos=Vec2())
+    player.perk_counts[int(PerkId.THICK_SKINNED)] = 1
+    player.perk_counts[int(PerkId.THICK_SKINNED_PLUS)] = 1
+
+    stats = resolve_player_stats(player)
+
+    # ~0.666^2 = ~0.444 - a further third off what's left, not off the original.
+    assert_float_close(stats.damage_taken_mult, _THICK_SKINNED_DAMAGE_SCALE * _THICK_SKINNED_DAMAGE_SCALE)

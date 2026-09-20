@@ -107,24 +107,29 @@ def test_perk_generate_choices_monster_vision_forced_slot_preserves_native_order
         player_count=1,
         count=7,
     )
+    # Rewrite-only: adding "++" tier perks (2026-09-19, most recently
+    # Thick Skinned++) raises PERK_ID_MAX each time, which shifts
+    # perk_select_random's `rand % PERK_ID_MAX + 1` modulo against these same
+    # scripted draws - recomputed reference stream, same method as the
+    # earlier "unlock everything" pass. Recompute again (by running, not by
+    # hand) if PerkId count ever changes.
     assert choices == [
         PerkId.MONSTER_VISION,
-        PerkId.ANXIOUS_LOADER,
         PerkId.VEINS_OF_POISON,
-        PerkId.PERK_EXPERT,
-        PerkId.FIRE_CAUGH,
-        PerkId.BLOODY_MESS_QUICK_LEARNER,
+        PerkId.THICK_SKINNED,
+        PerkId.AMMO_MANIAC,
+        PerkId.BONUS_ECONOMIST,
+        PerkId.JINXED,
         PerkId.BARREL_GREASER,
     ]
     assert [record.caller for record in rng.records_since()] == [
         RngCallerStatic.PERK_SELECT_RANDOM,
-        RngCallerStatic.PERKS_GENERATE_CHOICES_RARITY_GATE,
+        RngCallerStatic.PERK_SELECT_RANDOM,
+        RngCallerStatic.PERK_SELECT_RANDOM,
+        RngCallerStatic.PERK_SELECT_RANDOM,
         RngCallerStatic.PERK_SELECT_RANDOM,
         RngCallerStatic.PERK_SELECT_RANDOM,
         RngCallerStatic.PERKS_GENERATE_CHOICES_RARITY_GATE,
-        RngCallerStatic.PERK_SELECT_RANDOM,
-        RngCallerStatic.PERK_SELECT_RANDOM,
-        RngCallerStatic.PERK_SELECT_RANDOM,
         RngCallerStatic.PERK_SELECT_RANDOM,
     ]
 
@@ -257,6 +262,10 @@ def test_perk_generate_choices_degenerate_all_owned_matches_reference_stream() -
     before_calls = rng.calls
     before_state = rng.state
     choices = perk_generate_choices(state, player, game_mode=GameMode.QUESTS, player_count=1, count=7)
+    # Rewrite-only: adding "++" tier perks (2026-09-19, most recently
+    # Thick Skinned++) raises PERK_ID_MAX each time, which shifts this
+    # degenerate "everything owned" reference stream - recomputed by running,
+    # same method as the earlier "unlock everything" pass.
     assert choices == [
         PerkId.RANDOM_WEAPON,
         PerkId.INSTANT_WINNER,
@@ -264,14 +273,14 @@ def test_perk_generate_choices_degenerate_all_owned_matches_reference_stream() -
         PerkId.RANDOM_WEAPON,
         PerkId.RANDOM_WEAPON,
         PerkId.RANDOM_WEAPON,
-        PerkId.RANDOM_WEAPON,
+        PerkId.INSTANT_WINNER,
     ]
     assert_rng_progression(
         rng,
         before_calls=before_calls,
         before_state=before_state,
-        expected_draws=57126,
-        expected_after_state=1125552909,
+        expected_draws=55847,
+        expected_after_state=880630722,
     )
 
 

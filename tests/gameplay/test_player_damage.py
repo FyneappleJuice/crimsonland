@@ -16,16 +16,18 @@ from tests.support.helpers import ScriptedCrand, assert_float_close
 @pytest.mark.parametrize(
     ("perk_counts", "rand_val", "expected_applied", "expected_health"),
     [
-        ({PerkId.NINJA: 1}, 6, 0.0, 100.0),
+        ({PerkId.NINJA: 1}, 5, 0.0, 100.0),
         ({PerkId.NINJA: 1}, 1, 10.0, 90.0),
         ({PerkId.DODGER: 1}, 10, 0.0, 100.0),
-        ({PerkId.NINJA: 1, PerkId.DODGER: 1}, 5, 10.0, 90.0),
+        ({PerkId.NINJA: 1, PerkId.DODGER: 1}, 5, 0.0, 100.0),
+        ({PerkId.NINJA: 1, PerkId.DODGER: 1}, 10, 10.0, 90.0),
     ],
     ids=[
-        "ninja-dodges-1-in-3",
+        "ninja-dodges-1-in-5",
         "ninja-applies-damage-otherwise",
         "dodger-dodges-1-in-5",
-        "ninja-has-priority-over-dodger",
+        "ninja-plus-dodger-composed-dodge-9-in-25",
+        "ninja-plus-dodger-composed-miss-16-in-25",
     ],
 )
 def test_player_take_damage_dodge_perks(

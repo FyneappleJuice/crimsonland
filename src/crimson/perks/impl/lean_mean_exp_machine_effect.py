@@ -24,6 +24,12 @@ def update_lean_mean_exp_machine(ctx: PerksUpdateEffectsCtx) -> None:
         if perk_count > 0:
             player0.experience += perk_count * 10
 
+        # Rewrite-only: Lean Mean Exp Machine++ adds a second, larger trickle on
+        # the same timer rather than replacing the base rate.
+        plus_count = perk_count_get(player0, PerkId.LEAN_MEAN_EXP_MACHINE_PLUS)
+        if plus_count > 0:
+            player0.experience += plus_count * 20
+
 
 HOOKS = PerkHooks(
     perk_id=PerkId.LEAN_MEAN_EXP_MACHINE,

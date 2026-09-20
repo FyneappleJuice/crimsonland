@@ -37,6 +37,36 @@ def test_creature_handle_death_awards_bloody_mess_quick_learner_xp() -> None:
     assert player.experience == 116
 
 
+def test_bloody_mess_plus_upgrades_the_kill_xp_multiplier() -> None:
+    state = GameplayState()
+    state.bonus_spawn_guard = True
+
+    player = PlayerState(index=0, pos=Vec2(), experience=100)
+    player.perk_counts[int(PerkId.BLOODY_MESS_QUICK_LEARNER)] = 1
+    player.perk_counts[int(PerkId.BLOODY_MESS_QUICK_LEARNER_PLUS)] = 1
+
+    pool = CreaturePool()
+    creature = pool.entries[0]
+    creature.active = True
+    creature.hp = 10.0
+    creature.lifecycle_stage = CREATURE_LIFECYCLE_ALIVE
+    creature.reward_value = 12.7
+    creature.last_hit_owner = OwnerRef.from_player(0)
+
+    death = pool.handle_death(
+        0,
+        state=state,
+        players=[player],
+        rng=state.rng,
+        world_width=1024.0,
+        world_height=1024.0,
+        fx_queue=None,
+    )
+
+    assert death.xp_awarded == 20  # int(12.7 * 1.6), not the base x1.3
+    assert player.experience == 120
+
+
 def test_bloody_mess_quick_learner_name_depends_on_violence_disabled() -> None:
     perk_id = PerkId.BLOODY_MESS_QUICK_LEARNER
     assert perk_display_name(perk_id, violence_disabled=0) == "Bloody Mess"

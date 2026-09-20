@@ -551,10 +551,12 @@ def _creature_interaction_contact_damage(ctx: _CreatureInteractionCtx) -> None:
     if perk_active(perk_player, PerkId.MR_MELEE):
         from .damage import creature_apply_damage_with_lethal_followup
 
+        # Rewrite-only: Mr. Melee++ doubles the flat counterattack damage.
+        mr_melee_damage = 50.0 if perk_active(perk_player, PerkId.MR_MELEE_PLUS) else 25.0
         creature_apply_damage_with_lethal_followup(
             creature,
             creature_index=int(ctx.creature_index),
-            damage_amount=25.0,
+            damage_amount=mr_melee_damage,
             damage_type=CreatureDamageType.MELEE,
             impulse=Vec2(),
             owner=OwnerRef.from_player(int(ctx.player.index)),
@@ -1926,7 +1928,10 @@ class CreaturePool:
 
         xp_awarded = 0
         if killer is not None:
-            if perk_active(killer, PerkId.BLOODY_MESS_QUICK_LEARNER):
+            # Rewrite-only: Bloody Mess++ upgrades the kill-XP multiplier x1.3 -> x1.6.
+            if perk_active(killer, PerkId.BLOODY_MESS_QUICK_LEARNER_PLUS):
+                xp_awarded = award_experience(state, killer, int(float(creature.reward_value) * 1.6))
+            elif perk_active(killer, PerkId.BLOODY_MESS_QUICK_LEARNER):
                 xp_awarded = award_experience(state, killer, int(float(creature.reward_value) * 1.3))
             else:
                 xp_awarded = award_experience_from_reward(state, killer, float(creature.reward_value))

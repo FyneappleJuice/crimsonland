@@ -23,6 +23,19 @@ def test_perks_update_effects_lean_mean_exp_machine_ticks_xp_without_double_xp()
     assert_float_close(state.lean_mean_exp_timer, 0.25)
 
 
+def test_lean_mean_exp_machine_plus_adds_a_second_larger_trickle() -> None:
+    state = GameplayState()
+
+    player = PlayerState(index=0, pos=Vec2(10.0, 20.0))
+    player.perk_counts[int(PerkId.LEAN_MEAN_EXP_MACHINE)] = 1
+    player.perk_counts[int(PerkId.LEAN_MEAN_EXP_MACHINE_PLUS)] = 1
+
+    perks_update_effects(state, [player], 0.3)  # crosses the 0.25s tick once
+
+    # Base (1 copy * 10) + Plus (1 copy * 20) on the same tick = 30, not 10.
+    assert player.experience == 30
+
+
 def test_lean_mean_exp_machine_tick_awards_only_player0_in_multiplayer() -> None:
     state = GameplayState()
     state.lean_mean_exp_timer = 0.05

@@ -82,6 +82,24 @@ class PerkId(IntEnum):
     TOUGH_RELOADER = 56
     LIFELINE_50_50 = 57
 
+    # Rewrite-only: "++" tier upgrades. Each requires its base perk as a
+    # prereq (see docs on PerkMeta.prereq below) and, like the four native
+    # tier pairs (Dodger->Ninja, Veins of Poison->Toxic Avenger, Perk
+    # Expert->Perk Master, Regeneration->Greater Regeneration), pushes the
+    # same single knob further rather than adding a new effect.
+    FASTSHOT_PLUS = 58
+    FASTLOADER_PLUS = 59
+    AMMO_MANIAC_PLUS = 60
+    URANIUM_FILLED_BULLETS_PLUS = 61
+    BONUS_ECONOMIST_PLUS = 62
+    BLOODY_MESS_QUICK_LEARNER_PLUS = 63
+    LEAN_MEAN_EXP_MACHINE_PLUS = 64
+    LONG_DISTANCE_RUNNER_PLUS = 65
+    MR_MELEE_PLUS = 66
+    BONUS_MAGNET_PLUS = 67
+    TOUGH_RELOADER_PLUS = 68
+    THICK_SKINNED_PLUS = 69
+
 
 class PerkMeta(msgspec.Struct, frozen=True):
     perk_id: PerkId
@@ -497,6 +515,91 @@ _PERK_TABLE = [
         description="The computer removes half of the wrong monsters for you. You don't gain any experience.",
         flags=PERK_DEFAULT_FLAGS,
         prereq=(),
+    ),
+    # --- Rewrite-only "++" tier upgrades -------------------------------
+    PerkMeta(
+        perk_id=PerkId.FASTSHOT_PLUS,
+        name="Fastshot++",
+        description="Your gun spits bullets even faster than before. The engineers have given up trying to explain it.",
+        flags=PERK_DEFAULT_FLAGS,
+        prereq=(PerkId.FASTSHOT,),
+    ),
+    PerkMeta(
+        perk_id=PerkId.FASTLOADER_PLUS,
+        name="Fastloader++",
+        description="You've halved your reload time now. Loading a gun has never looked so effortless.",
+        flags=PERK_DEFAULT_FLAGS,
+        prereq=(PerkId.FASTLOADER,),
+    ),
+    PerkMeta(
+        perk_id=PerkId.AMMO_MANIAC_PLUS,
+        name="Ammo Maniac++",
+        description="You've upgraded your obsession; your clips now hold considerably more than before.",
+        flags=PERK_DEFAULT_FLAGS,
+        prereq=(PerkId.AMMO_MANIAC,),
+    ),
+    PerkMeta(
+        perk_id=PerkId.URANIUM_FILLED_BULLETS_PLUS,
+        name="Uranium Filled Bullets++",
+        description="You've enriched the filling even further. That's got to be against some kind of treaty.",
+        flags=PERK_DEFAULT_FLAGS,
+        prereq=(PerkId.URANIUM_FILLED_BULLETS,),
+    ),
+    PerkMeta(
+        perk_id=PerkId.BONUS_ECONOMIST_PLUS,
+        name="Bonus Economist++",
+        description="Your bonus power-ups now last twice as long as they normally would.",
+        flags=PERK_DEFAULT_FLAGS,
+        prereq=(PerkId.BONUS_ECONOMIST,),
+    ),
+    PerkMeta(
+        perk_id=PerkId.BLOODY_MESS_QUICK_LEARNER_PLUS,
+        name="Bloody Mess++",
+        description="You've taken your bloodlust to the next level; the carnage teaches you even faster now.",
+        flags=PERK_DEFAULT_FLAGS,
+        prereq=(PerkId.BLOODY_MESS_QUICK_LEARNER,),
+    ),
+    PerkMeta(
+        perk_id=PerkId.LEAN_MEAN_EXP_MACHINE_PLUS,
+        name="Lean Mean Exp Machine++",
+        description="You've tuned your experience machine into a leaner, meaner, faster-flowing one.",
+        flags=PERK_DEFAULT_FLAGS,
+        prereq=(PerkId.LEAN_MEAN_EXP_MACHINE,),
+    ),
+    PerkMeta(
+        perk_id=PerkId.LONG_DISTANCE_RUNNER_PLUS,
+        name="Long Distance Runner++",
+        description="You've kept training. You now warm up to a much higher top speed than before.",
+        flags=PERK_DEFAULT_FLAGS,
+        prereq=(PerkId.LONG_DISTANCE_RUNNER,),
+    ),
+    PerkMeta(
+        perk_id=PerkId.MR_MELEE_PLUS,
+        name="Mr. Melee++",
+        description="Your counterattacks hit twice as hard now. Some might say you've mastered the art.",
+        flags=PERK_DEFAULT_FLAGS,
+        prereq=(PerkId.MR_MELEE,),
+    ),
+    PerkMeta(
+        perk_id=PerkId.BONUS_MAGNET_PLUS,
+        name="Bonus Magnet++",
+        description="Bonuses find their way to you even more often now. You're basically a lodestone.",
+        flags=PERK_DEFAULT_FLAGS,
+        prereq=(PerkId.BONUS_MAGNET,),
+    ),
+    PerkMeta(
+        perk_id=PerkId.TOUGH_RELOADER_PLUS,
+        name="Tough Reloader++",
+        description="Damage received during reloading is cut down even further now.",
+        flags=PERK_DEFAULT_FLAGS,
+        prereq=(PerkId.TOUGH_RELOADER,),
+    ),
+    PerkMeta(
+        perk_id=PerkId.THICK_SKINNED_PLUS,
+        name="Thick Skinned++",
+        description="Your skin thickens further still. Trade another third of your health for another third off incoming damage.",
+        flags=PERK_DEFAULT_FLAGS,
+        prereq=(PerkId.THICK_SKINNED,),
     ),
 ]
 

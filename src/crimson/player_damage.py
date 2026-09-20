@@ -57,8 +57,13 @@ def player_take_damage(
         return 0.0
 
     damage_scaled = float(raw_damage)
-    if perk_active(perk_player, PerkId.TOUGH_RELOADER) and player.weapon.reload_active:
-        damage_scaled = x87_pc24_mul(damage_scaled, f32(0.5))
+    if player.weapon.reload_active:
+        # Rewrite-only: Tough Reloader++ cuts reload-time damage further, from
+        # half down to a quarter.
+        if perk_active(perk_player, PerkId.TOUGH_RELOADER_PLUS):
+            damage_scaled = x87_pc24_mul(damage_scaled, f32(0.25))
+        elif perk_active(perk_player, PerkId.TOUGH_RELOADER):
+            damage_scaled = x87_pc24_mul(damage_scaled, f32(0.5))
     spread_heat_damage = float(damage_scaled)
 
     state.survival_reward_damage_seen = True
@@ -76,7 +81,15 @@ def player_take_damage(
 
     dodged = False
     if perk_active(perk_player, PerkId.NINJA):
-        dodged = (state.rng.rand_tagged(RngCallerStatic.PLAYER_TAKE_DAMAGE_NINJA) % 3) == 0
+        if perk_active(perk_player, PerkId.DODGER):
+            # Rewrite-only: Ninja composes with Dodger (its prereq) instead of
+            # replacing it. Both roll at 1-in-5; combined miss chance for two
+            # independent "chance to dodge" rolls is 1 - (1-1/5)*(1-1/5) =
+            # 9/25 - reinterprets one roll (mod 25) rather than drawing twice,
+            # so the RNG stream still advances exactly once per hit either way.
+            dodged = (state.rng.rand_tagged(RngCallerStatic.PLAYER_TAKE_DAMAGE_NINJA) % 25) < 9
+        else:
+            dodged = (state.rng.rand_tagged(RngCallerStatic.PLAYER_TAKE_DAMAGE_NINJA) % 5) == 0
     elif perk_active(perk_player, PerkId.DODGER):
         dodged = (state.rng.rand_tagged(RngCallerStatic.PLAYER_TAKE_DAMAGE_DODGER) % 5) == 0
 

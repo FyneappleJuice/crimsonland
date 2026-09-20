@@ -27,6 +27,7 @@ from ..impl.random_weapon import HOOKS as RANDOM_WEAPON_HOOKS
 from ..impl.reflex_boosted import HOOKS as REFLEX_BOOSTED_HOOKS
 from ..impl.regeneration_effect import HOOKS as REGENERATION_HOOKS
 from ..impl.thick_skinned import HOOKS as THICK_SKINNED_HOOKS
+from ..impl.thick_skinned import PLUS_HOOKS as THICK_SKINNED_PLUS_HOOKS
 from .apply_context import PerkApplyHandler
 from .hook_types import PerkHooks, PerksUpdateEffectsStep, PlayerDeathHook, PlayerPerkTickStep, WorldDtStep
 from .player_bonus_timers import update_player_bonus_timers
@@ -50,6 +51,7 @@ PERK_HOOKS_IN_ORDER: tuple[PerkHooks, ...] = (
     RANDOM_WEAPON_HOOKS,
     LIFELINE_50_50_HOOKS,
     THICK_SKINNED_HOOKS,
+    THICK_SKINNED_PLUS_HOOKS,
     BREATHING_ROOM_HOOKS,
     INFERNAL_CONTRACT_HOOKS,
     GRIM_DEAL_HOOKS,

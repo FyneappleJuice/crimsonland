@@ -26,3 +26,11 @@ HOOKS = PerkHooks(
     perk_id=PerkId.THICK_SKINNED,
     apply_handler=apply_thick_skinned,
 )
+
+# Rewrite-only: Thick Skinned++ takes the same one-time current-HP cut a
+# second time (on top of the base perk's own cut, already applied when it was
+# picked), pairing with its own second damage_taken_mult MORE term above.
+PLUS_HOOKS = PerkHooks(
+    perk_id=PerkId.THICK_SKINNED_PLUS,
+    apply_handler=apply_thick_skinned,
+)

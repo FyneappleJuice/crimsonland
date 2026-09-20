@@ -363,7 +363,15 @@ class BonusPool:
                         has_bonus_magnet = any(perk_active(player, PerkId.BONUS_MAGNET) for player in players)
                 if not has_bonus_magnet:
                     return None
-                if rng.rand_tagged(RngCallerStatic.BONUS_TRY_SPAWN_ON_KILL_BONUS_MAGNET) % 10 != 2:
+                # Rewrite-only: Bonus Magnet++ raises these gated odds from
+                # 1-in-10 to 1-in-5. Reinterprets the same single roll rather
+                # than drawing again, so the RNG stream is unaffected either way.
+                has_bonus_magnet_plus = players and any(
+                    perk_active(player, PerkId.BONUS_MAGNET_PLUS) for player in players
+                )
+                magnet_roll = rng.rand_tagged(RngCallerStatic.BONUS_TRY_SPAWN_ON_KILL_BONUS_MAGNET)
+                magnet_hit = (magnet_roll % 5 == 2) if has_bonus_magnet_plus else (magnet_roll % 10 == 2)
+                if not magnet_hit:
                     return None
 
         entry = self.spawn_at_pos(

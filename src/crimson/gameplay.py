@@ -512,8 +512,11 @@ def _player_accelerate_move_speed(player: PlayerState, perk_player: PlayerState,
             acceleration = f32(float(dt) * 4.0)
             player.move_speed = float(f32(float(player.move_speed) + float(acceleration)))
         player.move_speed = float(f32(float(player.move_speed) + float(dt)))
-        if player.move_speed > f32(2.8):
-            player.move_speed = f32(2.8)
+        # Rewrite-only: Long Distance Runner++ raises the warmed-up top speed
+        # cap further (2.8 -> 3.4), same ramp shape otherwise.
+        speed_cap = f32(3.4) if perk_active(perk_player, PerkId.LONG_DISTANCE_RUNNER_PLUS) else f32(2.8)
+        if player.move_speed > speed_cap:
+            player.move_speed = speed_cap
     else:
         acceleration = f32(float(dt) * 5.0)
         player.move_speed = float(f32(float(player.move_speed) + float(acceleration)))

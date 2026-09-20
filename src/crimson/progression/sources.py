@@ -43,15 +43,24 @@ PERK_STAT_MODS: dict[PerkId, tuple[StatMod, ...]] = {
     # --- fire rate --------------------------------------------------
     # weapon_runtime/fire.py: shot_cooldown *= 0.88
     PerkId.FASTSHOT: (more("shot_cooldown_mult", -0.12, source="perk:fastshot"),),
+    # Tier upgrade (rewrite-only): combined with FASTSHOT (prereq-gated, always
+    # co-owned) this brings shot_cooldown to *0.80 total (-20%): 0.88*(10/11)=0.80.
+    PerkId.FASTSHOT_PLUS: (more("shot_cooldown_mult", -1.0 / 11.0, source="perk:fastshot_plus"),),
     # weapon_runtime/fire.py: shot_cooldown *= 1.05 (aim tradeoff; laser sight
     # + spread reset stay in code - see PERK_MECHANICAL note)
     PerkId.SHARPSHOOTER: (more("shot_cooldown_mult", 0.05, source="perk:sharpshooter"),),
     # --- reload ----------------------------------------------------
     # weapon_runtime/assign.py: reload_timer = reload_time * 0.7
     PerkId.FASTLOADER: (more("reload_time_mult", -0.3, source="perk:fastloader"),),
+    # Tier upgrade (rewrite-only): combined with FASTLOADER this brings
+    # reload_time to *0.5 total (half reload time): 0.7*(5/7)=0.5.
+    PerkId.FASTLOADER_PLUS: (more("reload_time_mult", -2.0 / 7.0, source="perk:fastloader_plus"),),
     # --- ammo / clip ---------------------------------------------
     # weapon_runtime/assign.py: clip += max(1, floor(clip * 0.25))
     PerkId.AMMO_MANIAC: (increased("clip_size_mult", 0.25, source="perk:ammo_maniac"),),
+    # Tier upgrade (rewrite-only): INC sums, so combined with AMMO_MANIAC this
+    # brings clip_size_mult to +60% total (0.25 + 0.35).
+    PerkId.AMMO_MANIAC_PLUS: (increased("clip_size_mult", 0.35, source="perk:ammo_maniac_plus"),),
     # weapon_runtime/assign.py: clip += 2. (Its "no more random weapon bonuses"
     # rule stays a raw perk check in bonuses/selection.py + bonuses/pool.py.)
     PerkId.MY_FAVOURITE_WEAPON: (flat("clip_size_add", 2.0, source="perk:my_favourite_weapon"),),
@@ -59,6 +68,11 @@ PERK_STAT_MODS: dict[PerkId, tuple[StatMod, ...]] = {
     # creatures/damage.py: kinetic-bullet damage += itself (x2). Lead only - a
     # uranium slug is meaningless for a plasma bolt, so this does NOT touch energy.
     PerkId.URANIUM_FILLED_BULLETS: (more("damage_mult_bullet", 1.0, source="perk:uranium_filled_bullets"),),
+    # Tier upgrade (rewrite-only): combined with URANIUM_FILLED_BULLETS this
+    # brings damage_mult_bullet to *3.0 total (triple, up from double): 2.0*1.5=3.0.
+    PerkId.URANIUM_FILLED_BULLETS_PLUS: (
+        more("damage_mult_bullet", 0.5, source="perk:uranium_filled_bullets_plus"),
+    ),
     # creatures/damage.py: projectile damage *= 1.2. "You know where to aim" is
     # ammo-agnostic, so it rides the projectile layer (kinetic bullet + energy).
     PerkId.DOCTOR: (more("damage_mult_projectile", 0.2, source="perk:doctor"),),
@@ -77,8 +91,19 @@ PERK_STAT_MODS: dict[PerkId, tuple[StatMod, ...]] = {
     PerkId.THICK_SKINNED: (
         more("damage_taken_mult", _THICK_SKINNED_DAMAGE_SCALE - 1.0, source="perk:thick_skinned"),
     ),
+    # Tier upgrade (rewrite-only): the exact same MORE delta as THICK_SKINNED,
+    # applied a second time. MORE terms multiply, so combined with the base
+    # this gives damage_taken_mult *= 0.666^2 = ~0.444 (~56% less damage taken
+    # total) - "a further third off what's left," not off the original.
+    # perks/impl/thick_skinned.py applies a second current-HP cut on pick.
+    PerkId.THICK_SKINNED_PLUS: (
+        more("damage_taken_mult", _THICK_SKINNED_DAMAGE_SCALE - 1.0, source="perk:thick_skinned_plus"),
+    ),
     # bonuses/apply.py: bonus timers *= 1.5
     PerkId.BONUS_ECONOMIST: (more("bonus_duration_mult", 0.5, source="perk:bonus_economist"),),
+    # Tier upgrade (rewrite-only): combined with BONUS_ECONOMIST this brings
+    # bonus_duration_mult to *2.0 total (double duration): 1.5*(4/3)=2.0.
+    PerkId.BONUS_ECONOMIST_PLUS: (more("bonus_duration_mult", 1.0 / 3.0, source="perk:bonus_economist_plus"),),
     # --- pure keystone flags ---------------------------------
     # player_damage.py: incoming hits don't jitter your heading
     PerkId.UNSTOPPABLE: (flag("no_hit_stagger", source="perk:unstoppable"),),
@@ -132,6 +157,14 @@ PERK_MECHANICAL: dict[PerkId, str] = {
     PerkId.LIVING_FORTRESS: "outgoing damage ramps the longer you stand still (dynamic)",
     PerkId.TOUGH_RELOADER: "halves incoming damage only while reloading (conditional)",
     PerkId.LIFELINE_50_50: "Typ-o-Shooter: auto-removes half the wrong targets",
+    # --- Rewrite-only "++" tier upgrades (hard-wired: no cross-perk stat to
+    # compose with, so each overrides its base's number at the same call site) --
+    PerkId.BLOODY_MESS_QUICK_LEARNER_PLUS: "upgrades the kill-XP multiplier from x1.3 to x1.6",
+    PerkId.LEAN_MEAN_EXP_MACHINE_PLUS: "adds a second, larger passive XP trickle on the same timer",
+    PerkId.LONG_DISTANCE_RUNNER_PLUS: "raises the warmed-up top speed cap further",
+    PerkId.MR_MELEE_PLUS: "doubles the flat counterattack damage",
+    PerkId.BONUS_MAGNET_PLUS: "raises the gated bonus-drop odds from 1-in-10 to 1-in-5",
+    PerkId.TOUGH_RELOADER_PLUS: "cuts reload-time incoming damage further, from half to a quarter",
 }
 
 
