@@ -656,7 +656,7 @@ _PERK_TABLE = [
     PerkMeta(
         perk_id=PerkId.COLD_SNAP,
         name="Deep Freeze",
-        description="Something about your critical hits just isn't right anymore. They don't wound, they freeze solid, on the spot, no warmup required. And you hit anything frozen harder, no matter what did the freezing. You've stopped asking why.",
+        description="Your critical hits carry something colder than they should. Whatever they land on freezes solid, right on the spot, no warning given. Frozen things turn brittle, and you've never been one to waste an opportunity like that.",
         flags=PERK_DEFAULT_FLAGS,
         prereq=(),
     ),
