@@ -169,6 +169,16 @@ def _damage_type1_living_fortress(ctx: _CreatureDamageCtx) -> None:
         if timer > 0.0:
             scale = x87_pc24_add(x87_pc24_mul(timer, f32(0.05)), 1.0)
             ctx.damage = x87_pc24_mul(ctx.damage, scale)
+        # Not native: Stunt Double's clone ticks its own Living Fortress timer
+        # (it never moves for its whole active window) but isn't itself a
+        # real player in ctx.players - fold its timer in as one more source
+        # of the same team-wide stack, same as a second real player would.
+        snapshot = player.hollow_form_snapshot
+        if snapshot is not None:
+            snapshot_timer = float(snapshot.living_fortress_timer)
+            if snapshot_timer > 0.0:
+                snapshot_scale = x87_pc24_add(x87_pc24_mul(snapshot_timer, f32(0.05)), 1.0)
+                ctx.damage = x87_pc24_mul(ctx.damage, snapshot_scale)
 
 
 def _damage_type1_heading_jitter(ctx: _CreatureDamageCtx) -> None:

@@ -4,13 +4,18 @@ from __future__ import annotations
 
 Every 4-10 seconds, a frozen snapshot of the player (weapon, perks, active
 powerup timers - a full `msgspec.structs.replace(player)`) appears at the
-player's current position and, for 1 real second, aims at whatever's nearest
-and holds its trigger down exactly like a held-LMB player would: it's fed
-into the real `fire_weapon()` every tick, so its own ammo/cooldown/reload
-state evolves naturally and it can fire more than once in that second if the
-weapon's fire rate allows. It never touches the real player's weapon/ammo/
-streak state. render/world/draw.py draws it as a dimmed trooper sprite at
-`hollow_form_pos` for as long as `hollow_form_active_timer > 0`.
+player's current position and, for 2 real seconds, aims at whatever's
+nearest and holds its trigger down exactly like a held-LMB player would:
+it's fed into the real `fire_weapon()` every tick, so its own ammo/cooldown/
+reload state evolves naturally and it can fire more than once in that
+window if the weapon's fire rate allows. It also runs the same
+periodic-perk-tick pipeline a real player's frame does (Hot Tempered, Fire
+Cough, Man Bomb, Living Fortress), so it can proc those independently of
+pulling the trigger - Living Fortress in particular has a real shot at
+mattering now that it never moves for a full 2 seconds. It never touches
+the real player's weapon/ammo/streak state. render/world/draw.py draws it
+as a dimmed trooper sprite at `hollow_form_pos` for as long as
+`hollow_form_active_timer > 0`.
 
 Doesn't spawn a creature-visible world entity, so there's nothing for
 creatures to aggro onto.
@@ -45,7 +50,7 @@ def _aim_heading_toward(pos, target_pos) -> float:
 
 HOLLOW_FORM_MIN_INTERVAL = 4.0
 HOLLOW_FORM_MAX_INTERVAL = 10.0
-HOLLOW_FORM_ACTIVE_DURATION = 1.0
+HOLLOW_FORM_ACTIVE_DURATION = 2.0
 
 # Private RNG for the trigger interval only (build-variance timing, same
 # reasoning as Free Rounds/crit.py) - the shots themselves still resolve on
@@ -98,7 +103,14 @@ def _advance_clone_weapon_timers(clone: PlayerState, dt: float) -> None:
 
 
 def _tick_hollow_form_clone(ctx: PerksUpdateEffectsCtx, player: PlayerState) -> None:
-    from ...weapon_runtime import WeaponFireCtx, fire_weapon
+    from ...weapon_runtime import (
+        WeaponFireCtx,
+        fire_weapon,
+        owner_ref_for_player,
+        owner_ref_for_player_projectiles,
+        projectile_spawn,
+    )
+    from ..runtime.player_ticks import apply_player_perk_ticks
 
     clone = player.hollow_form_snapshot
     if clone is None:
@@ -109,6 +121,22 @@ def _tick_hollow_form_clone(ctx: PerksUpdateEffectsCtx, player: PlayerState) -> 
     clone.pos = player.hollow_form_pos
     clone.aim = target_pos
     clone.aim_heading = _aim_heading_toward(clone.pos, target_pos)
+
+    # Not native: run the clone through the same periodic-perk-tick pipeline
+    # a real player's frame does (Hot Tempered, Fire Cough, Man Bomb, Living
+    # Fortress), same order player_update() runs it in - real players and its
+    # own perks, not a copy that can only pull the trigger.
+    apply_player_perk_ticks(
+        player=clone,
+        player_pos_before_move=clone.pos,
+        dt=float(ctx.dt),
+        state=ctx.state,
+        players=list(ctx.players),
+        owner_ref_for_player=owner_ref_for_player,
+        owner_ref_for_player_projectiles=owner_ref_for_player_projectiles,
+        projectile_spawn=projectile_spawn,
+    )
+
     _advance_clone_weapon_timers(clone, float(ctx.dt))
     fire_weapon(
         WeaponFireCtx(

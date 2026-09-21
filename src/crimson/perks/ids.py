@@ -740,7 +740,7 @@ _PERK_TABLE = [
     PerkMeta(
         perk_id=PerkId.HOLLOW_FORM,
         name="Stunt Double",
-        description="You've got someone who does the dangerous work so you don't have to. Every so often they step in wearing your face, empty the clip at whatever's closest for a second, and slip out before anyone realizes the swap.",
+        description="You've got someone who does the dangerous work so you don't have to. Every so often they step in wearing your face, empty the clip at whatever's closest for a couple of seconds, and slip out before anyone realizes the swap.",
         flags=PERK_DEFAULT_FLAGS,
         prereq=(),
     ),

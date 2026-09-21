@@ -297,6 +297,66 @@ def test_momentum_fires_exactly_one_rocket_from_a_swarmer_dump_weapon() -> None:
     assert ratio == pytest.approx(1.0) or ratio == pytest.approx(CRIT_MULTIPLIER)
 
 
+def test_momentum_shot_fires_from_the_player_not_the_kill_site() -> None:
+    # Regression: the clone used to spawn at the dead creature's position
+    # instead of the killer's own position, both for the shot's origin and
+    # for picking the "nearest" target - invisible in the other tests here
+    # since their killer and dying creature share the origin by coincidence.
+    state = GameplayState()
+    state.bonus_spawn_guard = True
+    player = PlayerState(index=0, pos=Vec2(1000.0, 0.0))
+    player.perk_counts[int(PerkId.MOMENTUM)] = 1
+    weapon_assign_player(player, WeaponId.ASSAULT_RIFLE, state=state)
+
+    pool = CreaturePool()
+    dying = pool.entries[0]
+    dying.active = True
+    dying.pos = Vec2(0.0, 0.0)
+    dying.hp = 0.0
+    dying.max_hp = 100.0
+    dying.lifecycle_stage = CREATURE_LIFECYCLE_ALIVE
+    dying.last_hit_owner = OwnerRef.from_player(0)
+
+    # Nearest to the *player*, far from the kill site.
+    near_player = pool.entries[1]
+    near_player.active = True
+    near_player.pos = Vec2(1010.0, 0.0)
+    near_player.hp = 100.0
+
+    # Nearest to the *kill site*, far from the player - would be picked if
+    # the old (buggy) origin were still in use.
+    near_kill_site = pool.entries[2]
+    near_kill_site.active = True
+    near_kill_site.pos = Vec2(10.0, 0.0)
+    near_kill_site.hp = 100.0
+
+    pool.handle_death(0, state=state, players=[player], rng=state.rng, world_width=2048.0, world_height=2048.0, fx_queue=None)
+
+    spawned = list(state.projectiles.iter_active())
+    assert len(spawned) == 1
+    # Origin includes the weapon's muzzle offset from the clone's position,
+    # so compare against the player's position with slack rather than exactly -
+    # the point is it's nowhere near the kill site (x=0), not pixel-perfect.
+    assert spawned[0].origin.x == pytest.approx(1000.0, abs=50.0)
+
+
+def test_momentum_shot_does_not_inherit_an_active_powerup() -> None:
+    # Unlike Hollow Form's clone, Domino Effect's free shot deliberately does
+    # not snapshot active powerup timers - a live Fire Bullets buff on the
+    # real player must not carry over and change the bonus shot's projectile
+    # type.
+    from crimson.projectiles.types import ProjectileTemplateId
+
+    state, player, pool = _kill_setup(weapon_id=WeaponId.ASSAULT_RIFLE, momentum=True)
+    player.fire_bullets_timer = 5.0
+
+    pool.handle_death(0, state=state, players=[player], rng=state.rng, world_width=1024.0, world_height=1024.0, fx_queue=None)
+
+    spawned = list(state.projectiles.iter_active())
+    assert len(spawned) == 1
+    assert spawned[0].type_id != ProjectileTemplateId.FIRE_BULLETS
+
+
 def test_momentum_does_nothing_without_the_perk() -> None:
     state = GameplayState()
     state.bonus_spawn_guard = True

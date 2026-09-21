@@ -109,6 +109,30 @@ def test_hollow_form_does_nothing_without_a_living_target() -> None:
     assert not any(entry.active for entry in state.projectiles.entries)  # ...but never fires
 
 
+def test_hollow_form_clone_can_proc_its_own_hot_tempered() -> None:
+    # The clone now runs the same periodic-perk-tick pipeline a real player's
+    # frame does, so a Hot Tempered ring (8 plasma projectiles) should fire
+    # off the clone's own snapshot, independent of pulling the trigger.
+    state = GameplayState()
+    player = PlayerState(index=0, pos=Vec2(50.0, 25.0), health=100.0)
+    player.perk_counts[int(PerkId.HOLLOW_FORM)] = 1
+    player.perk_counts[int(PerkId.HOT_TEMPERED)] = 1
+    weapon_assign_player(player, WeaponId.PISTOL, state=state)
+    creature = _make_target(Vec2(250.0, 25.0))
+
+    perks_update_effects(state, [player], 0.016, creatures=[creature])
+    assert player.hollow_form_snapshot is not None
+
+    # A dt bigger than Hot Tempered's ~1.4s default interval forces the
+    # clone's own timer past threshold in a single tick. perks_update_effects
+    # never calls player_update(), so this can only be the clone's own tick -
+    # the real player's Hot Tempered never runs in this harness.
+    perks_update_effects(state, [player], 1.5, creatures=[creature])
+
+    active = [entry for entry in state.projectiles.entries if entry.active]
+    assert len(active) >= 8
+
+
 def test_hollow_form_resets_when_perk_is_not_active() -> None:
     state = GameplayState()
     player = PlayerState(

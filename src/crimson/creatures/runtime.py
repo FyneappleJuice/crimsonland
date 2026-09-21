@@ -240,16 +240,17 @@ def _owner_to_player_index(owner: OwnerRef) -> int | None:
     return owner.player_index()
 
 
-# Rewrite-only: Domino Effect's free shot is fired from a full snapshot of
-# the killer (weapon, perks, active powerup timers) the same way Hollow
-# Form's clone is - real fire_weapon(), not a flat placeholder projectile -
-# but at half damage, since it's a freebie riding on a kill you already got.
-MOMENTUM_DAMAGE_MULT = 0.5
+# Rewrite-only: Domino Effect's free shot is fired from a snapshot of the
+# killer's weapon and perks (real fire_weapon(), not a flat placeholder
+# projectile) - but at 40% damage (60% less), since it's a freebie riding on
+# a kill you already got. Unlike Hollow Form's clone, active powerup timers
+# (Fire Bullets, Explosive Payload, Plasma Overload, Fork Shot, Speed,
+# Shield) are deliberately NOT copied onto this clone - see _fire_momentum_shot.
+MOMENTUM_DAMAGE_MULT = 0.4
 
 
 def _fire_momentum_shot(
     pool: "CreaturePool",
-    dead_creature: "CreatureState",
     *,
     dying_idx: int,
     killer: PlayerState,
@@ -258,7 +259,10 @@ def _fire_momentum_shot(
 ) -> None:
     nearest_idx: int | None = None
     nearest_dist = None
-    dx0, dy0 = float(dead_creature.pos.x), float(dead_creature.pos.y)
+    # The bonus shot fires from the killer's own position (matching Hollow
+    # Form's clone), not from wherever the kill happened - "nearest" is
+    # nearest to the player, same reference point the shot actually fires from.
+    dx0, dy0 = float(killer.pos.x), float(killer.pos.y)
     for other_idx, other in enumerate(pool._entries):
         if other_idx == dying_idx or not other.active or float(other.hp) <= 0.0:
             continue
@@ -279,6 +283,15 @@ def _fire_momentum_shot(
 
     clone = msgspec.structs.replace(
         killer,
+        # Unlike Hollow Form's clone, active powerup timers do NOT carry over
+        # to this one - the free shot only inherits the killer's weapon and
+        # perks, not whatever bonus happens to be running.
+        speed_bonus_timer=0.0,
+        shield_timer=0.0,
+        fire_bullets_timer=0.0,
+        projectile_fork_timer=0.0,
+        explosive_payload_timer=0.0,
+        plasma_overload_timer=0.0,
         weapon=msgspec.structs.replace(
             killer.weapon,
             # Exactly one shot's worth, not a full clip: some weapons (Mini-
@@ -292,7 +305,7 @@ def _fire_momentum_shot(
             shot_cooldown=0.0,
         ),
     )
-    clone.pos = dead_creature.pos
+    clone.pos = killer.pos
     clone.aim = target.pos
     # Not a plain atan2: aim_heading feeds the muzzle-position formula
     # (native_fire_muzzle_pos), which uses this specific fpatan(pos - aim) -
@@ -1995,7 +2008,7 @@ class CreaturePool:
             and perk_active(killer, PerkId.MOMENTUM)
             and not creature.last_hit_owner.via_domino_effect
         ):
-            _fire_momentum_shot(self, creature, dying_idx=int(idx), killer=killer, state=state, players=players)
+            _fire_momentum_shot(self, dying_idx=int(idx), killer=killer, state=state, players=players)
 
         # Rewrite-only: Bane of Legends - a kill opens/refreshes the 5s
         # bonus-damage window (perks/impl/bane_of_legends.py ticks it down).
