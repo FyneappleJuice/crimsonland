@@ -170,7 +170,7 @@ PERK_MECHANICAL: dict[PerkId, str] = {
     PerkId.COUP_DE_GRACE: "guaranteed kill on enemies below a health-percent threshold",
     PerkId.DEATH_WISH: "forces guaranteed crits while the player is at critically low health",
     PerkId.MOMENTUM: "a kill fires a free shot at the nearest other creature",
-    PerkId.COLD_SNAP: "critical hits freeze the target in place for a duration",
+    PerkId.COLD_SNAP: "critical hits freeze the target; frozen targets (by any source) take bonus damage",
     PerkId.DESPERATION: "incoming damage scales down as the player's health drops",
     PerkId.OVERDUE: "a streak of non-crits opens a timed bonus-crit-damage window",
     PerkId.KINETIC_DISCIPLINE: "a continuous charge builds while moving in a straight line and buys ramping damage",

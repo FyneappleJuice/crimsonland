@@ -102,7 +102,7 @@ _FORK_SHOT_ANGLE_RAD = 1.0471976
 _FORK_SHOT_SHOTGUN_DAMAGE_MULT = 0.5
 
 # Rewrite-only: Cold Snap - how long a crit freezes its target (seconds).
-COLD_SNAP_FREEZE_DURATION = 1.0
+COLD_SNAP_FREEZE_DURATION = 1.5
 # `Projectile.reserved` (native "unused" field, offset 0x28) doubles as fork
 # state: 0 = normal, 1 = has forked / is a plain fork child, 2 = fork child
 # that carries the shotgun damage penalty.

@@ -461,6 +461,50 @@ def test_cold_snap_does_not_freeze_on_a_non_crit() -> None:
     assert creature.crit_freeze_timer == 0.0
 
 
+def test_cold_snap_frozen_target_takes_bonus_damage_from_any_freeze_source() -> None:
+    # Deep Freeze's real payoff isn't the freeze itself (it can never out-CC
+    # Evil Eyes' unconditional, permanent freeze) - it's bonus damage to
+    # anything currently frozen, regardless of what froze it. Set is_frozen
+    # directly here rather than via crit_freeze_timer, to prove the bonus
+    # doesn't care about the source (e.g. it should apply just as well to a
+    # target Evil Eyes is holding).
+    creature = CreatureState(active=True, hp=100.0, max_hp=100.0, is_frozen=True)
+    player = PlayerState(index=0, pos=Vec2())
+    player.perk_counts[int(PerkId.COLD_SNAP)] = 1
+
+    creature_apply_damage(
+        creature, damage_amount=10.0, damage_type=int(CreatureDamageType.BULLET),
+        impulse=Vec2(), owner=OwnerRef.from_player(0), dt=0.016, players=[player], rng=Crand(1),
+    )
+
+    assert_float_close(creature.hp, 87.0)  # 100 - (10 * 1.30)
+
+
+def test_cold_snap_no_bonus_without_the_perk() -> None:
+    creature = CreatureState(active=True, hp=100.0, max_hp=100.0, is_frozen=True)
+    player = PlayerState(index=0, pos=Vec2())  # no Cold Snap
+
+    creature_apply_damage(
+        creature, damage_amount=10.0, damage_type=int(CreatureDamageType.BULLET),
+        impulse=Vec2(), owner=OwnerRef.from_player(0), dt=0.016, players=[player], rng=Crand(1),
+    )
+
+    assert_float_close(creature.hp, 90.0)
+
+
+def test_cold_snap_no_bonus_when_target_is_not_frozen() -> None:
+    creature = CreatureState(active=True, hp=100.0, max_hp=100.0, is_frozen=False)
+    player = PlayerState(index=0, pos=Vec2())
+    player.perk_counts[int(PerkId.COLD_SNAP)] = 1
+
+    creature_apply_damage(
+        creature, damage_amount=10.0, damage_type=int(CreatureDamageType.BULLET),
+        impulse=Vec2(), owner=OwnerRef.from_player(0), dt=0.016, players=[player], rng=Crand(1),
+    )
+
+    assert_float_close(creature.hp, 90.0)
+
+
 # --- Desperation ---------------------------------------------------------
 
 

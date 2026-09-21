@@ -430,6 +430,12 @@ class CreatureState(msgspec.Struct):
     # Rewrite-only: Cold Snap freezes the target on a crit (weapon_runtime/
     # crit.py, projectiles/runtime/projectile_pool.py). > 0 blocks movement.
     crit_freeze_timer: float = 0.0
+    # Rewrite-only: true whenever this creature is frozen for any reason
+    # (Cold Snap's crit_freeze_timer above, or the native Evil Eyes perk's
+    # aim-target lock) - set once per tick in the update loop below. Deep
+    # Freeze's damage bonus in creatures/damage.py reads this directly rather
+    # than re-deriving "am I frozen" from the players list at damage time.
+    is_frozen: bool = False
 
     # Rewrite-only: The Hit List (perks/impl/hit_list.py) - True on the single
     # Apex-tier monster currently marked. Killing it pays out the perk's
@@ -1355,7 +1361,8 @@ class CreaturePool:
                 creature.crit_freeze_timer = max(0.0, float(creature.crit_freeze_timer) - float(dt))
 
             frozen_by_evil_eyes = idx in evil_targets
-            if frozen_by_evil_eyes or creature.crit_freeze_timer > 0.0:
+            creature.is_frozen = frozen_by_evil_eyes or creature.crit_freeze_timer > 0.0
+            if creature.is_frozen:
                 # Native branch (`creature_update_all`, around 0x0042665f): when the
                 # current creature is the Evil Eyes target, the update path jumps to
                 # the loop tail before cooldown/interaction/ranged logic.
@@ -1731,6 +1738,7 @@ class CreaturePool:
         entry.affix_lunge_active = 0.0
         entry.affix_lob_timer = 0.0
         entry.crit_freeze_timer = 0.0
+        entry.is_frozen = False
 
         entry.bonus_id = init.bonus_id
         entry.bonus_duration_override = (
@@ -1962,6 +1970,11 @@ class CreaturePool:
                 # The parent may have carried a Hit List mark; a split child
                 # is a new target, not the one that was marked.
                 child.hit_list_marked = False
+                # Same reasoning for freeze state - the split happens on death,
+                # so the parent's frozen status has nothing to do with the
+                # freshly spawned child.
+                child.crit_freeze_timer = 0.0
+                child.is_frozen = False
                 self._entries[child_idx] = child
                 self.spawned_count += 1
 

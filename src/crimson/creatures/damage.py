@@ -36,6 +36,12 @@ KINETIC_DISCIPLINE_MAX_BONUS = 0.30
 # Adrenaline Rush's timed window (opened in player_damage.py whenever the
 # player actually loses health) grants this flat bonus while it's open.
 ADRENALINE_RUSH_BONUS = 0.25
+# Deep Freeze (Cold Snap): bonus damage a shooter deals to any target that is
+# currently frozen, regardless of what froze it - their own crit-freeze
+# (creature.crit_freeze_timer) or the native Evil Eyes perk's aim-lock. This
+# is Deep Freeze's actual payoff now - the freeze itself was never going to
+# out-compete Evil Eyes' unconditional, permanent freeze on CC alone.
+COLD_SNAP_FROZEN_TARGET_BONUS = 0.30
 
 
 def _any_player_has_perk(players: list[PlayerState], perk_id: PerkId) -> bool:
@@ -389,6 +395,8 @@ def creature_apply_damage(
                 ctx.damage = f32(float(ctx.damage) * (1.0 + DELICATE_WATCH_BONUS))
             if perk_active(shooter, PerkId.HIT_LIST) and float(shooter.hit_list_bonus) > 0.0:
                 ctx.damage = f32(float(ctx.damage) * (1.0 + float(shooter.hit_list_bonus)))
+            if perk_active(shooter, PerkId.COLD_SNAP) and creature.is_frozen:
+                ctx.damage = f32(float(ctx.damage) * (1.0 + COLD_SNAP_FROZEN_TARGET_BONUS))
 
     if ctx.damage_type in (
         CreatureDamageType.BULLET,
