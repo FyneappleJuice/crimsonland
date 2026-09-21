@@ -96,7 +96,6 @@ class _Room(msgspec.Struct):
     mode_id: GameMode
     player_count: int
     quest_level: QuestLevel | None
-    preserve_bugs: bool
     tick_rate: int
     input_delay_ticks: int
     rollback_max_ticks: int
@@ -377,7 +376,6 @@ class RelayServer:
             mode_id=settings.mode_id,
             player_count=int(player_count),
             quest_level=settings.quest_level,
-            preserve_bugs=bool(settings.preserve_bugs),
             tick_rate=int(settings.tick_rate),
             input_delay_ticks=int(settings.input_delay_ticks),
             rollback_max_ticks=int(settings.rollback_max_ticks),
@@ -654,7 +652,6 @@ class RelayServer:
             mode_id=room.mode_id,
             player_count=int(room.player_count),
             quest_level=room.quest_level,
-            preserve_bugs=bool(room.preserve_bugs),
             tick_rate=int(room.tick_rate),
             input_delay_ticks=int(room.input_delay_ticks),
             rollback_max_ticks=int(room.rollback_max_ticks),
@@ -704,7 +701,6 @@ class RelayServer:
             mode_id=room.mode_id,
             player_count=int(room.player_count),
             quest_level=room.quest_level,
-            preserve_bugs=bool(room.preserve_bugs),
             tick_rate=int(room.tick_rate),
             input_delay_ticks=int(room.input_delay_ticks),
             rollback_max_ticks=int(room.rollback_max_ticks),

@@ -127,7 +127,7 @@ def test_player_take_damage_decrements_death_timer_on_death_hit() -> None:
 
 def test_player_take_damage_exact_zero_kill_uses_death_path_by_default() -> None:
     rng = ScriptedCrand(0, fallback=ScriptedCrand.Fallback.REPEAT_LAST)
-    state = GameplayState(preserve_bugs=False, rng=rng)
+    state = GameplayState(rng=rng)
     player = PlayerState(index=0, pos=Vec2(), health=100.0, death_timer=16.0)
     player.perk_counts[int(PerkId.HIGHLANDER)] = 1
 
@@ -140,26 +140,6 @@ def test_player_take_damage_exact_zero_kill_uses_death_path_by_default() -> None
     assert [record.caller for record in rng.records_since()] == [
         RngCallerStatic.PLAYER_TAKE_DAMAGE_HIGHLANDER,
         RngCallerStatic.PLAYER_TAKE_DAMAGE_DEATH_SFX,
-        RngCallerStatic.PLAYER_TAKE_DAMAGE_HEADING,
-        RngCallerStatic.PLAYER_TAKE_DAMAGE_LOW_HEALTH,
-    ]
-
-
-def test_player_take_damage_exact_zero_kill_preserve_bugs_keeps_pain_path() -> None:
-    rng = ScriptedCrand(0, fallback=ScriptedCrand.Fallback.REPEAT_LAST)
-    state = GameplayState(preserve_bugs=True, rng=rng)
-    player = PlayerState(index=0, pos=Vec2(), health=100.0, death_timer=16.0)
-    player.perk_counts[int(PerkId.HIGHLANDER)] = 1
-
-    applied = player_take_damage(state, player, 10.0, dt=0.1)
-
-    assert applied == 100.0
-    assert player.health == 0.0
-    assert player.death_timer == 16.0
-    assert state.sfx_queue == [SfxId.TROOPER_INPAIN_01]
-    assert [record.caller for record in rng.records_since()] == [
-        RngCallerStatic.PLAYER_TAKE_DAMAGE_HIGHLANDER,
-        RngCallerStatic.PLAYER_TAKE_DAMAGE_PAIN_SFX,
         RngCallerStatic.PLAYER_TAKE_DAMAGE_HEADING,
         RngCallerStatic.PLAYER_TAKE_DAMAGE_LOW_HEALTH,
     ]
@@ -205,7 +185,7 @@ def test_player_take_damage_zero_contact_damage_preserves_native_side_effects() 
 
 
 def test_player_take_damage_uses_target_player_alive_guard_by_default() -> None:
-    state = GameplayState(preserve_bugs=False, rng=ScriptedCrand(0, fallback=ScriptedCrand.Fallback.REPEAT_LAST))
+    state = GameplayState(rng=ScriptedCrand(0, fallback=ScriptedCrand.Fallback.REPEAT_LAST))
     player1 = PlayerState(index=0, pos=Vec2(), health=-1.0)
     player2 = PlayerState(index=1, pos=Vec2(), health=5.0, death_timer=16.0)
 
@@ -217,68 +197,14 @@ def test_player_take_damage_uses_target_player_alive_guard_by_default() -> None:
     assert state.sfx_queue == [SfxId.TROOPER_DIE_01]
 
 
-def test_player_take_damage_preserve_bugs_uses_player1_alive_guard() -> None:
-    state = GameplayState(preserve_bugs=True, rng=ScriptedCrand(0, fallback=ScriptedCrand.Fallback.REPEAT_LAST))
-    player1 = PlayerState(index=0, pos=Vec2(), health=-1.0)
-    player2 = PlayerState(index=1, pos=Vec2(), health=5.0, death_timer=16.0)
-
-    applied = player_take_damage(state, player2, 10.0, dt=0.1, players=[player1, player2])
-
-    assert applied == 10.0
-    assert player2.health == -5.0
-    assert player2.death_timer == x87_pc24_sub(16.0, x87_pc24_mul(f32(0.1), 28.0))
-    assert state.sfx_queue == []
-
-
-@pytest.mark.parametrize(
-    ("preserve_bugs", "player1_has_perk", "target_has_perk", "expected_health"),
-    [
-        (True, True, False, 95.0),
-        (True, False, True, 90.0),
-        (False, False, True, 95.0),
-    ],
-    ids=["native-player1-source", "native-ignores-target-perk", "corrected-target-source"],
-)
-def test_player_take_damage_tough_reloader_perk_source(
-    preserve_bugs: bool,
-    player1_has_perk: bool,
-    target_has_perk: bool,
-    expected_health: float,
-) -> None:
-    state = GameplayState(
-        preserve_bugs=preserve_bugs,
-        rng=ScriptedCrand(0, fallback=ScriptedCrand.Fallback.REPEAT_LAST),
-    )
+def test_player_take_damage_tough_reloader_perk_source_uses_target() -> None:
+    state = GameplayState(rng=ScriptedCrand(0, fallback=ScriptedCrand.Fallback.REPEAT_LAST))
     player1 = PlayerState(index=0, pos=Vec2(), health=100.0)
     target = PlayerState(index=1, pos=Vec2(), health=100.0)
     target.weapon.reload_active = True
-    player1.perk_counts[int(PerkId.TOUGH_RELOADER)] = int(player1_has_perk)
-    target.perk_counts[int(PerkId.TOUGH_RELOADER)] = int(target_has_perk)
+    player1.perk_counts[int(PerkId.TOUGH_RELOADER)] = 0
+    target.perk_counts[int(PerkId.TOUGH_RELOADER)] = 1
 
     player_take_damage(state, target, 10.0, players=[player1, target])
 
-    assert target.health == expected_health
-
-
-@pytest.mark.parametrize(
-    ("player1_has_perk", "target_has_perk", "expected_applied"),
-    [(True, False, 0.0), (False, True, 10.0)],
-    ids=["player1-blocks-target-damage", "target-perk-is-ignored"],
-)
-def test_player_take_damage_preserve_bugs_death_clock_perk_source(
-    player1_has_perk: bool,
-    target_has_perk: bool,
-    expected_applied: float,
-) -> None:
-    state = GameplayState(
-        preserve_bugs=True,
-        rng=ScriptedCrand(0, fallback=ScriptedCrand.Fallback.REPEAT_LAST),
-    )
-    player1 = PlayerState(index=0, pos=Vec2(), health=100.0)
-    target = PlayerState(index=1, pos=Vec2(), health=100.0)
-    player1.perk_counts[int(PerkId.DEATH_CLOCK)] = int(player1_has_perk)
-    target.perk_counts[int(PerkId.DEATH_CLOCK)] = int(target_has_perk)
-
-    applied = player_take_damage(state, target, 10.0, players=[player1, target])
-
-    assert applied == expected_applied
+    assert target.health == 95.0

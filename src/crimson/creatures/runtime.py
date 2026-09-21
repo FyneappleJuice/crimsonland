@@ -441,8 +441,6 @@ class CreatureUpdateResult(msgspec.Struct, frozen=True):
 
 class _TargetPlayerResolution(msgspec.Struct, frozen=True):
     target_player: int
-    auto_target_player: int
-    native_auto_target_distance: float | None = None
 
 
 class CreatureUpdateOptions(msgspec.Struct, frozen=True):
@@ -645,9 +643,7 @@ def _creature_interaction_contact_damage(ctx: _CreatureInteractionCtx) -> None:
     if options is not None:
         ctx.sfx.append(options[ctx.rng.rand_tagged(RngCallerStatic.CREATURE_UPDATE_ALL_CONTACT_SFX) & 1])
 
-    # Native's perk_count_get helper always reads player slot zero, even though
-    # the surrounding contact path targets and damages the selected player.
-    perk_player = ctx.players[0] if ctx.state.preserve_bugs and ctx.players else ctx.player
+    perk_player = ctx.player
 
     if perk_active(perk_player, PerkId.MR_MELEE):
         from .damage import creature_apply_damage_with_lethal_followup
@@ -664,7 +660,6 @@ def _creature_interaction_contact_damage(ctx: _CreatureInteractionCtx) -> None:
             dt=ctx.dt,
             players=ctx.players,
             rng=ctx.rng,
-            preserve_bugs=bool(ctx.state.preserve_bugs),
             effects=ctx.state.effects,
             detail_preset=int(ctx.detail_preset),
             creature_damage_runtime=_CreatureInteractionCreatureDamageRuntime(ctx=ctx),
@@ -836,20 +831,11 @@ class CreaturePool:
         player_count = len(players)
         if player_count == 0:
             creature.target_player = 0
-            return _TargetPlayerResolution(target_player=0, auto_target_player=0)
+            return _TargetPlayerResolution(target_player=0)
 
         if player_count == 1:
             creature.target_player = 0
-            native_auto_target_distance = None
-            if (self._update_tick % _TARGET_REEVAL_PERIOD) != 0:
-                dx = x87_pc24_sub(players[0].pos.x, creature.pos.x)
-                dy = x87_pc24_sub(players[0].pos.y, creature.pos.y)
-                native_auto_target_distance = x87_pc24_hypot(dx, dy)
-            return _TargetPlayerResolution(
-                target_player=0,
-                auto_target_player=0,
-                native_auto_target_distance=native_auto_target_distance,
-            )
+            return _TargetPlayerResolution(target_player=0)
 
         target_player = int(creature.target_player)
         if not (0 <= target_player < player_count):
@@ -858,7 +844,6 @@ class CreaturePool:
         # Native 2-player behavior: periodically switch to P2 if alive and closer,
         # and always flip when the current target dies.
         if player_count == 2:
-            native_auto_target_distance = None
             if (self._update_tick % _TARGET_REEVAL_PERIOD) != 0:
                 other = 1 - target_player
                 if float(players[other].health) > 0.0:
@@ -868,18 +853,12 @@ class CreaturePool:
                     other_dx = x87_pc24_sub(players[other].pos.x, creature.pos.x)
                     other_dy = x87_pc24_sub(players[other].pos.y, creature.pos.y)
                     other_distance = x87_pc24_hypot(other_dx, other_dy)
-                    native_auto_target_distance = other_distance
                     if other_distance < cur_distance:
                         target_player = other
-            auto_target_player = target_player
             if float(players[target_player].health) <= 0.0:
                 target_player = 1 - target_player
             creature.target_player = int(target_player)
-            return _TargetPlayerResolution(
-                target_player=int(target_player),
-                auto_target_player=int(auto_target_player),
-                native_auto_target_distance=native_auto_target_distance,
-            )
+            return _TargetPlayerResolution(target_player=int(target_player))
 
         # 3/4-player extension: keep deterministic nearest-alive targeting with the
         # same periodic refresh/dead-target refresh policy as native 2-player mode.
@@ -898,20 +877,15 @@ class CreaturePool:
                 target_player = nearest_idx
 
         creature.target_player = int(target_player)
-        return _TargetPlayerResolution(
-            target_player=int(target_player),
-            auto_target_player=int(target_player),
-        )
+        return _TargetPlayerResolution(target_player=int(target_player))
 
     def _update_player_auto_target(
         self,
         *,
         players: list[PlayerState],
-        preserve_bugs: bool,
         player_index: int,
         creature_index: int,
         creature: CreatureState,
-        native_candidate_distance: float | None = None,
     ) -> None:
         if not (0 <= int(player_index) < len(players)):
             return
@@ -927,23 +901,10 @@ class CreaturePool:
             return
 
         current = self._entries[int(auto_target)]
-        if preserve_bugs and native_candidate_distance is not None:
-            # In native two-player mode this is the distance from the creature
-            # to the player opposite its target at the start of reevaluation.
-            dist_new = float(native_candidate_distance)
-        else:
-            # Native leaves the alternate-distance stack local untouched when
-            # the opposite player is dead. Its first value is unknowable, so
-            # bug mode uses this deterministic selected-player fallback rather
-            # than fabricating stack residue.
-            new_dx = x87_pc24_sub(player.pos.x, creature.pos.x)
-            new_dy = x87_pc24_sub(player.pos.y, creature.pos.y)
-            dist_new = x87_pc24_hypot(new_dx, new_dy)
+        new_dx = x87_pc24_sub(player.pos.x, creature.pos.x)
+        new_dy = x87_pc24_sub(player.pos.y, creature.pos.y)
+        dist_new = x87_pc24_hypot(new_dx, new_dy)
         current_origin = player.pos
-        if preserve_bugs and players:
-            # Native always measures the previous auto-target from player 1's
-            # coordinates, even when it writes player 2's auto-target slot.
-            current_origin = players[0].pos
         current_dx = x87_pc24_sub(current_origin.x, current.pos.x)
         current_dy = x87_pc24_sub(current_origin.y, current.pos.y)
         dist_current = x87_pc24_hypot(current_dx, current_dy)
@@ -1157,24 +1118,14 @@ class CreaturePool:
 
         evil_targets: set[int] = set()
         if players:
-            if bool(state.preserve_bugs):
-                # Native `creature_update_all` reads one global
-                # `evil_eyes_target_creature` slot (player-0 storage), even in
-                # multiplayer runs.
-                if perk_active(players[0], PerkId.EVIL_EYES):
-                    evil_target = int(players[0].evil_eyes_target_creature)
-                    if evil_target >= 0:
-                        evil_targets.add(int(evil_target))
-            else:
-                # Bug-fixed path: apply all alive Evil Eyes owners.
-                for player in players:
-                    if float(player.health) <= 0.0:
-                        continue
-                    if not perk_active(player, PerkId.EVIL_EYES):
-                        continue
-                    evil_target = int(player.evil_eyes_target_creature)
-                    if evil_target >= 0:
-                        evil_targets.add(int(evil_target))
+            for player in players:
+                if float(player.health) <= 0.0:
+                    continue
+                if not perk_active(player, PerkId.EVIL_EYES):
+                    continue
+                evil_target = int(player.evil_eyes_target_creature)
+                if evil_target >= 0:
+                    evil_targets.add(int(evil_target))
 
         # Movement + AI. Dead creatures keep updating (death slide + corpse decals)
         # even when `players` is empty so debug views remain deterministic.
@@ -1219,7 +1170,6 @@ class CreaturePool:
                 dt=dt,
                 players=players,
                 rng=rng,
-                preserve_bugs=bool(state.preserve_bugs),
                 effects=state.effects,
                 detail_preset=int(detail_preset),
                 creature_damage_runtime=creature_damage_runtime,
@@ -1262,15 +1212,9 @@ class CreaturePool:
                     if (self._update_tick % _TARGET_REEVAL_PERIOD) != 0:
                         self._update_player_auto_target(
                             players=players,
-                            preserve_bugs=bool(state.preserve_bugs),
-                            player_index=int(
-                                target_resolution.auto_target_player
-                                if state.preserve_bugs
-                                else target_resolution.target_player,
-                            ),
+                            player_index=int(target_resolution.target_player),
                             creature_index=int(idx),
                             creature=creature,
-                            native_candidate_distance=target_resolution.native_auto_target_distance,
                         )
                     if single_player_dormant_target is not None and float(players[0].health) <= 0.0:
                         creature.target_player = 1
@@ -1319,15 +1263,9 @@ class CreaturePool:
             if target_resolution is not None and (self._update_tick % _TARGET_REEVAL_PERIOD) != 0:
                 self._update_player_auto_target(
                     players=players,
-                    preserve_bugs=bool(state.preserve_bugs),
-                    player_index=int(
-                        target_resolution.auto_target_player
-                        if state.preserve_bugs
-                        else target_resolution.target_player,
-                    ),
+                    player_index=int(target_resolution.target_player),
                     creature_index=int(idx),
                     creature=creature,
-                    native_candidate_distance=target_resolution.native_auto_target_distance,
                 )
             if uses_dormant_target:
                 assert single_player_dormant_target is not None
@@ -1435,7 +1373,6 @@ class CreaturePool:
                     dt=float(dt),
                     players=players,
                     rng=rng,
-                    preserve_bugs=bool(state.preserve_bugs),
                     effects=state.effects,
                     detail_preset=int(detail_preset),
                     creature_damage_runtime=creature_damage_runtime,
@@ -1529,14 +1466,10 @@ class CreaturePool:
 
             # Native radioactive contact pulse runs after movement/AI/cooldown
             # synthesis inside the live-creature branch. The distance is measured
-            # to the creature's target player, the perk gate reads player slot
-            # zero, the kill XP is credited to player 1, and the timer-fire
-            # requires the creature to still be alive (hp > 0).
-            radioactive_active = bool(players) and (
-                perk_active(players[0], PerkId.RADIOACTIVE)
-                if state.preserve_bugs
-                else any(perk_active(p, PerkId.RADIOACTIVE) for p in players)
-            )
+            # to the creature's target player, the kill XP is credited to
+            # player 1, and the timer-fire requires the creature to still be
+            # alive (hp > 0).
+            radioactive_active = bool(players) and any(perk_active(p, PerkId.RADIOACTIVE) for p in players)
             if radioactive_active and target_dist < 100.0:
                 pulse_timer_step = x87_pc24_mul(float(dt), f32(1.5))
                 creature.collision_timer = x87_pc24_sub(
@@ -1668,9 +1601,8 @@ class CreaturePool:
                 world_height=world_height,
                 detail_preset=int(detail_preset),
             )
-            if not bool(state.preserve_bugs):
-                creature.bonus_id = None
-                creature.bonus_duration_override = None
+            creature.bonus_id = None
+            creature.bonus_duration_override = None
         survival_record_recent_death(state, pos=creature.pos)
         if not creature.active:
             # Native `creature_handle_death` gates its XP/bonus/freeze body under
@@ -2029,11 +1961,9 @@ class CreaturePool:
 
         killer: PlayerState | None = None
         if players:
-            player_index = 0
-            if not bool(state.preserve_bugs):
-                player_index = _owner_to_player_index(creature.last_hit_owner)
-                if player_index is None or not (0 <= player_index < len(players)):
-                    player_index = 0
+            player_index = _owner_to_player_index(creature.last_hit_owner)
+            if player_index is None or not (0 <= player_index < len(players)):
+                player_index = 0
             killer = players[player_index]
 
         xp_awarded = 0

@@ -38,7 +38,6 @@ class WorldRuntime:
         demo_mode_active: bool = False,
         quest_fail_retry_count: int = 0,
         hardcore: bool = False,
-        preserve_bugs: bool = False,
         config: CrimsonConfig | None = None,
         audio_rng: CrandLike,
         audio: AudioState | None = None,
@@ -49,7 +48,6 @@ class WorldRuntime:
         self.demo_mode_active = bool(demo_mode_active)
         self.quest_fail_retry_count = int(quest_fail_retry_count)
         self.hardcore = bool(hardcore)
-        self.preserve_bugs = bool(preserve_bugs)
         self.config = config
         self.audio = audio
         self.audio_rng = audio_rng
@@ -60,7 +58,6 @@ class WorldRuntime:
             demo_mode_active=bool(self.demo_mode_active),
             hardcore=bool(self.hardcore),
             quest_fail_retry_count=int(self.quest_fail_retry_count),
-            preserve_bugs=bool(self.preserve_bugs),
         )
         render_resources = RenderResources(
             assets_dir=self.assets_dir,
@@ -126,7 +123,6 @@ class WorldRuntime:
         self.sim_world.demo_mode_active = bool(self.demo_mode_active)
         self.sim_world.hardcore = bool(self.hardcore)
         self.sim_world.quest_fail_retry_count = int(self.quest_fail_retry_count)
-        self.sim_world.preserve_bugs = bool(self.preserve_bugs)
         self.sim_world.reset(
             seed=int(seed),
             player_count=int(player_count),

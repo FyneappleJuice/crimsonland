@@ -102,9 +102,7 @@ class UnlockedWeaponsDatabaseView(_DatabaseBaseView):
         weapon_id = int(self._selected_weapon_id)
         name, icon_index = self._weapon_label_and_icon(weapon_id)
         weapon = self._weapon_entry(weapon_id)
-        preserve_bugs = self.state.preserve_bugs
-        weapon_no_label = "wepno" if preserve_bugs else "weapon"
-        draw_small_text(font, f"{weapon_no_label} #{weapon_id}", detail_top_left + Vec2(240.0 * scale, 32.0 * scale), rl.Color(255, 255, 255, int(255 * 0.4)))
+        draw_small_text(font, f"weapon #{weapon_id}", detail_top_left + Vec2(240.0 * scale, 32.0 * scale), rl.Color(255, 255, 255, int(255 * 0.4)))
         draw_small_text(font, name, detail_top_left + Vec2(50.0 * scale, 50.0 * scale), text_color)
         if icon_index is not None:
             self._draw_wicon(icon_index, weapon_id=weapon_id, pos=detail_top_left + Vec2(82.0 * scale, 82.0 * scale), scale=scale)
@@ -112,11 +110,10 @@ class UnlockedWeaponsDatabaseView(_DatabaseBaseView):
         reload_time = weapon.reload_time
         clip_size = weapon.clip_size
         ammo_class = int(weapon.ammo_class or 0)
-        firerate_label = "Firerate" if preserve_bugs else "Fire rate"
         if ammo_class == 1:
-            firerate_text = f"{firerate_label}: n/a"
+            firerate_text = "Fire rate: n/a"
         else:
-            firerate_text = f"{firerate_label}: {self._weapon_rpm(weapon)} rpm"
+            firerate_text = f"Fire rate: {self._weapon_rpm(weapon)} rpm"
         draw_small_text(font, firerate_text, detail_top_left + Vec2(66.0 * scale, 128.0 * scale), text_color)
         draw_small_text(font, f"Reload time: {reload_time:.1f} secs", detail_top_left + Vec2(66.0 * scale, 146.0 * scale), text_color)
         draw_small_text(font, f"Clip size: {clip_size}", detail_top_left + Vec2(66.0 * scale, 164.0 * scale), text_color)
@@ -231,5 +228,5 @@ class UnlockedWeaponsDatabaseView(_DatabaseBaseView):
         from ...weapons import WEAPON_BY_ID, WeaponId, weapon_display_name
 
         weapon = WEAPON_BY_ID[WeaponId(weapon_id)]
-        name = weapon_display_name(weapon.weapon_id, preserve_bugs=self.state.preserve_bugs)
+        name = weapon_display_name(weapon.weapon_id)
         return name, weapon.icon_index

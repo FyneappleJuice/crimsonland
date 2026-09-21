@@ -200,14 +200,12 @@ def test_survival_weapon_guard_reverts_mismatched_temporary_weapons() -> None:
 
 def test_gameplay_weapon_guard_never_revokes_splitter_gun() -> None:
     # Not native: Splitter Gun is unconditionally unlocked (weapon_runtime/
-    # availability.py), so the native full-game-unlock revocation gate is
-    # gone - true regardless of preserve_bugs mode.
-    for preserve_bugs in (True, False):
-        state = GameplayState(preserve_bugs=preserve_bugs)
-        players = [PlayerState(index=index, pos=Vec2()) for index in range(3)]
-        for player in players:
-            weapon_assign_player(player, WeaponId.SPLITTER_GUN, state=state)
+    # availability.py), so the native full-game-unlock revocation gate is gone.
+    state = GameplayState()
+    players = [PlayerState(index=index, pos=Vec2()) for index in range(3)]
+    for player in players:
+        weapon_assign_player(player, WeaponId.SPLITTER_GUN, state=state)
 
-        gameplay_enforce_weapon_guards(state, players)
+    gameplay_enforce_weapon_guards(state, players)
 
-        assert all(player.weapon.weapon_id == WeaponId.SPLITTER_GUN for player in players)
+    assert all(player.weapon.weapon_id == WeaponId.SPLITTER_GUN for player in players)

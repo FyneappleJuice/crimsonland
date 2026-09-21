@@ -57,7 +57,7 @@ def test_evil_eyes_freezes_creature_under_aim() -> None:
 
 
 def test_perks_update_effects_evil_eyes_defaults_to_alive_player_target_slot() -> None:
-    state = GameplayState(preserve_bugs=False)
+    state = GameplayState()
 
     player0 = PlayerState(index=0, pos=Vec2(), health=0.0)
     player1 = PlayerState(index=1, pos=Vec2())
@@ -76,27 +76,8 @@ def test_perks_update_effects_evil_eyes_defaults_to_alive_player_target_slot() -
     assert player1.evil_eyes_target_creature == 0
 
 
-def test_perks_update_effects_evil_eyes_preserve_bugs_keeps_player0_only_targeting() -> None:
-    state = GameplayState(preserve_bugs=True)
-
-    player0 = PlayerState(index=0, pos=Vec2(), health=0.0)
-    player1 = PlayerState(index=1, pos=Vec2())
-    player1.perk_counts[int(PerkId.EVIL_EYES)] = 1
-    player1.aim = Vec2(100.0, 200.0)
-
-    creature = CreatureState()
-    creature.active = True
-    creature.pos = Vec2(100.0, 200.0)
-    creature.lifecycle_stage = 16.0
-    creature.size = 50.0
-
-    perks_update_effects(state, [player0, player1], 0.1, creatures=[creature])
-
-    assert player0.evil_eyes_target_creature == -1
-
-
 def test_perks_update_effects_evil_eyes_default_targets_each_alive_player() -> None:
-    state = GameplayState(preserve_bugs=False)
+    state = GameplayState()
 
     player0 = PlayerState(index=0, pos=Vec2())
     player1 = PlayerState(index=1, pos=Vec2())

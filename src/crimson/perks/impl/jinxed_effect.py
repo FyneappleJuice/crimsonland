@@ -33,9 +33,6 @@ def _award_experience_once_from_reward(*, player: PlayerState, reward_value: flo
 
 def _select_jinxed_accident_target(ctx: PerksUpdateEffectsCtx) -> PlayerState:
     player0 = ctx.players[0]
-    if ctx.state.preserve_bugs:
-        return player0
-
     alive_players = [player for player in ctx.players if float(player.health) > 0.0]
     if not alive_players:
         return player0
@@ -92,8 +89,7 @@ def update_jinxed(ctx: PerksUpdateEffectsCtx) -> None:
     )
 
     if float(ctx.state.bonuses.freeze) <= 0.0 and ctx.creatures is not None:
-        pool_limit = 0x17F if ctx.state.preserve_bugs else 0x180
-        pool_mod = min(pool_limit, len(ctx.creatures))
+        pool_mod = min(0x180, len(ctx.creatures))
         if pool_mod <= 0:
             return
 

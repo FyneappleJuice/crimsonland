@@ -327,9 +327,7 @@ class ProjectilePool:
         poison_bullets_active = False
         ion_scale = float(ion_aoe_scale)
         poison_idx = int(PerkId.POISON_BULLETS)
-        # Native's perk_count_get helper always reads player slot zero. Keep the
-        # generalized any-player behavior available outside bug-compatible mode.
-        perk_players = players[:1] if runtime_state.preserve_bugs else players
+        perk_players = players
         # Barrel Greaser (double step count) and Ion Gun Master (ion blast
         # radius) resolve through crimson.progression now; Poison Bullets is
         # still a raw perk check.
@@ -723,8 +721,7 @@ class ProjectilePool:
                         shooter_index = proj.owner.player_index()
                         if shooter_index is not None and 0 <= shooter_index < len(players):
                             shooter = players[shooter_index]
-                            perk_shooter = players[0] if runtime_state.preserve_bugs and players else shooter
-                            if perk_active(perk_shooter, PerkId.COLD_SNAP):
+                            if perk_active(shooter, PerkId.COLD_SNAP):
                                 creature.crit_freeze_timer = COLD_SNAP_FREEZE_DURATION
 
                     did_pierce = False

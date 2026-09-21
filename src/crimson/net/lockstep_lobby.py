@@ -40,7 +40,6 @@ class HostLobby(msgspec.Struct):
     tick_rate: int
     input_delay_ticks: int
     quest_level: QuestLevel | None = None
-    preserve_bugs: bool = False
     session_id: str = msgspec.field(default_factory=lambda: uuid.uuid4().hex[:12])
     started: bool = False
     host_ready: bool = True
@@ -51,7 +50,6 @@ class HostLobby(msgspec.Struct):
             mode_id=self.mode_id,
             player_count=int(self.player_count),
             quest_level=self.quest_level,
-            preserve_bugs=bool(self.preserve_bugs),
             tick_rate=int(self.tick_rate),
             input_delay_ticks=int(self.input_delay_ticks),
         )

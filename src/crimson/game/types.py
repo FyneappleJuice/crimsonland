@@ -43,7 +43,6 @@ class GameConfig(msgspec.Struct, frozen=True):
     no_intro: bool = False
     debug: bool = False
     rtx: bool = False
-    preserve_bugs: bool = False
     test_mode: bool = False
     pending_network_session: PendingNetworkSession | None = None
 
@@ -77,7 +76,6 @@ class NetworkSessionConfig(msgspec.Struct, frozen=True):
     rollback_max_ticks: int = 8
     reconnect_timeout_ms: int = 15_000
     input_delay_ticks: int = 1
-    preserve_bugs: bool = False
 
     def __post_init__(self) -> None:
         endpoint = self.endpoint
@@ -172,7 +170,6 @@ class GameState(msgspec.Struct):
     status: GameStatus
     console: ConsoleState
     demo_enabled: bool
-    preserve_bugs: bool
     resources: RuntimeResources | None
     audio: AudioState | None
     session_start: float

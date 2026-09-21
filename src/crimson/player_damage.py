@@ -61,9 +61,7 @@ def player_take_damage(
     if state.debug_god_mode:
         return 0.0
 
-    # Native perk_count_get() is hard-wired to player 1 even though the
-    # surrounding player fields are indexed by the actual damage target.
-    perk_player = players[0] if state.preserve_bugs and players else player
+    perk_player = player
     refresh_player_stats(list(players) if players else [player])
 
     if perk_active(perk_player, PerkId.DEATH_CLOCK):
@@ -135,16 +133,13 @@ def player_take_damage(
             player.health = max(float(floor), float(player.health))
 
         # Rewrite-only: Adrenaline Rush - any actual health loss opens (or
-        # refreshes) a timed bonus-damage window. Keyed off the actual player
-        # who lost health, not the native perk_player bug-preserve quirk above.
+        # refreshes) a timed bonus-damage window.
         if health_before - float(player.health) > 0.0 and perk_active(player, PerkId.ADRENALINE_RUSH):
             player.adrenaline_rush_window_timer = ADRENALINE_RUSH_WINDOW_DURATION
 
-    # Native routes exact-zero Highlander kills through the pain branch; default
-    # rewrite mode treats `health == 0` as lethal here.
-    lethal_hit = float(player.health) < 0.0
-    if not state.preserve_bugs and float(player.health) == 0.0:
-        lethal_hit = True
+    # Native routes exact-zero Highlander kills through the pain branch; this
+    # rewrite treats `health == 0` as lethal here.
+    lethal_hit = float(player.health) <= 0.0
     # Native's dodge proc jumps past the damage stores but still runs the
     # health branch: a dodged hit on an already-dead player keeps decrementing
     # the death-animation timer.

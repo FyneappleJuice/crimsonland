@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import pytest
-
 from crimson.creatures.runtime import CREATURE_LIFECYCLE_ALIVE, CreaturePool
 from crimson.creatures.spawn import CreatureFlags
 from crimson.gameplay import GameplayState
@@ -92,19 +90,8 @@ def test_mr_melee_is_inert_when_not_active() -> None:
     assert_float_close(creature.hp, 100.0)
 
 
-@pytest.mark.parametrize(
-    ("preserve_bugs", "expected_hp", "expected_strong_poison"),
-    [
-        (True, 75.0, False),
-        (False, 100.0, True),
-    ],
-)
-def test_contact_perks_select_native_player_zero_or_corrected_target(
-    preserve_bugs: bool,
-    expected_hp: float,
-    expected_strong_poison: bool,
-) -> None:
-    state = GameplayState(preserve_bugs=preserve_bugs)
+def test_contact_perks_use_the_targeted_player() -> None:
+    state = GameplayState()
     player0 = PlayerState(index=0, pos=Vec2(900.0, 900.0), health=100.0)
     player0.perk_counts[int(PerkId.MR_MELEE)] = 1
     player0.perk_counts[int(PerkId.VEINS_OF_POISON)] = 1
@@ -123,7 +110,7 @@ def test_contact_perks_select_native_player_zero_or_corrected_target(
 
     pool.update(0.2, options=make_creature_update_options(state=state, players=[player0, player1]))
 
-    assert_float_close(creature.hp, expected_hp)
+    assert_float_close(creature.hp, 100.0)
     assert creature.flags & CreatureFlags.SELF_DAMAGE_TICK
-    assert bool(creature.flags & CreatureFlags.SELF_DAMAGE_TICK_STRONG) is expected_strong_poison
+    assert bool(creature.flags & CreatureFlags.SELF_DAMAGE_TICK_STRONG) is True
     assert_float_close(player1.health, 90.0)

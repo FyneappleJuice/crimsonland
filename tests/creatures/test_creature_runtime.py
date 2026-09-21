@@ -1026,7 +1026,6 @@ def test_creature_auto_target_keeps_current_slot_when_native_distances_round_equ
 
     pool._update_player_auto_target(
         players=[player],
-        preserve_bugs=True,
         player_index=0,
         creature_index=1,
         creature=candidate,
@@ -1095,7 +1094,7 @@ def test_creature_update_auto_target_skips_refresh_on_0x46_boundary_tick() -> No
 
 
 def test_creature_update_coop_auto_target_uses_target_player_position_by_default() -> None:
-    state = GameplayState(preserve_bugs=False)
+    state = GameplayState()
     pool = CreaturePool()
     player0 = PlayerState(
         index=0,
@@ -1145,132 +1144,6 @@ def test_creature_update_coop_auto_target_uses_target_player_position_by_default
     )
 
     assert player1.auto_target == 1
-
-
-def test_creature_update_coop_auto_target_preserve_bugs_keeps_player1_distance_bias() -> None:
-    state = GameplayState(preserve_bugs=True)
-    pool = CreaturePool()
-    player0 = PlayerState(
-        index=0,
-        pos=Vec2(0.0, 0.0),
-        health=100.0,
-        weapon=WeaponSlot(weapon_id=WeaponId.ASSAULT_RIFLE),
-    )
-    player1 = PlayerState(
-        index=1,
-        pos=Vec2(100.0, 0.0),
-        health=100.0,
-        weapon=WeaponSlot(weapon_id=WeaponId.ASSAULT_RIFLE),
-    )
-
-    current = pool.entries[0]
-    current.active = True
-    current.hp = 50.0
-    current.lifecycle_stage = CREATURE_LIFECYCLE_ALIVE
-    current.flags = CreatureFlags(0)
-    current.ai_mode = CreatureAiMode.ORBIT_PLAYER
-    current.move_speed = 0.0
-    current.size = 45.0
-    current.contact_damage = 0.0
-    current.target_player = 0
-    current.pos = Vec2(10.0, 0.0)
-
-    nearer_for_player1 = pool.entries[1]
-    nearer_for_player1.active = True
-    nearer_for_player1.hp = 50.0
-    nearer_for_player1.lifecycle_stage = CREATURE_LIFECYCLE_ALIVE
-    nearer_for_player1.flags = CreatureFlags(0)
-    nearer_for_player1.ai_mode = CreatureAiMode.ORBIT_PLAYER
-    nearer_for_player1.move_speed = 0.0
-    nearer_for_player1.size = 45.0
-    nearer_for_player1.contact_damage = 0.0
-    nearer_for_player1.target_player = 0
-    nearer_for_player1.pos = Vec2(80.0, 0.0)
-
-    player1.auto_target = 0
-    pool.update(
-        1.0 / 60.0,
-        options=make_creature_update_options(
-            state=state,
-            players=[player0, player1],
-            rng=ScriptedCrand(0, fallback=ScriptedCrand.Fallback.REPEAT_LAST),
-        ),
-    )
-
-    assert player1.auto_target == 0
-
-
-def test_creature_update_coop_auto_target_preserve_bugs_reuses_other_player_distance() -> None:
-    state = GameplayState(preserve_bugs=True)
-    pool = CreaturePool()
-    player0 = PlayerState(index=0, pos=Vec2(0.0, 0.0), health=100.0, auto_target=0)
-    player1 = PlayerState(index=1, pos=Vec2(100.0, 0.0), health=100.0)
-
-    current = pool.entries[0]
-    current.active = True
-    current.hp = 50.0
-    current.lifecycle_stage = CREATURE_LIFECYCLE_ALIVE
-    current.ai_mode = CreatureAiMode.ORBIT_PLAYER
-    current.move_speed = 0.0
-    current.size = 45.0
-    current.target_player = 0
-    current.pos = Vec2(50.0, 0.0)
-
-    candidate = pool.entries[1]
-    candidate.active = True
-    candidate.hp = 50.0
-    candidate.lifecycle_stage = CREATURE_LIFECYCLE_ALIVE
-    candidate.ai_mode = CreatureAiMode.ORBIT_PLAYER
-    candidate.move_speed = 0.0
-    candidate.size = 45.0
-    candidate.target_player = 0
-    candidate.pos = Vec2(10.0, 0.0)
-
-    pool.update(
-        1.0 / 60.0,
-        options=make_creature_update_options(
-            state=state,
-            players=[player0, player1],
-            rng=ScriptedCrand(0, fallback=ScriptedCrand.Fallback.REPEAT_LAST),
-        ),
-    )
-
-    # The candidate is 10 units from player 1, but native reuses its 90-unit
-    # distance from player 2. It therefore does not replace the 50-unit slot.
-    assert player0.auto_target == 0
-
-
-def test_creature_update_preserve_bugs_updates_dead_auto_target_before_redirect() -> None:
-    state = GameplayState(preserve_bugs=True)
-    pool = CreaturePool()
-    player0 = PlayerState(index=0, pos=Vec2(0.0, 0.0), health=0.0, auto_target=0)
-    player1 = PlayerState(index=1, pos=Vec2(100.0, 0.0), health=100.0, auto_target=0)
-
-    stale_current = pool.entries[0]
-    stale_current.pos = Vec2(200.0, 0.0)
-
-    candidate = pool.entries[1]
-    candidate.active = True
-    candidate.hp = 50.0
-    candidate.lifecycle_stage = CREATURE_LIFECYCLE_ALIVE
-    candidate.ai_mode = CreatureAiMode.ORBIT_PLAYER
-    candidate.move_speed = 0.0
-    candidate.size = 45.0
-    candidate.target_player = 0
-    candidate.pos = Vec2(10.0, 0.0)
-
-    pool.update(
-        1.0 / 60.0,
-        options=make_creature_update_options(
-            state=state,
-            players=[player0, player1],
-            rng=ScriptedCrand(0, fallback=ScriptedCrand.Fallback.REPEAT_LAST),
-        ),
-    )
-
-    assert player0.auto_target == 1
-    assert player1.auto_target == 0
-    assert candidate.target_player == 1
 
 
 def test_small_creature_dies_on_contact() -> None:
@@ -1387,19 +1260,8 @@ def test_death_awards_xp_and_can_spawn_bonus() -> None:
     assert stub_rand._idx == 67
 
 
-@pytest.mark.parametrize(
-    ("preserve_bugs", "expected_experience"),
-    [
-        (True, (13, 0)),
-        (False, (0, 10)),
-    ],
-    ids=["native-player-zero", "corrected-last-hit-owner"],
-)
-def test_death_award_player_source_policy(
-    preserve_bugs: bool,
-    expected_experience: tuple[int, int],
-) -> None:
-    state = GameplayState(preserve_bugs=preserve_bugs)
+def test_death_award_player_source_policy_uses_last_hit_owner() -> None:
+    state = GameplayState()
     state.bonus_spawn_guard = True
     players = [
         PlayerState(index=0, pos=Vec2()),
@@ -1422,6 +1284,7 @@ def test_death_award_player_source_policy(
         fx_queue=None,
     )
 
+    expected_experience = (0, 10)
     assert death.xp_awarded == max(expected_experience)
     assert (players[0].experience, players[1].experience) == expected_experience
 
@@ -1715,51 +1578,6 @@ def test_handle_death_inactive_entry_forced_bonus_on_death_is_one_shot_by_defaul
     assert death.xp_awarded == 0
     assert creature.bonus_id is None
     assert creature.bonus_duration_override is None
-
-
-def test_handle_death_inactive_entry_forced_bonus_on_death_repeats_with_preserve_bugs(mocker) -> None:
-    state = GameplayState(preserve_bugs=True)
-    pool = CreaturePool()
-    creature = pool.entries[0]
-    creature.active = False
-    creature.flags = CreatureFlags.BONUS_ON_DEATH
-    creature.bonus_id = BonusId.POINTS
-    creature.bonus_duration_override = 5
-    creature.hp = -1.0
-    creature.pos = Vec2(100.0, 100.0)
-
-    spawn_at = mocker.patch.object(
-        state.bonus_pool,
-        "spawn_at",
-        return_value=BonusEntry(
-            bonus_id=BonusId.POINTS,
-            pos=Vec2(100.0, 100.0),
-            time_left=10.0,
-            time_max=10.0,
-            amount=5,
-        ),
-    )
-
-    pool.handle_death(
-        0,
-        state=state,
-        players=[],
-        rng=state.rng,
-        world_width=1024.0,
-        world_height=1024.0,
-        fx_queue=None,
-    )
-    pool.handle_death(
-        0,
-        state=state,
-        players=[],
-        rng=state.rng,
-        world_width=1024.0,
-        world_height=1024.0,
-        fx_queue=None,
-    )
-
-    assert spawn_at.call_count == 2
 
 
 def test_spawn_inits_resets_native_spawn_state_fields() -> None:
@@ -2539,7 +2357,7 @@ def test_evil_eyes_target_still_reevaluates_target_player() -> None:
 
 
 def test_evil_eyes_default_freezes_targets_from_multiple_players() -> None:
-    state = GameplayState(rng=Crand(0xBEEF), preserve_bugs=False)
+    state = GameplayState(rng=Crand(0xBEEF))
 
     player0 = PlayerState(index=0, pos=Vec2(512.0, 512.0), weapon=WeaponSlot(weapon_id=WeaponId.PISTOL))
     player0.perk_counts[int(PerkId.EVIL_EYES)] = 1

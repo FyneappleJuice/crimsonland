@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import pytest
-
 from crimson.bonuses import BonusId
 from crimson.bonuses.pool import BonusPool
 from crimson.bonuses.update import bonus_telekinetic_update
@@ -32,21 +30,10 @@ def test_telekinetic_picks_up_bonus_after_hover_time() -> None:
     assert perk_player.experience == 500
 
 
-@pytest.mark.parametrize(
-    ("preserve_bugs", "perk_player_index", "expected_pickup"),
-    [
-        (True, 0, True),
-        (True, 1, False),
-        (False, 1, True),
-    ],
-    ids=["native-primary-owner", "native-secondary-owner", "corrected-secondary-owner"],
-)
-def test_telekinetic_player_ownership(
-    preserve_bugs: bool,
-    perk_player_index: int,
-    expected_pickup: bool,
-) -> None:
-    state = GameplayState(preserve_bugs=preserve_bugs)
+def test_telekinetic_player_ownership() -> None:
+    # Perk ownership is per-player: the perk gate reads the pickup owner, not
+    # player slot zero, so a secondary player holding Telekinetic can pick up.
+    state = GameplayState()
     state.bonus_pool = BonusPool()
     entry = state.bonus_pool.spawn_at(pos=Vec2(100.0, 100.0), bonus_id=BonusId.POINTS, state=state)
     assert entry is not None
@@ -55,15 +42,14 @@ def test_telekinetic_player_ownership(
         PlayerState(index=0, pos=Vec2(), aim=Vec2()),
         PlayerState(index=1, pos=Vec2(), aim=Vec2(100.0, 100.0)),
     ]
-    players[perk_player_index].perk_counts[int(PerkId.TELEKINETIC)] = 1
+    players[1].perk_counts[int(PerkId.TELEKINETIC)] = 1
 
     pickups = bonus_telekinetic_update(state, players, dt=0.7, creatures=[])
 
-    assert entry.picked is expected_pickup
-    assert bool(pickups) is expected_pickup
-    if expected_pickup:
-        assert pickups[0].player_index == 1
-    assert players[0].experience == (500 if expected_pickup else 0)
+    assert entry.picked is True
+    assert len(pickups) == 1
+    assert pickups[0].player_index == 1
+    assert players[0].experience == 500
     assert players[1].experience == 0
 
 

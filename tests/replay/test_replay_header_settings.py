@@ -17,7 +17,6 @@ def test_replay_header_from_session_settings_roundtrip() -> None:
         mode_id=GameMode.RUSH,
         player_count=3,
         quest_level=None,
-        preserve_bugs=True,
         tick_rate=75,
         input_delay_ticks=2,
     )
@@ -35,7 +34,7 @@ def test_replay_header_from_session_settings_roundtrip() -> None:
     assert header.game_mode_id == GameMode.RUSH
     assert header.tick_rate == 75
     assert header.player_count == 3
-    assert header.preserve_bugs is True
+    assert header.preserve_bugs is False
     assert header.seed == 1234
     assert header.status == status
 
@@ -48,7 +47,6 @@ def test_replay_header_from_session_settings_rejects_unknown_mode() -> None:
         mode_id=cast(GameMode, 999),
         player_count=1,
         quest_level=None,
-        preserve_bugs=False,
         tick_rate=60,
         input_delay_ticks=0,
     )
@@ -61,7 +59,6 @@ def test_replay_header_from_session_settings_rejects_missing_quest_level() -> No
         mode_id=GameMode.QUESTS,
         player_count=1,
         quest_level=None,
-        preserve_bugs=False,
         tick_rate=60,
         input_delay_ticks=0,
     )
@@ -82,6 +79,5 @@ def test_session_settings_from_replay_header_uses_lockstep_defaults() -> None:
     assert settings.mode_id == GameMode.QUESTS
     assert settings.player_count == 2
     assert settings.quest_level == QuestLevel(2, 3)
-    assert settings.preserve_bugs is False
     assert settings.tick_rate == 60
     assert settings.input_delay_ticks == 1

@@ -26,11 +26,6 @@ def travel_budget_for_type_id(type_id: ProjectileTemplateId) -> float:
     return float(weapon_entry_for_projectile_type_id(type_id).travel_budget)
 
 
-def _uses_native_player_projectile_path(owner: OwnerRef) -> bool:
-    legacy_owner = int(owner.to_legacy())
-    return legacy_owner == -100 or -3 <= legacy_owner <= -1
-
-
 def _resolve_player_slot(players: list[PlayerState], *, player_index: int) -> int | None:
     target_index = int(player_index)
     if 0 <= target_index < len(players):
@@ -101,17 +96,11 @@ def _shots_fired_player_index(
 def _fire_bullets_active(
     players: list[PlayerState] | None,
     *,
-    state: GameplayState,
     owner: OwnerRef,
     owner_player_index: int | None,
 ) -> bool:
     if not players:
         return False
-
-    # Native `projectile_spawn` checks player-1/player-2 Fire Bullets timers
-    # globally, regardless of projectile ownership.
-    if bool(state.preserve_bugs):
-        return any(float(player.fire_bullets_timer) > 0.0 for player in players[:2])
 
     resolved_owner_slot: int | None = None
     if owner_player_index is not None:
@@ -142,9 +131,7 @@ def projectile_spawn(
     hits_players: bool = False,
 ) -> int:
     # Mirror `projectile_spawn` (0x00420440) Fire Bullets override.
-    uses_player_projectile_path = owner.is_player() and (
-        not bool(state.preserve_bugs) or _uses_native_player_projectile_path(owner)
-    )
+    uses_player_projectile_path = owner.is_player()
     if (not state.bonus_spawn_guard) and uses_player_projectile_path:
         while True:
             player_index = _shots_fired_player_index(
@@ -160,7 +147,6 @@ def projectile_spawn(
                 break
             if not _fire_bullets_active(
                 players,
-                state=state,
                 owner=owner,
                 owner_player_index=owner_player_index,
             ):

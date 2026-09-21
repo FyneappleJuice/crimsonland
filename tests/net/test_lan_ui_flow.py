@@ -39,7 +39,6 @@ def _lockstep_pending(
             rollback_max_ticks=8,
             reconnect_timeout_ms=15_000,
             input_delay_ticks=1,
-            preserve_bugs=False,
         ),
         auto_start=auto_start,
     )

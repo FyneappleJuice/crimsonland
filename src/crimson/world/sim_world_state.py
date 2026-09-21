@@ -164,7 +164,6 @@ class SimWorldState(msgspec.Struct):
     demo_mode_active: bool = False
     quest_fail_retry_count: int = 0
     hardcore: bool = False
-    preserve_bugs: bool = False
 
     world_state: WorldState = cast(WorldState, None)
     spawn_env: SpawnEnv = cast(SpawnEnv, None)
@@ -196,7 +195,6 @@ class SimWorldState(msgspec.Struct):
             demo_mode_active=bool(self.demo_mode_active),
             hardcore=bool(self.hardcore),
             quest_fail_retry_count=int(self.quest_fail_retry_count),
-            preserve_bugs=bool(self.preserve_bugs),
         )
         self.spawn_env = self.world_state.spawn_env
         self.state = self.world_state.state

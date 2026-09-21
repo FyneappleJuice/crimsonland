@@ -21,7 +21,6 @@ def apply_shock_chain(ctx: BonusApplyCtx) -> None:
     best_idx = creature_find_nearest_alive(
         creatures=creatures,
         origin=origin,
-        preserve_bugs=bool(ctx.state.preserve_bugs),
     )
 
     if best_idx < 0:

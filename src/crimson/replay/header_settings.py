@@ -16,7 +16,6 @@ def session_settings_from_replay_header(
         mode_id=header.game_mode_id,
         player_count=header.player_count,
         quest_level=header.quest_level,
-        preserve_bugs=header.preserve_bugs,
         tick_rate=header.tick_rate,
         input_delay_ticks=input_delay_ticks,
     )
@@ -51,7 +50,7 @@ def replay_header_from_session_settings(
         tick_rate=settings.tick_rate,
         quest_fail_retry_count=quest_fail_retry_count,
         hardcore=hardcore,
-        preserve_bugs=settings.preserve_bugs,
+        preserve_bugs=False,
         detail_preset=detail_preset,
         violence_disabled=violence_disabled,
         world_size=world_size,

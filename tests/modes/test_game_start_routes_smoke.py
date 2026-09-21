@@ -32,7 +32,6 @@ def test_start_actions_map_to_expected_views(tmp_path: Path) -> None:
         status=save_status.ensure_game_status(tmp_path),
         console=create_console(tmp_path, assets_dir=assets_dir),
         demo_enabled=False,
-        preserve_bugs=False,
         resources=None,
         audio=None,
         session_start=time.monotonic(),

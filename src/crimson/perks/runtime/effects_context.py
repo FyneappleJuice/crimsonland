@@ -65,16 +65,12 @@ class PerksUpdateEffectsCtx(msgspec.Struct):
             self._aim_target_by_player_index[player_index] = int(target)
             return int(target)
 
-        if self.state.preserve_bugs and player_index != 0:
-            self._aim_target_by_player_index[player_index] = int(target)
-            return int(target)
-
         if not (0 <= player_index < len(self.players)):
             self._aim_target_by_player_index[player_index] = int(target)
             return int(target)
 
         player = self.players[player_index]
-        if not self.state.preserve_bugs and float(player.health) <= 0.0:
+        if float(player.health) <= 0.0:
             self._aim_target_by_player_index[player_index] = int(target)
             return int(target)
 

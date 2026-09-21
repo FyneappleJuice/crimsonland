@@ -42,11 +42,10 @@ def creature_find_nearest_alive(
     *,
     creatures: Sequence[CreatureState],
     origin: Vec2,
-    preserve_bugs: bool = False,
 ) -> int:
     """Port of `creature_find_nearest(origin, -1, 0.0)`."""
 
-    best_idx = 0 if preserve_bugs else -1
+    best_idx = -1
     best_distance = f32(1_000_000.0)
     max_index = min(len(creatures), 0x180)
     for idx in range(max_index):
@@ -70,7 +69,6 @@ def creature_find_nearest_active(
     origin: Vec2,
     exclude_id: int,
     min_dist: float,
-    preserve_bugs: bool = False,
 ) -> int:
     """Port of ``creature_find_nearest(origin, exclude_id, min_dist)``.
 
@@ -78,7 +76,7 @@ def creature_find_nearest_active(
     and compares the stored PC=24 square-root distance against both bounds.
     """
 
-    best_idx = 0 if preserve_bugs else -1
+    best_idx = -1
     best_distance = f32(1_000_000.0)
     minimum_distance = f32(min_dist)
     max_index = min(len(creatures), 0x180)

@@ -11,8 +11,7 @@ def apply_infernal_contract(ctx: PerkApplyCtx) -> None:
     if ctx.perk_state is not None:
         ctx.perk_state.pending_count += 3
         ctx.perk_state.choices_dirty = True
-    contract_players = ctx.players[:2] if ctx.state.preserve_bugs else ctx.players
-    for player in contract_players:
+    for player in ctx.players:
         if player.health > 0.0:
             # Rewrite-only: floored at 1.0 (was a flat 0.1) so this
             # self-inflicted, non-enemy cost is never itself lethal.

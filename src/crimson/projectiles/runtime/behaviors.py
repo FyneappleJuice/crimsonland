@@ -230,7 +230,6 @@ def _post_hit_ion_rifle(ctx: _ProjectileUpdateCtx, hit: _ProjectileHitInfo) -> N
                 origin=origin_pos,
                 exclude_id=hit_creature,
                 min_dist=100.0,
-                preserve_bugs=bool(runtime_state.preserve_bugs),
             )
 
             if best_idx < 0:

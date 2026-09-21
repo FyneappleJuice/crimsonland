@@ -156,7 +156,7 @@ def test_perks_update_effects_jinxed_accident_never_kills_the_player() -> None:
 def test_perks_update_effects_jinxed_default_accident_can_hit_other_alive_players() -> None:
     dt = 0.2
 
-    state = GameplayState(preserve_bugs=False)
+    state = GameplayState()
     state.rng = ScriptedCrand(
         [
             3,  # accident roll
@@ -194,43 +194,10 @@ def test_perks_update_effects_jinxed_default_accident_can_hit_other_alive_player
     ]
 
 
-def test_perks_update_effects_jinxed_preserve_bugs_keeps_accident_on_player0() -> None:
-    dt = 0.2
-
-    state = GameplayState(preserve_bugs=True)
-    state.rng = ScriptedCrand(
-        [
-            3,  # accident roll
-            0,  # timer roll
-        ],
-        fallback=ScriptedCrand.Fallback.REPEAT_LAST,
-    )
-    state.bonuses.freeze = 1.0
-
-    player0 = PlayerState(index=0, pos=Vec2(10.0, 20.0), health=50.0)
-    player0.perk_counts[int(PerkId.JINXED)] = 1
-    player1 = PlayerState(index=1, pos=Vec2(20.0, 20.0), health=70.0)
-
-    fx_queue = FxQueue(capacity=8, max_count=8)
-
-    perks_update_effects(state, [player0, player1], dt, creatures=[], fx_queue=fx_queue)
-
-    assert_float_close(state.jinxed_timer, _JINXED_ZERO_ROLL_AFTER_0P2)
-    assert_float_close(player0.health, 45.0)
-    assert_float_close(player1.health, 70.0)
-    assert fx_queue.count == 2
-    assert [record.caller for record in state.rng.records_since()] == [
-        RngCallerStatic.PERKS_UPDATE_EFFECTS_JINXED_ACCIDENT_GATE,
-        *_FX_QUEUE_CALLERS,
-        *_FX_QUEUE_CALLERS,
-        RngCallerStatic.PERKS_UPDATE_EFFECTS_JINXED_TIMER_RESET,
-    ]
-
-
 def test_perks_update_effects_jinxed_default_skips_dead_players_without_extra_pick() -> None:
     dt = 0.2
 
-    state = GameplayState(preserve_bugs=False)
+    state = GameplayState()
     state.rng = ScriptedCrand(
         [
             3,  # accident roll
@@ -268,7 +235,7 @@ def test_perks_update_effects_jinxed_default_uses_full_384_slot_pool() -> None:
     creatures[0x17F].lifecycle_stage = 16.0
     creatures[0x17F].reward_value = 12.7
 
-    state = GameplayState(preserve_bugs=False)
+    state = GameplayState()
     state.rng = ScriptedCrand(
         [
             0,  # accident roll: rand%10 != 3
@@ -290,40 +257,6 @@ def test_perks_update_effects_jinxed_default_uses_full_384_slot_pool() -> None:
         RngCallerStatic.PERKS_UPDATE_EFFECTS_JINXED_ACCIDENT_GATE,
         RngCallerStatic.PERKS_UPDATE_EFFECTS_JINXED_TIMER_RESET,
         RngCallerStatic.PERKS_UPDATE_EFFECTS_JINXED_CREATURE_PICK,
-    ]
-
-
-def test_perks_update_effects_jinxed_preserve_bugs_keeps_383_slot_rolls() -> None:
-    dt = 0.2
-    creatures = [CreatureState() for _ in range(0x180)]
-    creatures[0x17F].active = True
-    creatures[0x17F].hp = 100.0
-    creatures[0x17F].lifecycle_stage = 16.0
-    creatures[0x17F].reward_value = 12.7
-
-    state = GameplayState(preserve_bugs=True)
-    state.rng = ScriptedCrand(
-        [
-            0,  # accident roll: rand%10 != 3
-            0,  # timer roll: (rand%0x14)*0.1
-            0x17F,  # creature index: rand%0x17f -> 0
-        ],
-        fallback=ScriptedCrand.Fallback.REPEAT_LAST,
-    )
-
-    player = PlayerState(index=0, pos=Vec2(10.0, 20.0), experience=100, health=50.0)
-    player.perk_counts[int(PerkId.JINXED)] = 1
-
-    perks_update_effects(state, [player], dt, creatures=creatures)
-
-    assert creatures[0x17F].hp == 100.0
-    assert player.experience == 100
-    assert state.sfx_queue == []
-    assert [record.caller for record in state.rng.records_since()] == [
-        RngCallerStatic.PERKS_UPDATE_EFFECTS_JINXED_ACCIDENT_GATE,
-        RngCallerStatic.PERKS_UPDATE_EFFECTS_JINXED_TIMER_RESET,
-        RngCallerStatic.PERKS_UPDATE_EFFECTS_JINXED_CREATURE_PICK,
-        *([RngCallerStatic.PERKS_UPDATE_EFFECTS_JINXED_CREATURE_RETRY] * 10),
     ]
 
 

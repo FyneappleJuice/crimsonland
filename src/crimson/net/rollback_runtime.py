@@ -65,7 +65,6 @@ class _RollbackRuntimeConfigBase(msgspec.Struct):
     relay_port: int = DEFAULT_PORT
     room_code: RoomCode | None = None
     quest_level: QuestLevel | None = None
-    preserve_bugs: bool = False
     netcode_mode: NetcodeMode = "rollback"
     tick_rate: int = 60
     input_delay_ticks: int = INPUT_DELAY_TICKS
@@ -381,7 +380,6 @@ class RollbackRuntime(msgspec.Struct):
                     mode_id=self.cfg.mode_id,
                     player_count=int(self.cfg.player_count),
                     quest_level=self.cfg.quest_level,
-                    preserve_bugs=bool(self.cfg.preserve_bugs),
                     tick_rate=int(self.cfg.tick_rate),
                     input_delay_ticks=int(self.cfg.input_delay_ticks),
                     rollback_max_ticks=int(self.cfg.rollback_max_ticks),

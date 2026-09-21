@@ -89,7 +89,6 @@ class _LockstepRuntimeConfigBase(msgspec.Struct):
     host_ip: str
     port: int
     quest_level: QuestLevel | None = None
-    preserve_bugs: bool = False
     tick_rate: int = TICK_RATE
     input_delay_ticks: int = INPUT_DELAY_TICKS
     sim_status: GameStatusData | None = None
@@ -220,7 +219,6 @@ class LockstepRuntime(msgspec.Struct):
                 tick_rate=int(self.cfg.tick_rate),
                 input_delay_ticks=int(self.cfg.input_delay_ticks),
                 quest_level=self.cfg.quest_level,
-                preserve_bugs=bool(self.cfg.preserve_bugs),
             )
             self.host_last_broadcast_ms = _now_ms()
         else:
@@ -246,7 +244,6 @@ class LockstepRuntime(msgspec.Struct):
                 mode_id=self.cfg.mode_id,
                 player_count=int(self.cfg.player_count),
                 quest_level=self.cfg.quest_level,
-                preserve_bugs=bool(self.cfg.preserve_bugs),
                 tick_rate=int(self.cfg.tick_rate),
                 input_delay_ticks=int(self.cfg.input_delay_ticks),
             )
@@ -770,7 +767,6 @@ class LockstepRuntime(msgspec.Struct):
                 seed=int(event.seed),
                 start_tick=int(event.start_tick),
                 quest_level=str(event.quest_level or ""),
-                preserve_bugs=bool(event.preserve_bugs),
                 status_quest_unlock_index=int(status.quest_unlock_index),
                 status_quest_unlock_index_full=int(status.quest_unlock_index_full),
                 tick_rate=int(self.cfg.tick_rate),
@@ -836,7 +832,6 @@ class LockstepRuntime(msgspec.Struct):
                 tick_rate=int(message.tick_rate),
                 input_delay_ticks=int(message.input_delay_ticks),
                 quest_level=str(message.quest_level or ""),
-                preserve_bugs=bool(message.preserve_bugs),
                 host=bool(message.host),
             )
             welcome = lobby.process_hello(addr, message)
@@ -1096,7 +1091,6 @@ class LockstepRuntime(msgspec.Struct):
                 tick_rate=int(message.tick_rate),
                 input_delay_ticks=int(message.input_delay_ticks),
                 quest_level=str(message.quest_level or ""),
-                preserve_bugs=bool(message.preserve_bugs),
                 started=bool(message.started),
             )
             lobby.ingest_welcome(message)
@@ -1122,8 +1116,6 @@ class LockstepRuntime(msgspec.Struct):
                         welcome_input_delay_ticks=int(welcome_settings.input_delay_ticks),
                         hello_quest_level=str(hello_settings.quest_level or ""),
                         welcome_quest_level=str(welcome_settings.quest_level or ""),
-                        hello_preserve_bugs=bool(hello_settings.preserve_bugs),
-                        welcome_preserve_bugs=bool(welcome_settings.preserve_bugs),
                     )
 
             # Host is authoritative; adopt its config so lockstep + validation use
@@ -1133,7 +1125,6 @@ class LockstepRuntime(msgspec.Struct):
             self.cfg.tick_rate = int(welcome_settings.tick_rate)
             self.cfg.input_delay_ticks = int(welcome_settings.input_delay_ticks)
             self.cfg.quest_level = welcome_settings.quest_level
-            self.cfg.preserve_bugs = bool(welcome_settings.preserve_bugs)
             ready = Ready(slot_index=int(message.slot_index), ready=True)
             self._client_send(ready, reliable=True, now_ms=int(now_ms))
             return
@@ -1168,7 +1159,6 @@ class LockstepRuntime(msgspec.Struct):
                 seed=int(message.seed),
                 start_tick=int(message.start_tick),
                 quest_level=str(message.quest_level or ""),
-                preserve_bugs=bool(message.preserve_bugs),
                 status_quest_unlock_index=int(status_unlock),
                 status_quest_unlock_index_full=int(status_unlock_full),
             )
@@ -1191,7 +1181,6 @@ class LockstepRuntime(msgspec.Struct):
                 mode_id=self.cfg.mode_id,
                 player_count=int(self.cfg.player_count),
                 quest_level=self.cfg.quest_level,
-                preserve_bugs=bool(self.cfg.preserve_bugs),
                 tick_rate=int(self.cfg.tick_rate),
                 input_delay_ticks=int(self.cfg.input_delay_ticks),
             )
@@ -1213,8 +1202,6 @@ class LockstepRuntime(msgspec.Struct):
                     actual_player_count=int(match_settings.player_count),
                     expected_quest_level=str(expected_settings.quest_level or ""),
                     actual_quest_level=str(match_settings.quest_level or ""),
-                    expected_preserve_bugs=bool(expected_settings.preserve_bugs),
-                    actual_preserve_bugs=bool(match_settings.preserve_bugs),
                 )
                 return
 

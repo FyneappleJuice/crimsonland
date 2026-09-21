@@ -33,7 +33,6 @@ def test_relay_packet_round_trip_for_control_message() -> None:
             mode_id=GameMode.RUSH,
             player_count=3,
             quest_level=None,
-            preserve_bugs=False,
             rollback_max_ticks=8,
             netcode_mode="rollback",
         ),

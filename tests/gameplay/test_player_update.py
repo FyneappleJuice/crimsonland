@@ -56,17 +56,6 @@ def _active_type_ids(pool: ProjectilePool) -> list[int]:
     return [entry.type_id for entry in pool.entries if entry.active]
 
 
-def test_preserve_mode_uses_player_zero_timed_perk_for_player_one() -> None:
-    state = GameplayState(preserve_bugs=True)
-    player0 = PlayerState(index=0, pos=Vec2())
-    player0.perk_counts[int(PerkId.LIVING_FORTRESS)] = 1
-    player1 = PlayerState(index=1, pos=Vec2())
-
-    player_update(player1, PlayerInput(), 0.1, state, players=[player0, player1])
-
-    assert_float_close(player1.living_fortress_timer, f32(0.1))
-
-
 def test_dead_player_update_only_advances_native_death_timer() -> None:
     state = GameplayState(player_spread_damping_scalar=0.5)
     player = PlayerState(
@@ -469,35 +458,6 @@ def test_player_update_tops_up_when_stationary_reload_finishes_same_tick() -> No
 
     assert_float_close(player.weapon.reload_timer, 0.0)
     assert_float_close(player.weapon.ammo, 6.0)
-    assert player.weapon.reload_active is True
-
-
-def test_player_update_preserve_bugs_keeps_empty_reload_loop() -> None:
-    state = GameplayState(preserve_bugs=True)
-    player = PlayerState(
-        index=0,
-        pos=Vec2(50.0, 50.0),
-        weapon=WeaponSlot(
-            weapon_id=WeaponId.ION_CANNON,
-            clip_size=6,
-            ammo=0.0,
-            reload_active=True,
-            reload_timer=0.06,
-            reload_timer_max=3.0,
-            shot_cooldown=0.5,
-        ),
-    )
-    player.perk_counts[int(PerkId.STATIONARY_RELOADER)] = 1
-
-    player_update(
-        player,
-        PlayerInput(aim=Vec2(51.0, 50.0), fire_down=True),
-        0.03100000135600567,
-        state,
-    )
-
-    assert_float_close(player.weapon.reload_timer, 0.0)
-    assert_float_close(player.weapon.ammo, 0.0)
     assert player.weapon.reload_active is True
 
 

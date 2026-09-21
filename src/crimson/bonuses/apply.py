@@ -76,12 +76,9 @@ def bonus_apply(
     if amount is None:
         amount = int(meta.native_amount or 0)
 
-    # Native perk lookups always read player slot zero, even when player one is
-    # the pickup owner. Corrected mode keeps intuitive per-player ownership.
-    perk_player = players[0] if state.preserve_bugs and players else player
     # Bonus Economist is folded into stats.bonus_duration_mult by
     # crimson.progression; with only Economist active this resolves to 1.5.
-    economist_multiplier = float(perk_player.stats.bonus_duration_mult)
+    economist_multiplier = float(player.stats.bonus_duration_mult)
     icon_id = int(meta.icon_id) if meta.icon_id is not None else -1
     label = meta.name
     ctx = BonusApplyCtx(

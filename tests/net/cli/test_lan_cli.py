@@ -56,7 +56,6 @@ def test_net_host_lockstep_builds_pending_session_and_runs_game(mocker, tmp_path
     assert endpoint.bind_host == "127.0.0.1"
     assert endpoint.host == "192.168.1.10"
     assert endpoint.port == 32001
-    assert pending.config.preserve_bugs is False
 
 
 def test_net_host_lockstep_quests_requires_quest_level(mocker, tmp_path: Path) -> None:

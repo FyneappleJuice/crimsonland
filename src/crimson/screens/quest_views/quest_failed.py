@@ -312,8 +312,6 @@ class QuestFailedView:
         if retry_count == 3:
             return "No luck this time, have another go?"
         if retry_count == 4:
-            if bool(self.state.preserve_bugs):
-                return "Persistence will be rewared."
             return "Persistence will be rewarded."
         if retry_count == 5:
             return "Try one more time?"

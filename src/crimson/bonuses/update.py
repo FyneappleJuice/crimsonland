@@ -138,10 +138,7 @@ def bonus_telekinetic_update(
 
         if player.bonus_aim_hover_timer_ms <= BONUS_TELEKINETIC_PICKUP_MS:
             continue
-        # Native calls the singleton perk_count_get here, so player zero owns
-        # the perk gate even though the iterated player receives the pickup.
-        perk_player = players[0] if state.preserve_bugs and players else player
-        if not perk_active(perk_player, PerkId.TELEKINETIC):
+        if not perk_active(player, PerkId.TELEKINETIC):
             continue
         if entry.picked or entry.bonus_id == BonusId.UNUSED:
             continue

@@ -72,7 +72,6 @@ class SecondarySpawnSpec(msgspec.Struct, frozen=True):
     time_to_live: float = 2.0
     target_hint: Vec2 | None = None
     creatures: Sequence[CreatureState] | None = None
-    preserve_bugs: bool = False
 
 
 class SecondaryStepCtx(msgspec.Struct, frozen=True):
@@ -108,7 +107,6 @@ class SecondaryProjectilePool:
         time_to_live = float(spec.time_to_live)
         target_hint = spec.target_hint
         creatures = spec.creatures
-        preserve_bugs = bool(spec.preserve_bugs)
 
         index = None
         for i, entry in enumerate(self._entries):
@@ -170,7 +168,6 @@ class SecondaryProjectilePool:
                 entry.target_id = creature_find_nearest_alive(
                     creatures=creatures,
                     origin=origin,
-                    preserve_bugs=preserve_bugs,
                 )
 
         return index
@@ -335,7 +332,6 @@ class SecondaryProjectilePool:
                         entry.target_id = creature_find_nearest_alive(
                             creatures=creatures,
                             origin=entry.pos,
-                            preserve_bugs=bool(runtime_state.preserve_bugs) if runtime_state is not None else False,
                         )
                         target_id = entry.target_id
 

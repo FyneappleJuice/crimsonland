@@ -19,7 +19,6 @@ def _hello(
         tick_rate=TICK_RATE,
         input_delay_ticks=INPUT_DELAY_TICKS,
         quest_level=None,
-        preserve_bugs=False,
         host=False,
     )
 
@@ -118,7 +117,6 @@ def test_host_lobby_accepts_mismatched_client_mode_and_players() -> None:
             tick_rate=999,
             input_delay_ticks=0,
             quest_level=None,
-            preserve_bugs=True,
             host=False,
         ),
     )

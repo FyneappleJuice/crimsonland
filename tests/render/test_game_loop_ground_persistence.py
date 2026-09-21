@@ -106,7 +106,6 @@ def _build_state(tmp_path: Path) -> GameState:
         status=save_status.ensure_game_status(tmp_path),
         console=create_console(tmp_path, assets_dir=assets_dir),
         demo_enabled=False,
-        preserve_bugs=False,
         resources=None,
         audio=None,
         session_start=time.monotonic(),

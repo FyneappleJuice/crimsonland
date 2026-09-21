@@ -192,7 +192,6 @@ class PlaybackDriver:
             demo_mode_active=False,
             hardcore=bool(self.replay.header.hardcore),
             quest_fail_retry_count=int(self.replay.header.quest_fail_retry_count),
-            preserve_bugs=bool(self.session_settings.preserve_bugs),
         )
         world.state.rng.srand(int(self.replay.header.seed))
         world.creatures.apply_gameplay_reset_target_players(int(self.session_settings.player_count))

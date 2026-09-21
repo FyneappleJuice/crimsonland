@@ -142,18 +142,6 @@ def test_quest_results_name_entry_draws_stats_card(tmp_path: Path, mocker) -> No
     assert len(draw_texture_pro.call_args_list) == 2
 
 
-def test_quest_results_name_prompt_preserve_bugs(tmp_path: Path, mocker) -> None:
-    ui = _build_ui(tmp_path, phase=1)
-    ui.preserve_bugs = True
-    draw_small, _draw_texture_pro, _draw_line = _patch_draw_environment(mocker)
-
-    ui.draw(mouse=rl.Vector2(0.0, 0.0))
-
-    captured_text = [str(call.args[2]) for call in draw_small.call_args_list]
-    assert "State your name trooper!" in captured_text
-    assert "State your name, trooper!" not in captured_text
-
-
 def test_quest_results_name_entry_uses_native_offsets_and_colors(tmp_path: Path, mocker) -> None:
     ui = _build_ui(tmp_path, phase=1)
     draw_small, _draw_texture_pro, draw_line = _patch_draw_environment(mocker)

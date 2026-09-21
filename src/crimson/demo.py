@@ -67,10 +67,6 @@ class _DemoLocalInputRuntime(LocalInputRuntime):
         return self.view._build_runner_inputs(frame_ctx)
 
 
-def _weapon_name(weapon_id: WeaponId, *, preserve_bugs: bool = False) -> str:
-    return weapon_display_name(weapon_id, preserve_bugs=bool(preserve_bugs))
-
-
 class DemoView:
     """Attract-mode demo scaffold.
 
@@ -89,7 +85,6 @@ class DemoView:
             world_size=float(WORLD_SIZE),
             demo_mode_active=True,
             hardcore=state.config.gameplay.hardcore,
-            preserve_bugs=bool(state.preserve_bugs),
             config=state.config,
             audio=state.audio,
             audio_rng=state.rng,
@@ -617,7 +612,7 @@ class DemoView:
         hint = "Press any key / click to skip"
         remaining = max(0.0, float(self._demo_time_limit_ms - self._quest_spawn_timeline_ms) / 1000.0)
         weapons = ", ".join(
-            f"P{p.index + 1}:{_weapon_name(p.weapon.weapon_id, preserve_bugs=bool(self.state.preserve_bugs))}"
+            f"P{p.index + 1}:{weapon_display_name(p.weapon.weapon_id)}"
             for p in self._runtime.sim_world.players
         )
         detail = f"{weapons}  —  next in {remaining:0.1f}s"

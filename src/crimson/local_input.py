@@ -127,16 +127,12 @@ def _key_down_with_single_player_alt(
     return False
 
 
-def _aim_pov_left_active(*, player_index: int, preserve_bugs: bool) -> bool:
-    # Native `input_aim_pov_left_active` always reads joystick POV index 0.
-    pov_index = 0 if preserve_bugs else int(player_index)
-    return input_code_is_down(_AIM_POV_LEFT_CODE, player_index=pov_index)
+def _aim_pov_left_active(*, player_index: int) -> bool:
+    return input_code_is_down(_AIM_POV_LEFT_CODE, player_index=int(player_index))
 
 
-def _aim_pov_right_active(*, player_index: int, preserve_bugs: bool) -> bool:
-    # Native `input_aim_pov_right_active` always reads joystick POV index 0.
-    pov_index = 0 if preserve_bugs else int(player_index)
-    return input_code_is_down(_AIM_POV_RIGHT_CODE, player_index=pov_index)
+def _aim_pov_right_active(*, player_index: int) -> bool:
+    return input_code_is_down(_AIM_POV_RIGHT_CODE, player_index=int(player_index))
 
 
 def clear_input_edges(inputs: Sequence[PlayerInput]) -> list[PlayerInput]:
@@ -158,12 +154,8 @@ def clear_input_edges(inputs: Sequence[PlayerInput]) -> list[PlayerInput]:
 
 
 class LocalInputInterpreter:
-    def __init__(self, *, preserve_bugs: bool = False) -> None:
+    def __init__(self) -> None:
         self._states: list[_PerPlayerInputState] = [_PerPlayerInputState() for _ in range(4)]
-        self._preserve_bugs = preserve_bugs
-
-    def set_preserve_bugs(self, enabled: bool) -> None:
-        self._preserve_bugs = enabled
 
     @staticmethod
     def _state_slot_for_player(*, player_index: int, player: PlayerState | None = None) -> int:
@@ -430,9 +422,9 @@ class LocalInputInterpreter:
             else:
                 aim = _aim_point_from_heading(player.pos, heading)
         elif aim_scheme is AimScheme.JOYSTICK:
-            if _aim_pov_right_active(player_index=idx, preserve_bugs=self._preserve_bugs):
+            if _aim_pov_right_active(player_index=idx):
                 heading = float(heading + float(dt) * _AIM_JOYSTICK_TURN_RATE)
-            if _aim_pov_left_active(player_index=idx, preserve_bugs=self._preserve_bugs):
+            if _aim_pov_left_active(player_index=idx):
                 heading = float(heading - float(dt) * _AIM_JOYSTICK_TURN_RATE)
             aim = _aim_point_from_heading(player.pos, heading)
         elif aim_scheme is AimScheme.COMPUTER:

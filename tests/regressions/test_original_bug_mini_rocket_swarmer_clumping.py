@@ -11,8 +11,8 @@ from crimson.weapons import WeaponId
 from grim.geom import Vec2
 
 
-def _spawn_swarmer_burst(*, preserve_bugs: bool, ammo: float) -> list[tuple[float, float]]:
-    state = GameplayState(preserve_bugs=bool(preserve_bugs))
+def _spawn_swarmer_burst(*, ammo: float) -> list[tuple[float, float]]:
+    state = GameplayState()
     player = PlayerState(
         index=0,
         pos=Vec2(100.0, 100.0),
@@ -44,21 +44,9 @@ def _spawn_swarmer_burst(*, preserve_bugs: bool, ammo: float) -> list[tuple[floa
 
 
 def test_mini_rocket_swarmer_clumping_bug_is_fixed_by_default() -> None:
-    headings = _spawn_swarmer_burst(preserve_bugs=False, ammo=6.0)
+    headings = _spawn_swarmer_burst(ammo=6.0)
     assert len(headings) == 6
     assert len(set(headings)) == 6
-
-
-def test_mini_rocket_swarmer_clumping_bug_can_be_preserved() -> None:
-    headings = _spawn_swarmer_burst(preserve_bugs=True, ammo=6.0)
-    assert headings == [
-        (-1.0, 0.000001),
-        (-1.0, 0.0),
-        (-1.0, -0.0),
-        (-1.0, -0.0),
-        (-1.0, -0.0),
-        (-1.0, -0.000001),
-    ]
 
 
 def test_mini_rocket_swarmer_empty_clip_fires_no_rockets() -> None:

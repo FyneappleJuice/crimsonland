@@ -136,16 +136,15 @@ def test_damage_type1_global_perks_apply_with_non_player_owner() -> None:
     assert creature.hp == -131.92474365234375
 
 
-def test_damage_perks_use_player_zero_only_when_preserving_native_bugs() -> None:
+def test_damage_perks_use_any_player_owning_them() -> None:
     player0 = PlayerState(index=0, pos=Vec2())
     player1 = PlayerState(index=1, pos=Vec2())
     player1.perk_counts[int(PerkId.URANIUM_FILLED_BULLETS)] = 1
 
-    corrected_creature = CreatureState(active=True, hp=100.0, size=50.0, flags=CreatureFlags(0))
-    native_creature = CreatureState(active=True, hp=100.0, size=50.0, flags=CreatureFlags(0))
+    creature = CreatureState(active=True, hp=100.0, size=50.0, flags=CreatureFlags(0))
 
-    corrected_killed = creature_apply_damage(
-        corrected_creature,
+    killed = creature_apply_damage(
+        creature,
         damage_amount=10.0,
         damage_type=CreatureDamageType.BULLET,
         impulse=Vec2(),
@@ -153,24 +152,10 @@ def test_damage_perks_use_player_zero_only_when_preserving_native_bugs() -> None
         dt=0.016,
         players=[player0, player1],
         rng=ScriptedCrand(0, fallback=ScriptedCrand.Fallback.REPEAT_LAST),
-        preserve_bugs=False,
-    )
-    native_killed = creature_apply_damage(
-        native_creature,
-        damage_amount=10.0,
-        damage_type=CreatureDamageType.BULLET,
-        impulse=Vec2(),
-        owner=OwnerRef.from_player(1),
-        dt=0.016,
-        players=[player0, player1],
-        rng=ScriptedCrand(0, fallback=ScriptedCrand.Fallback.REPEAT_LAST),
-        preserve_bugs=True,
     )
 
-    assert corrected_killed is False
-    assert native_killed is False
-    assert_float_close(corrected_creature.hp, 80.0)
-    assert_float_close(native_creature.hp, 90.0)
+    assert killed is False
+    assert_float_close(creature.hp, 80.0)
 
 
 def test_stacked_bullet_damage_perks_fold_into_one_multiply() -> None:
@@ -409,7 +394,7 @@ def test_resolve_native_death_sfx_default_fixes_trooper_uninitialized_fourth_slo
     creature = CreatureState(type_id=CreatureTypeId.TROOPER, flags=CreatureFlags(0))
     rng = ScriptedCrand([0, 1, 2, 3])
 
-    resolved = [resolve_native_death_sfx(creature, rng=rng, preserve_bugs=False)[0] for _ in range(4)]
+    resolved = [resolve_native_death_sfx(creature, rng=rng)[0] for _ in range(4)]
 
     assert resolved == [
         SfxId.TROOPER_DIE_01,
@@ -420,15 +405,3 @@ def test_resolve_native_death_sfx_default_fixes_trooper_uninitialized_fourth_slo
     assert [record.caller for record in rng.records] == [
         RngCallerStatic.CREATURE_APPLY_DAMAGE_DEATH_SFX,
     ] * 4
-
-
-def test_resolve_native_death_sfx_preserve_bugs_keeps_trooper_pain_grunt_slot() -> None:
-    creature = CreatureState(type_id=CreatureTypeId.TROOPER, flags=CreatureFlags(0))
-    rng = ScriptedCrand(3, fallback=ScriptedCrand.Fallback.REPEAT_LAST)
-
-    resolved = resolve_native_death_sfx(creature, rng=rng, preserve_bugs=True)
-
-    assert resolved == (SfxId.TROOPER_INPAIN_01,)
-    assert [record.caller for record in rng.records] == [
-        RngCallerStatic.CREATURE_APPLY_DAMAGE_DEATH_SFX,
-    ]

@@ -157,10 +157,7 @@ def player_start_reload(
 ) -> None:
     """Start or refresh a reload timer (`player_start_reload` @ 0x00413430)."""
 
-    # Native queries the global perk table through `perk_count_get` (and reads
-    # Fastloader directly from slot zero) even while mutating another overlay
-    # player. Corrected mode keeps the intuitive per-player policy.
-    perk_player = players[0] if state.preserve_bugs and players else player
+    perk_player = player
     refresh_player_stats(list(players) if players else [player])
 
     if player.weapon.reload_active and (

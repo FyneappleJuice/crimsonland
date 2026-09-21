@@ -114,7 +114,6 @@ class HudRenderContext(msgspec.Struct, frozen=True):
 
 class HudState(msgspec.Struct):
     survival_xp_smoothed: int = 0
-    preserve_bugs: bool = False
 
     def smooth_xp(self, target: int, frame_dt_ms: float) -> int:
         target = int(target)
@@ -398,14 +397,8 @@ def draw_hud_overlay(
             heart_center_base = Vec2(27.0, 12.0)
             heart_step = Vec2(0.0, 15.0)
             heart_scale = 0.5
-        player0_low_health = player_count > 0 and float(hud_players[0].health) < 30.0
-
         for idx, hud_player in enumerate(hud_players):
             pulse_speed = 5.0 if hud_player.health < 30.0 else 2.0
-            if bool(state.preserve_bugs) and player_count > 1 and idx > 0 and player0_low_health:
-                # Native 2-player HUD uses player 1 low-health pulse speed as a
-                # shared baseline for later player heart pulses.
-                pulse_speed = 5.0
             phase = float(idx) * (math.pi * 0.5)
             pulse = ((math.sin(t * pulse_speed + phase) ** 4) * 4.0 + 14.0) * heart_scale
             size = pulse * 2.0
@@ -977,10 +970,7 @@ def draw_hud_overlay(
             )
             max_y = max(max_y, dst.y + dst.height)
 
-        weapon_name = weapon_display_name(
-            hud_player.weapon.weapon_id,
-            preserve_bugs=bool(state.preserve_bugs),
-        )
+        weapon_name = weapon_display_name(hud_player.weapon.weapon_id)
         weapon_color = _with_alpha(HUD_TEXT_COLOR, text_alpha)
         text_pos = aux_text_base_pos + aux_step * float(aux_row)
         _draw_text(

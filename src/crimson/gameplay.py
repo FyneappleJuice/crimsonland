@@ -135,7 +135,6 @@ class GameplayState(msgspec.Struct):
     game_mode: GameMode = GameMode.SURVIVAL
     demo_mode_active: bool = False
     hardcore: bool = False
-    preserve_bugs: bool = False
     status: GameStatus | None = None
     quest_level: QuestLevel | None = None
     tutorial: TutorialState = msgspec.field(default_factory=TutorialState)
@@ -383,10 +382,9 @@ def gameplay_enforce_weapon_guards(state: GameplayState, players: Sequence[Playe
     would just be an inconsistent bug, not a real gate.
     """
 
-    # Native gameplay_render_world checks exactly the two fixed player slots.
-    # Corrected mode extends the same entitlement policy to generalized co-op.
-    guarded_players = players[:2] if state.preserve_bugs else players
-    survival_enforce_reward_weapon_guard(state, guarded_players)
+    # Native gameplay_render_world checked exactly the two fixed player slots;
+    # this extends the same entitlement policy to generalized co-op.
+    survival_enforce_reward_weapon_guard(state, players)
 
 
 def gameplay_accumulate_weapon_usage_time(
@@ -675,8 +673,10 @@ def player_update(
         return
 
     # Native's player_update perk queries all read the global slot-zero table,
-    # even while the overlay-selected player's fields are being updated.
-    perk_player = players[0] if state.preserve_bugs and players else player
+    # even while the overlay-selected player's fields are being updated;
+    # perk_player is kept as its own name below since it's threaded through
+    # several helpers, but it's always this player's own perks now.
+    perk_player = player
 
     # Native low-health warning pulse (`player_update` @ 0x004136b0): once
     # `player_take_damage` has armed `low_health_timer` (!= 100.0), count down
@@ -1010,15 +1010,12 @@ def player_update(
     reload_timer_now = float(f32(float(player.weapon.reload_timer)))
     dt_f32 = float(f32(float(dt)))
     reload_step = x87_pc24_mul(f32(float(reload_scale)), dt_f32)
-    # Native preloads ammo one frame before reload timer underflows using the
-    # unscaled `frame_dt` (before Stationary Reloader scale is applied). That
-    # can miss reload completion when Stationary Reloader is active, leaving the
-    # clip empty and causing a one-shot reload loop (fixed by default).
-    preload_dt = dt_f32
-    if not state.preserve_bugs:
-        preload_dt = reload_step
-
-    reload_preload_underflow = x87_pc24_sub(reload_timer_now, preload_dt)
+    # Native preloaded ammo one frame before reload timer underflows using the
+    # unscaled `frame_dt` (before Stationary Reloader scale is applied), which
+    # could miss reload completion when Stationary Reloader is active, leaving
+    # the clip empty and causing a one-shot reload loop. Fixed: use the scaled
+    # step instead.
+    reload_preload_underflow = x87_pc24_sub(reload_timer_now, reload_step)
     if reload_timer_now > 0.0 and reload_preload_underflow < 0.0:
         player.weapon.ammo = float(player.weapon.clip_size)
 

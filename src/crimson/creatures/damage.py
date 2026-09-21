@@ -43,8 +43,6 @@ def _any_player_has_perk(players: list[PlayerState], perk_id: PerkId) -> bool:
 
 
 def _damage_perk_active(ctx: _CreatureDamageCtx, perk_id: PerkId) -> bool:
-    if ctx.preserve_bugs:
-        return bool(ctx.players) and perk_active(ctx.players[0], perk_id)
     return _any_player_has_perk(ctx.players, perk_id)
 
 
@@ -57,7 +55,6 @@ class _CreatureDamageCtx(msgspec.Struct):
     dt: float
     players: list[PlayerState]
     rng: CrandLike
-    preserve_bugs: bool
     # Resolved once per hit from the union of every relevant player's perks /
     # affixes (crimson.progression). Reads perk_counts directly, so it is
     # correct without depending on the per-tick player.stats cache.
@@ -104,15 +101,6 @@ _TROOPER_DEATH_SFX: tuple[SfxId, ...] = (
     SfxId.TROOPER_DIE_01,
     SfxId.TROOPER_DIE_02,
     SfxId.TROOPER_DIE_03,
-)
-
-# Native `gameplay_reset_state` writes trooper death-bank slots 0..2 only, but
-# `creature_apply_damage` still indexes the bank with `rand & 3`. The unwritten
-# slot remains BSS-zeroed and resolves to native SFX id 0:
-# `sfx_trooper_inpain_01`.
-_TROOPER_DEATH_SFX_PRESERVE_BUGS: tuple[SfxId, ...] = (
-    *_TROOPER_DEATH_SFX,
-    SfxId.TROOPER_INPAIN_01,
 )
 
 
@@ -267,15 +255,12 @@ def resolve_native_death_sfx(
     creature: CreatureState,
     *,
     rng: CrandLike,
-    preserve_bugs: bool = False,
 ) -> tuple[SfxId, ...]:
     """Resolve the native `creature_apply_damage` death sound, if this path owns one."""
     if (creature.flags & CreatureFlags.RANGED_ATTACK_SHOCK) != 0:
         return ()
     roll = rng.rand_tagged(RngCallerStatic.CREATURE_APPLY_DAMAGE_DEATH_SFX)
     if creature.type_id == CreatureTypeId.TROOPER:
-        if preserve_bugs:
-            return (_TROOPER_DEATH_SFX_PRESERVE_BUGS[roll & 3],)
         return (_TROOPER_DEATH_SFX[roll % len(_TROOPER_DEATH_SFX)],)
     options = _CREATURE_DEATH_SFX.get(creature.type_id)
     if options is None:
@@ -322,7 +307,6 @@ def creature_apply_damage(
     dt: float,
     players: list[PlayerState],
     rng: CrandLike,
-    preserve_bugs: bool = False,
 ) -> bool:
     """Apply damage to a creature, returning True if the hit killed it.
 
@@ -346,10 +330,9 @@ def creature_apply_damage(
         dt=f32(dt),
         players=players,
         rng=rng,
-        preserve_bugs=bool(preserve_bugs),
-        # Native applies these damage perks if *any* player owns them (or only
-        # player 0 in preserve-bugs mode), not attributed to the shooter.
-        team_stats=resolve_team_stats(players[:1] if preserve_bugs else players),
+        # Native applies these damage perks if *any* player owns them, not
+        # attributed to the shooter.
+        team_stats=resolve_team_stats(players),
     )
 
     for step in _CREATURE_DAMAGE_GLOBAL_PRE_STEPS.get(ctx.damage_type, ()):
@@ -444,7 +427,6 @@ def creature_apply_damage_with_lethal_followup(
     dt: float,
     players: list[PlayerState],
     rng: CrandLike,
-    preserve_bugs: bool = False,
     effects: EffectPool | None = None,
     detail_preset: int = 5,
     creature_damage_runtime: CreatureDamageRuntime,
@@ -469,7 +451,6 @@ def creature_apply_damage_with_lethal_followup(
         dt=float(dt),
         players=players,
         rng=rng,
-        preserve_bugs=bool(preserve_bugs),
     )
     if killed and death_start_needed:
 
@@ -487,7 +468,7 @@ def creature_apply_damage_with_lethal_followup(
                 effects=effects,
                 detail_preset=int(detail_preset),
             )
-            return resolve_native_death_sfx(creature, rng=rng, preserve_bugs=preserve_bugs)
+            return resolve_native_death_sfx(creature, rng=rng)
 
         creature_damage_runtime.on_creature_lethal(int(creature_index), _resolve_damage_followup)
         return True

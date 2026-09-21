@@ -47,7 +47,6 @@ def _apply(damage_type: CreatureDamageType, *perks: PerkId, amount: float = 100.
         dt=0.016,
         players=[_player_with(*perks)],
         rng=_rng(),
-        preserve_bugs=False,
     )
     return hp0 - float(creature.hp)
 

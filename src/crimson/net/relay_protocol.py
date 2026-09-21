@@ -57,7 +57,6 @@ class RoomCreate(msgspec.Struct, tag="room_create", forbid_unknown_fields=True):
     mode_id: GameMode = GameMode.DEMO
     player_count: PlayerCount = 1
     quest_level: QuestLevel | None = None
-    preserve_bugs: bool = False
     tick_rate: PositiveInt = TICK_RATE
     input_delay_ticks: NonNegativeInt = INPUT_DELAY_TICKS
     rollback_max_ticks: PositiveInt = ROLLBACK_MAX_TICKS
@@ -81,7 +80,6 @@ class RoomState(msgspec.Struct, tag="room_state", forbid_unknown_fields=True):
     mode_id: GameMode = GameMode.DEMO
     player_count: PlayerCount = 1
     quest_level: QuestLevel | None = None
-    preserve_bugs: bool = False
     tick_rate: PositiveInt = TICK_RATE
     input_delay_ticks: NonNegativeInt = INPUT_DELAY_TICKS
     rollback_max_ticks: PositiveInt = ROLLBACK_MAX_TICKS
@@ -99,7 +97,6 @@ class RoomStart(msgspec.Struct, tag="room_start", forbid_unknown_fields=True):
     mode_id: GameMode = GameMode.DEMO
     player_count: PlayerCount = 1
     quest_level: QuestLevel | None = None
-    preserve_bugs: bool = False
     tick_rate: PositiveInt = TICK_RATE
     input_delay_ticks: NonNegativeInt = INPUT_DELAY_TICKS
     rollback_max_ticks: PositiveInt = ROLLBACK_MAX_TICKS

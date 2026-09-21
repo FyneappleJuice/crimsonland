@@ -280,7 +280,6 @@ def run_game(config: GameConfig) -> None:
             status=status,
             console=console,
             demo_enabled=config.demo_enabled,
-            preserve_bugs=config.preserve_bugs,
             skip_intro=config.no_intro,
             resources=None,
             audio=None,
@@ -315,7 +314,6 @@ def run_game(config: GameConfig) -> None:
                 width=int(width),
                 height=int(height),
                 fps=int(config.fps),
-                preserve_bugs=config.preserve_bugs,
             )
             console.log.log(f"lan debug log: {log_path}")
             print(f"[lan-debug] role={pending.role} log={log_path}")

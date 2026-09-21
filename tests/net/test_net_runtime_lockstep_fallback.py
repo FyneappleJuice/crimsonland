@@ -27,7 +27,6 @@ def test_manual_lockstep_fallback_selects_lockstep_runtime(make_game_state) -> N
             rollback_max_ticks=8,
             reconnect_timeout_ms=15_000,
             input_delay_ticks=1,
-            preserve_bugs=False,
         ),
         auto_start=False,
     )
@@ -58,7 +57,6 @@ def test_fallback_netcode_mode_is_not_switched_mid_match(make_game_state) -> Non
             rollback_max_ticks=8,
             reconnect_timeout_ms=15_000,
             input_delay_ticks=1,
-            preserve_bugs=False,
         ),
         auto_start=False,
     )
@@ -83,7 +81,6 @@ def test_fallback_netcode_mode_is_not_switched_mid_match(make_game_state) -> Non
         rollback_max_ticks=8,
         reconnect_timeout_ms=15_000,
         input_delay_ticks=1,
-        preserve_bugs=False,
     )
     assert loop._resolve_lan_action("start_survival") == "start_survival"
     assert state.network_runtime is runtime

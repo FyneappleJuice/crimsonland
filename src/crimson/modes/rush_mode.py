@@ -131,7 +131,7 @@ class RushMode(BaseGameplayMode):
                     tick_rate=int(self._gameplay_tick_rate()),
                     quest_fail_retry_count=int(self.quest_fail_retry_count),
                     hardcore=bool(self.hardcore),
-                    preserve_bugs=bool(self.state.preserve_bugs),
+                    preserve_bugs=False,
                     detail_preset=int(self._deterministic_detail_preset()),
                     violence_disabled=int(self._deterministic_violence_disabled()),
                     world_size=float(self.world_size),

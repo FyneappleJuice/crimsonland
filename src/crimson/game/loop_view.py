@@ -87,11 +87,7 @@ void main() {
 
 
 def _mode_view_context(state: GameState) -> ViewContext:
-    preserve_bugs = bool(state.preserve_bugs)
-    if bool(state.network_in_lobby):
-        # Network multiplayer must keep simulation rules deterministic across peers.
-        preserve_bugs = False
-    return ViewContext(assets_dir=state.assets_dir, preserve_bugs=preserve_bugs)
+    return ViewContext(assets_dir=state.assets_dir)
 
 
 def _get_gamma_ramp_shader() -> tuple[rl.Shader | None, int]:
@@ -404,7 +400,6 @@ class GameLoopView:
                     host_ip=str(endpoint.host),
                     port=int(endpoint.port),
                     quest_level=cfg.quest_level,
-                    preserve_bugs=False,
                     input_delay_ticks=max(0, int(cfg.input_delay_ticks)),
                     sim_status=sim_status,
                 )
@@ -416,7 +411,6 @@ class GameLoopView:
                     host_ip=str(endpoint.host),
                     port=int(endpoint.port),
                     quest_level=cfg.quest_level,
-                    preserve_bugs=False,
                     input_delay_ticks=max(0, int(cfg.input_delay_ticks)),
                     sim_status=sim_status,
                 )
@@ -433,7 +427,6 @@ class GameLoopView:
                     relay_port=int(endpoint.relay_port),
                     room_code=endpoint.room_code,
                     quest_level=cfg.quest_level,
-                    preserve_bugs=False,
                     netcode_mode="rollback",
                     input_delay_ticks=max(0, int(cfg.input_delay_ticks)),
                     rollback_max_ticks=max(1, int(cfg.rollback_max_ticks)),
@@ -448,7 +441,6 @@ class GameLoopView:
                     relay_port=int(endpoint.relay_port),
                     room_code=endpoint.room_code,
                     quest_level=cfg.quest_level,
-                    preserve_bugs=False,
                     netcode_mode="rollback",
                     input_delay_ticks=max(0, int(cfg.input_delay_ticks)),
                     rollback_max_ticks=max(1, int(cfg.rollback_max_ticks)),

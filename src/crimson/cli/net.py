@@ -100,7 +100,6 @@ def cmd_net_host(
             rollback_max_ticks=int(rollback_max_ticks),
             reconnect_timeout_ms=int(reconnect_timeout_ms),
             input_delay_ticks=int(input_delay_ticks),
-            preserve_bugs=False,
         )
     else:
         if str(host).strip() != "127.0.0.1" or int(port) != 31993:
@@ -126,7 +125,6 @@ def cmd_net_host(
             rollback_max_ticks=int(rollback_max_ticks),
             reconnect_timeout_ms=int(reconnect_timeout_ms),
             input_delay_ticks=int(input_delay_ticks),
-            preserve_bugs=False,
         )
 
     pending = PendingNetworkSession(
@@ -221,7 +219,6 @@ def cmd_net_join(
             rollback_max_ticks=int(rollback_max_ticks),
             reconnect_timeout_ms=int(reconnect_timeout_ms),
             input_delay_ticks=int(input_delay_ticks),
-            preserve_bugs=False,
         )
     else:
         if room_code is None:
@@ -244,7 +241,6 @@ def cmd_net_join(
             rollback_max_ticks=int(rollback_max_ticks),
             reconnect_timeout_ms=int(reconnect_timeout_ms),
             input_delay_ticks=int(input_delay_ticks),
-            preserve_bugs=False,
         )
 
     pending = PendingNetworkSession(

@@ -325,7 +325,6 @@ def test_contract_4_live_to_replay_uses_survival_session_and_matches_ticks(
                 demo_mode_active=bool(kwargs.get("demo_mode_active", False)),
                 hardcore=bool(kwargs.get("hardcore", False)),
                 quest_fail_retry_count=int(cast(Any, kwargs.get("quest_fail_retry_count", 0))),
-                preserve_bugs=bool(kwargs.get("preserve_bugs", False)),
             )
             self.sim_world = sw
             self.render_resources = RenderResources(assets_dir=_assets_dir())

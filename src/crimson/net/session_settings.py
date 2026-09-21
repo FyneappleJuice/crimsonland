@@ -33,7 +33,6 @@ class LockstepSessionSettings(msgspec.Struct, frozen=True):
     mode_id: GameMode = GameMode.DEMO
     player_count: PlayerCount = 1
     quest_level: QuestLevel | None = None
-    preserve_bugs: bool = False
     tick_rate: PositiveInt = LOCKSTEP_TICK_RATE
     input_delay_ticks: NonNegativeInt = LOCKSTEP_INPUT_DELAY_TICKS
     netcode_mode: Literal["lockstep"] = "lockstep"
@@ -43,7 +42,6 @@ class RelaySessionSettings(msgspec.Struct, frozen=True):
     mode_id: GameMode = GameMode.DEMO
     player_count: PlayerCount = 1
     quest_level: QuestLevel | None = None
-    preserve_bugs: bool = False
     tick_rate: PositiveInt = RELAY_TICK_RATE
     input_delay_ticks: NonNegativeInt = RELAY_INPUT_DELAY_TICKS
     rollback_max_ticks: PositiveInt = ROLLBACK_MAX_TICKS
@@ -58,7 +56,6 @@ def session_settings_from_hello(message: Hello) -> LockstepSessionSettings:
         mode_id=message.mode_id,
         player_count=message.player_count,
         quest_level=message.quest_level,
-        preserve_bugs=message.preserve_bugs,
         tick_rate=message.tick_rate,
         input_delay_ticks=message.input_delay_ticks,
     )
@@ -69,7 +66,6 @@ def session_settings_for_lockstep(
     mode_id: GameMode,
     player_count: int,
     quest_level: QuestLevel | None,
-    preserve_bugs: bool,
     tick_rate: int = LOCKSTEP_TICK_RATE,
     input_delay_ticks: int = LOCKSTEP_INPUT_DELAY_TICKS,
 ) -> LockstepSessionSettings:
@@ -80,7 +76,6 @@ def session_settings_for_lockstep(
         mode_id=mode_id,
         player_count=player_count,
         quest_level=quest_level,
-        preserve_bugs=preserve_bugs,
         tick_rate=tick_rate,
         input_delay_ticks=input_delay_ticks,
     )
@@ -91,7 +86,6 @@ def session_settings_from_welcome(message: Welcome) -> LockstepSessionSettings:
         mode_id=message.mode_id,
         player_count=message.player_count,
         quest_level=message.quest_level,
-        preserve_bugs=message.preserve_bugs,
         tick_rate=message.tick_rate,
         input_delay_ticks=message.input_delay_ticks,
     )
@@ -124,7 +118,6 @@ def welcome_from_session_settings(
         input_delay_ticks=settings.input_delay_ticks,
         seed=seed,
         quest_level=settings.quest_level,
-        preserve_bugs=settings.preserve_bugs,
         started=started,
     )
 
@@ -139,7 +132,6 @@ def session_settings_from_match_start(
         mode_id=message.mode_id,
         player_count=message.player_count,
         quest_level=message.quest_level,
-        preserve_bugs=message.preserve_bugs,
         tick_rate=tick_rate,
         input_delay_ticks=input_delay_ticks,
     )
@@ -160,7 +152,6 @@ def match_start_from_session_settings(
         seed=seed,
         start_tick=start_tick,
         quest_level=settings.quest_level,
-        preserve_bugs=settings.preserve_bugs,
         status=status,
     )
 
@@ -170,7 +161,6 @@ def session_settings_for_relay(
     mode_id: GameMode,
     player_count: int,
     quest_level: QuestLevel | None,
-    preserve_bugs: bool,
     tick_rate: int = RELAY_TICK_RATE,
     input_delay_ticks: int = RELAY_INPUT_DELAY_TICKS,
     rollback_max_ticks: int = ROLLBACK_MAX_TICKS,
@@ -184,7 +174,6 @@ def session_settings_for_relay(
         mode_id=mode_id,
         player_count=player_count,
         quest_level=quest_level,
-        preserve_bugs=preserve_bugs,
         tick_rate=tick_rate,
         input_delay_ticks=input_delay_ticks,
         rollback_max_ticks=rollback_max_ticks,
@@ -197,7 +186,6 @@ def session_settings_from_room_create(message: RoomCreate) -> RelaySessionSettin
         mode_id=message.mode_id,
         player_count=message.player_count,
         quest_level=message.quest_level,
-        preserve_bugs=message.preserve_bugs,
         tick_rate=message.tick_rate,
         input_delay_ticks=message.input_delay_ticks,
         rollback_max_ticks=message.rollback_max_ticks,
@@ -220,7 +208,6 @@ def hello_from_session_settings(
         tick_rate=settings.tick_rate,
         input_delay_ticks=settings.input_delay_ticks,
         quest_level=settings.quest_level,
-        preserve_bugs=settings.preserve_bugs,
         host=host,
     )
 
@@ -234,7 +221,6 @@ def room_create_from_session_settings(
         mode_id=settings.mode_id,
         player_count=settings.player_count,
         quest_level=settings.quest_level,
-        preserve_bugs=settings.preserve_bugs,
         tick_rate=settings.tick_rate,
         input_delay_ticks=settings.input_delay_ticks,
         rollback_max_ticks=settings.rollback_max_ticks,
@@ -258,7 +244,6 @@ def room_state_from_session_settings(
         mode_id=settings.mode_id,
         player_count=settings.player_count,
         quest_level=settings.quest_level,
-        preserve_bugs=settings.preserve_bugs,
         tick_rate=settings.tick_rate,
         input_delay_ticks=settings.input_delay_ticks,
         rollback_max_ticks=settings.rollback_max_ticks,
@@ -289,7 +274,6 @@ def room_start_from_session_settings(
         mode_id=settings.mode_id,
         player_count=settings.player_count,
         quest_level=settings.quest_level,
-        preserve_bugs=settings.preserve_bugs,
         tick_rate=settings.tick_rate,
         input_delay_ticks=settings.input_delay_ticks,
         rollback_max_ticks=settings.rollback_max_ticks,

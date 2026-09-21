@@ -233,7 +233,6 @@ def make_game_state(tmp_path: Path, assets_dir: Path) -> Callable[..., GameState
         assets_root: Path | None = None,
         rng_seed: int = 0,
         demo_enabled: bool = False,
-        preserve_bugs: bool = False,
         status: GameStatus | None = None,
         audio: AudioState | None = None,
         config_updates: Mapping[str, object] | None = None,
@@ -256,7 +255,6 @@ def make_game_state(tmp_path: Path, assets_dir: Path) -> Callable[..., GameState
             status=game_status,
             console=create_console(resolved_base_dir, assets_dir=resolved_assets_dir),
             demo_enabled=bool(demo_enabled),
-            preserve_bugs=bool(preserve_bugs),
             resources=None,
             audio=audio,
             session_start=time.monotonic() if session_start is None else float(session_start),
@@ -289,7 +287,6 @@ def make_world_state() -> Callable[..., WorldState]:
         demo_mode_active: bool = False,
         hardcore: bool = False,
         quest_fail_retry_count: int = 0,
-        preserve_bugs: bool = False,
         with_player: bool = True,
         player_index: int = 0,
         player_pos: Vec2 | None = None,
@@ -299,7 +296,6 @@ def make_world_state() -> Callable[..., WorldState]:
             demo_mode_active=bool(demo_mode_active),
             hardcore=bool(hardcore),
             quest_fail_retry_count=int(quest_fail_retry_count),
-            preserve_bugs=bool(preserve_bugs),
         )
         if with_player:
             pos = player_pos if player_pos is not None else Vec2(512.0, 512.0)

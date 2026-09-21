@@ -4,8 +4,6 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
 
-import pytest
-
 import crimson.screens.results.game_over as game_over_module
 import crimson.ui.text_input as text_input_module
 from crimson.game_modes import GameMode
@@ -263,21 +261,12 @@ def test_game_over_world_entity_alpha_tracks_close_timeline(tmp_path: Path) -> N
     assert ui.world_entity_alpha() == 1.0
 
 
-@pytest.mark.parametrize(
-    ("preserve_bugs", "expected_tooltip"),
-    [
-        (False, "The % of bullets that hit the target"),
-        (True, "The % of shot bullets hit the target"),
-    ],
-)
-def test_game_over_hit_ratio_tooltip_respects_preserve_bugs(
-    tmp_path: Path, preserve_bugs: bool, expected_tooltip: str, mocker,
-) -> None:
+def test_game_over_hit_ratio_tooltip_text(tmp_path: Path, mocker) -> None:
+    expected_tooltip = "The % of bullets that hit the target"
     ui = GameOverUi(
         assets_root=tmp_path,
         base_dir=tmp_path,
         config=_test_config(shadows_enabled=0, game_mode=1),
-        preserve_bugs=preserve_bugs,
     )
     ui.rank = 0
     ui._dt = 0.0

@@ -1210,7 +1210,6 @@ class LightingDebugView:
         self._runtime = WorldRuntime(
             assets_dir=ctx.assets_dir,
             world_size=float(WORLD_SIZE),
-            preserve_bugs=bool(ctx.preserve_bugs),
             audio_rng=self._audio_rng,
         )
         self._runtime.reset(player_count=1)

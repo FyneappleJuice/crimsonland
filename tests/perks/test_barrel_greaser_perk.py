@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import math
 
-import pytest
-
 from crimson.creatures.damage import creature_apply_damage
 from crimson.creatures.runtime import CreatureState
 from crimson.gameplay import GameplayState
@@ -41,7 +39,6 @@ def test_barrel_greaser_increases_bullet_damage() -> None:
 def _step_pistol_projectile(
     *,
     barrel_greaser_player: int | None,
-    preserve_bugs: bool = False,
 ) -> float:
     pool = ProjectilePool(size=1)
     travel_budget = float(weapon_entry_for_projectile_type_id(ProjectileTemplateId.PISTOL).travel_budget)
@@ -53,7 +50,7 @@ def _step_pistol_projectile(
         travel_budget=travel_budget,
     )
 
-    state = GameplayState(preserve_bugs=preserve_bugs)
+    state = GameplayState()
     players = [PlayerState(index=0, pos=Vec2()), PlayerState(index=1, pos=Vec2())]
     if barrel_greaser_player is not None:
         players[barrel_greaser_player].perk_counts[int(PerkId.BARREL_GREASER)] = 1
@@ -84,16 +81,6 @@ def test_barrel_greaser_doubles_projectile_speed_steps() -> None:
     assert greased_x > base_x
 
 
-@pytest.mark.parametrize(
-    ("preserve_bugs", "expected_x"),
-    [
-        (True, 18.240001678466797),
-        (False, 35.519996643066406),
-    ],
-)
-def test_barrel_greaser_selects_native_player_zero_or_corrected_any_player(
-    preserve_bugs: bool,
-    expected_x: float,
-) -> None:
-    pos_x = _step_pistol_projectile(barrel_greaser_player=1, preserve_bugs=preserve_bugs)
-    assert_float_close(pos_x, expected_x)
+def test_barrel_greaser_applies_for_any_player_owning_it() -> None:
+    pos_x = _step_pistol_projectile(barrel_greaser_player=1)
+    assert_float_close(pos_x, 35.519996643066406)

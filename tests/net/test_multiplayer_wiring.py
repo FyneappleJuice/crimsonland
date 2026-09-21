@@ -127,7 +127,6 @@ def test_base_gameplay_build_local_inputs_passes_creatures(mocker, tmp_path: Pat
     assert len(frame) == len(mode.sim_world.players)
     build_frame_inputs.assert_called_once()
     assert build_frame_inputs.call_args.kwargs["creatures"] is mode.creatures.entries
-    assert bool(mode._local_input._preserve_bugs) == bool(mode.state.preserve_bugs)
 
 
 def test_rush_mode_pauses_sim_while_lan_wait_gate_is_active(mocker, tmp_path: Path) -> None:

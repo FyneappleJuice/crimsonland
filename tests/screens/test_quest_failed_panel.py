@@ -112,16 +112,12 @@ def test_quest_failed_panel_slides_in_from_left(monkeypatch, quest_failed_state,
     assert view._panel_top_left().x == base.x
 
 
-def test_quest_failed_retry_message_respects_preserve_bugs(quest_failed_state) -> None:
+def test_quest_failed_retry_message_on_fourth_retry(quest_failed_state) -> None:
     state = quest_failed_state
     state.quest_fail_retry_count = 4
     view = QuestFailedView(state)
 
-    state.preserve_bugs = False
     assert view._failure_message() == "Persistence will be rewarded."
-
-    state.preserve_bugs = True
-    assert view._failure_message() == "Persistence will be rewared."
 
 
 def test_quest_failed_enter_retries_current_quest(monkeypatch, quest_failed_state, mocker) -> None:

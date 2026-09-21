@@ -29,38 +29,6 @@ def test_pistol_safety_net_forces_weapon_drop() -> None:
     assert entry.amount == WeaponId.ASSAULT_RIFLE
 
 
-def test_pistol_safety_net_preserve_bugs_requires_exact_two_player_slice() -> None:
-    state = _init_bonus_state(GameplayState(preserve_bugs=True))
-    rng = ScriptedCrand([0], fallback=ScriptedCrand.Fallback.RAISE)
-    state.rng = rng
-
-    players = [
-        PlayerState(index=0, pos=Vec2(), weapon=WeaponSlot(weapon_id=WeaponId.ASSAULT_RIFLE)),
-        PlayerState(index=1, pos=Vec2(), weapon=WeaponSlot(weapon_id=WeaponId.PISTOL)),
-        PlayerState(index=2, pos=Vec2(), weapon=WeaponSlot(weapon_id=WeaponId.ASSAULT_RIFLE)),
-    ]
-
-    entry = state.bonus_pool.try_spawn_on_kill(pos=Vec2(256.0, 256.0), state=state, players=players)
-
-    assert entry is None
-    assert rng.calls == 1
-
-
-def test_pistol_safety_net_preserve_bugs_admits_player_two_in_two_player_slice() -> None:
-    state = _init_bonus_state(GameplayState(preserve_bugs=True))
-    state.rng = ScriptedCrand([0, 0, 0, 1], fallback=ScriptedCrand.Fallback.ZERO)
-
-    players = [
-        PlayerState(index=0, pos=Vec2(), weapon=WeaponSlot(weapon_id=WeaponId.ASSAULT_RIFLE)),
-        PlayerState(index=1, pos=Vec2(), weapon=WeaponSlot(weapon_id=WeaponId.PISTOL)),
-    ]
-
-    entry = state.bonus_pool.try_spawn_on_kill(pos=Vec2(256.0, 256.0), state=state, players=players)
-
-    assert entry is not None
-    assert entry.bonus_id == BonusId.WEAPON
-
-
 def test_pistol_extra_gate_allows_spawn_without_bonus_magnet() -> None:
     state = _init_bonus_state(GameplayState())
     state.rng = ScriptedCrand([3, 0, 1, 0, 0], fallback=ScriptedCrand.Fallback.ZERO)
@@ -82,17 +50,6 @@ def test_pistol_extra_gate_uses_any_player_by_default() -> None:
     assert entry is not None
 
 
-def test_pistol_extra_gate_preserve_bugs_uses_player1_only() -> None:
-    state = _init_bonus_state(GameplayState(preserve_bugs=True))
-    state.rng = ScriptedCrand([3, 0, 1, 0], fallback=ScriptedCrand.Fallback.ZERO)
-
-    player1 = PlayerState(index=0, pos=Vec2(), weapon=WeaponSlot(weapon_id=WeaponId.ASSAULT_RIFLE))
-    player2 = PlayerState(index=1, pos=Vec2(300.0, 300.0), weapon=WeaponSlot(weapon_id=WeaponId.PISTOL))
-
-    entry = state.bonus_pool.try_spawn_on_kill(pos=Vec2(100.0, 100.0), state=state, players=[player1, player2])
-    assert entry is None
-
-
 def test_weapon_drop_near_player2_converts_to_points_by_default() -> None:
     state = _init_bonus_state(GameplayState())
     state.rng = ScriptedCrand([1, 13, 1, 4], fallback=ScriptedCrand.Fallback.ZERO)
@@ -106,25 +63,8 @@ def test_weapon_drop_near_player2_converts_to_points_by_default() -> None:
     assert entry.amount == 100
 
 
-def test_weapon_drop_near_player2_stays_player1_only_with_preserve_bugs() -> None:
-    state = _init_bonus_state(GameplayState(preserve_bugs=True))
-    state.rng = ScriptedCrand([1, 13, 1, 4], fallback=ScriptedCrand.Fallback.ZERO)
-
-    player1 = PlayerState(index=0, pos=Vec2(), weapon=WeaponSlot(weapon_id=WeaponId.ASSAULT_RIFLE))
-    player2 = PlayerState(index=1, pos=Vec2(500.0, 500.0), weapon=WeaponSlot(weapon_id=WeaponId.PLASMA_RIFLE))
-
-    entry = state.bonus_pool.try_spawn_on_kill(pos=Vec2(500.0, 500.0), state=state, players=[player1, player2])
-    assert entry is not None
-    assert entry.bonus_id == BonusId.WEAPON
-    # Submachine Gun is shelved (weapon_runtime.availability.INACTIVE_WEAPON_IDS),
-    # so the picker skips its scripted roll and falls through to the ZERO
-    # fallback, which lands on Pistol (id 1) - unrelated to what's being
-    # tested here (the preserve-bugs player1-only proximity gate).
-    assert entry.amount == WeaponId.PISTOL
-
-
 def test_weapon_drop_near_check_uses_native_pc24_hypotenuse_boundary() -> None:
-    state = _init_bonus_state(GameplayState(preserve_bugs=True))
+    state = _init_bonus_state(GameplayState())
     state.rng = ScriptedCrand([1, 13, 1, 4], fallback=ScriptedCrand.Fallback.ZERO)
 
     player = PlayerState(index=0, pos=Vec2(), weapon=WeaponSlot(weapon_id=WeaponId.ASSAULT_RIFLE))
@@ -138,8 +78,10 @@ def test_weapon_drop_near_check_uses_native_pc24_hypotenuse_boundary() -> None:
     # hypotenuse to exactly 56 and does not convert the weapon drop to points.
     assert entry is not None
     assert entry.bonus_id == BonusId.WEAPON
-    # See the ZERO-fallback note above - Submachine Gun being shelved is
-    # unrelated to what this test actually checks (the hypotenuse rounding).
+    # Submachine Gun is shelved (weapon_runtime.availability.INACTIVE_WEAPON_IDS),
+    # so the picker skips its scripted roll and falls through to the ZERO
+    # fallback, which lands on Pistol (id 1) - unrelated to what's being
+    # tested here (the hypotenuse rounding).
     assert entry.amount == WeaponId.PISTOL
 
 
@@ -197,19 +139,6 @@ def test_weapon_drop_suppression_checks_all_carried_weapons_by_default() -> None
 
     entry = state.bonus_pool.try_spawn_on_kill(pos=Vec2(256.0, 256.0), state=state, players=[player1, player2])
     assert entry is None
-
-
-def test_weapon_drop_suppression_preserve_bugs_checks_player1_weapon_only() -> None:
-    state = _init_bonus_state(GameplayState(preserve_bugs=True))
-    state.rng = ScriptedCrand([1, 13, 1, 2], fallback=ScriptedCrand.Fallback.ZERO)
-
-    player1 = PlayerState(index=0, pos=Vec2(), weapon=WeaponSlot(weapon_id=WeaponId.ASSAULT_RIFLE))
-    player2 = PlayerState(index=1, pos=Vec2(500.0, 500.0), weapon=WeaponSlot(weapon_id=WeaponId.SHOTGUN))
-
-    entry = state.bonus_pool.try_spawn_on_kill(pos=Vec2(256.0, 256.0), state=state, players=[player1, player2])
-    assert entry is not None
-    assert entry.bonus_id == BonusId.WEAPON
-    assert entry.amount == WeaponId.SHOTGUN
 
 
 def test_try_spawn_on_kill_owns_success_burst_rng() -> None:

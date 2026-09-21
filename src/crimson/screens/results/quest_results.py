@@ -112,7 +112,6 @@ class QuestResultsUi(msgspec.Struct):
     assets_root: Path
     base_dir: Path
     config: CrimsonConfig
-    preserve_bugs: bool = False
 
     phase: int = -1  # -1 init, 0 breakdown, 1 name entry (if qualifies), 2 results/buttons
     rank: int = TABLE_MAX
@@ -351,7 +350,7 @@ class QuestResultsUi(msgspec.Struct):
             )
 
         weapon_id = record.most_used_weapon_id
-        weapon_name = weapon_display_name(weapon_id, preserve_bugs=bool(self.preserve_bugs))
+        weapon_name = weapon_display_name(weapon_id)
         name_w = self._text_width(font, weapon_name, 1.0 * scale)
         name_x = max(x + 4.0 * scale, left_center_x - name_w * 0.5)
         self._draw_small(font, weapon_name, Vec2(name_x, row_y + 32.0 * scale), 1.0 * scale, col_row)
@@ -734,7 +733,7 @@ class QuestResultsUi(msgspec.Struct):
 
         elif self.phase == 1:
             text_y = panel_layout.top_left.y + 118.0 * scale
-            name_prompt = "State your name trooper!" if bool(self.preserve_bugs) else "State your name, trooper!"
+            name_prompt = "State your name, trooper!"
             self._draw_small(
                 font,
                 name_prompt,

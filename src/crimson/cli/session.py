@@ -57,7 +57,6 @@ def _run_game_with_pending_session(
             fps=fps,
             debug=bool(debug),
             rtx=bool(rtx),
-            preserve_bugs=False,
             pending_network_session=pending,
         ),
     )

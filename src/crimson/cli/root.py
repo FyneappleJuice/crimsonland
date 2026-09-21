@@ -209,7 +209,6 @@ def cmd_view(
         min=12,
         help="lighting-debug only: sampled frames per preset when --autotune-shadow-defaults is set",
     ),
-    preserve_bugs: bool = typer.Option(False, "--preserve-bugs", help="preserve known original exe bugs/quirks"),
     assets_dir: Path = typer.Option(Path("artifacts") / "assets", help="assets root (default: ./artifacts/assets)"),
 ) -> None:
     """Launch a Raylib debug view."""
@@ -241,7 +240,7 @@ def cmd_view(
             typer.echo("--autotune-shadow-defaults is only supported for view 'lighting-debug'", err=True)
             raise typer.Exit(code=1)
         os.environ["CRIMSON_LIGHTING_DEBUG_AUTO_TUNE"] = str(int(autotune_shadow_frames))
-    ctx = ViewContext(assets_dir=assets_dir, preserve_bugs=bool(preserve_bugs))
+    ctx = ViewContext(assets_dir=assets_dir)
     params = inspect.signature(view_def.factory).parameters
     if "ctx" in params:
         view = view_def.factory(ctx=ctx)
@@ -269,7 +268,6 @@ def cmd_game(
     no_intro: bool = typer.Option(False, "--no-intro", help="skip company splashes and intro music"),
     debug: bool = typer.Option(False, "--debug", help="enable debug cheats and overlays"),
     rtx: bool = typer.Option(False, "--rtx", help="enable non-canonical RTX render mode"),
-    preserve_bugs: bool = typer.Option(False, "--preserve-bugs", help="preserve known original exe bugs/quirks"),
     test_mode: bool = typer.Option(
         False,
         "--test-mode",
@@ -302,7 +300,6 @@ def cmd_game(
         no_intro=no_intro,
         debug=debug,
         rtx=bool(rtx),
-        preserve_bugs=bool(preserve_bugs),
         test_mode=bool(test_mode),
     )
     run_game(config)

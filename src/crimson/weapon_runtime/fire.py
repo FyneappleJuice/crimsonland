@@ -13,7 +13,6 @@ from grim.rand import CrandLike
 
 from ..math_parity import (
     NATIVE_HALF_PI,
-    NATIVE_PI,
     f32,
     native_fire_muzzle_pos,
     native_shot_angle_from_jitter_draws,
@@ -237,7 +236,7 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
     players = ctx.players
     force_pre_swap_fire_gate = bool(ctx.force_pre_swap_fire_gate)
     player_death_runtime = ctx.player_death_runtime
-    perk_player = players[0] if state.preserve_bugs and players else player
+    perk_player = player
     # `player.stats` is a per-tick cache; keep it fresh for callers (unit
     # tests, tools) that reach fire_weapon without going through WorldState.step.
     refresh_player_stats(list(players) if players else [player])
@@ -543,7 +542,6 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
                     owner=projectile_owner,
                     target_hint=target_hint,
                     creatures=spawn_creatures,
-                    preserve_bugs=bool(state.preserve_bugs),
                 ),
             )
             state.secondary_projectiles.entries[int(secondary_proj_id)].crit_mult = roll_crit_mult(weapon_id)
@@ -634,19 +632,9 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
             # (reachable via Regression Bullets / Ammunition Within).
             clip_ammo = float(player.weapon.ammo)
             rocket_count = math.ceil(clip_ammo) if clip_ammo > 0.0 else 0
-            preserve_swarmer_bug = bool(state.preserve_bugs)
-            if preserve_swarmer_bug:
-                # Native bug: step scales by ammo (`ammo * pi/3`), which aliases
-                # to near-identical headings for common clip sizes.
-                step = x87_pc24_mul(clip_ammo, f32(1.0471976))
-                angle = x87_pc24_sub(
-                    x87_pc24_sub(shot_angle, NATIVE_PI),
-                    x87_pc24_mul(x87_pc24_mul(step, clip_ammo), 0.5),
-                )
-            else:
-                spread = math.pi * (2.0 / 3.0)
-                step = 0.0 if rocket_count <= 1 else spread / float(rocket_count - 1)
-                angle = shot_angle - spread * 0.5
+            spread = math.pi * (2.0 / 3.0)
+            step = 0.0 if rocket_count <= 1 else spread / float(rocket_count - 1)
+            angle = shot_angle - spread * 0.5
             for _ in range(rocket_count):
                 swarmer_proj_id = state.secondary_projectiles.spawn_from_spec(
                     SecondarySpawnSpec(
@@ -656,11 +644,10 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
                         owner=projectile_owner,
                         target_hint=aim,
                         creatures=creatures,
-                        preserve_bugs=bool(state.preserve_bugs),
                     ),
                 )
                 state.secondary_projectiles.entries[int(swarmer_proj_id)].crit_mult = roll_crit_mult(weapon_id)
-                angle = x87_pc24_add(angle, step) if preserve_swarmer_bug else angle + step
+                angle = angle + step
             # Native subtracts the full clip value, zeroing the ammo even when
             # the clip was fractional or negative.
             ammo_cost = clip_ammo

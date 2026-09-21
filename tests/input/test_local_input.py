@@ -570,43 +570,6 @@ def test_local_input_joystick_aim_reads_player_pov_by_default(
     assert_float_close(float(out.aim.y), float(expected.y))
 
 
-def test_local_input_joystick_aim_preserve_bugs_uses_player1_pov_slot(
-    mocker: MockerFixture,
-) -> None:
-    mocker.patch.object(
-        local_input,
-        "input_code_is_down",
-        lambda key, **kwargs: int(key) == 0x134 and int(kwargs.get("player_index", -1)) == 0,
-    )
-    mocker.patch.object(local_input, "input_code_is_pressed", lambda *_args, **_kwargs: False)
-    mocker.patch.object(local_input, "input_axis_value", lambda *_args, **_kwargs: 0.0)
-
-    interpreter = local_input.LocalInputInterpreter()
-    interpreter.set_preserve_bugs(True)
-    player = PlayerState(index=1, pos=Vec2(100.0, 100.0), aim=Vec2(160.0, 100.0))
-    config = _config_with_player_bind_values(
-        range(16),
-        player_index=1,
-        player_count=2,
-        aim_scheme=AimScheme.JOYSTICK,
-    )
-
-    out = interpreter.build_player_input(
-        player_index=1,
-        player=player,
-        config=config,
-        mouse_screen=Vec2(),
-        mouse_world=Vec2(),
-        screen_center=Vec2(),
-        dt=0.1,
-        creatures=[],
-    )
-
-    expected = player.pos + Vec2.from_heading(0.4) * 60.0
-    assert_float_close(float(out.aim.x), float(expected.x))
-    assert_float_close(float(out.aim.y), float(expected.y))
-
-
 def test_local_input_dual_action_pad_aim_uses_native_radius_scale(
     mocker: MockerFixture,
 ) -> None:

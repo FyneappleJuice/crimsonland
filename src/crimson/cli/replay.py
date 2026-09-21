@@ -876,7 +876,7 @@ def cmd_replay_play(
     console = create_console(base_dir, assets_dir=assets_dir)
     download_missing_paqs(assets_dir, console)
 
-    ctx = ViewContext(assets_dir=assets_dir, preserve_bugs=False)
+    ctx = ViewContext(assets_dir=assets_dir)
     view = ReplayPlaybackMode(ctx, replay_path=replay_path, config=cfg, console=console)
     title = f"Replay — {replay_path.name}"
 

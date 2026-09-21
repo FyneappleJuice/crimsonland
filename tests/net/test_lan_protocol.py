@@ -123,7 +123,6 @@ def test_decode_packet_rejects_out_of_range_player_count_via_msgspec_constraints
                 "tick_rate": protocol.TICK_RATE,
                 "input_delay_ticks": protocol.INPUT_DELAY_TICKS,
                 "quest_level": None,
-                "preserve_bugs": False,
                 "host": False,
             },
         },

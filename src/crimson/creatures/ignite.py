@@ -98,7 +98,6 @@ def ignite_tick(
         dt=float(dt),
         players=players,
         rng=rng,
-        preserve_bugs=bool(state.preserve_bugs),
         effects=state.effects,
         detail_preset=int(detail_preset),
         creature_damage_runtime=creature_damage_runtime,

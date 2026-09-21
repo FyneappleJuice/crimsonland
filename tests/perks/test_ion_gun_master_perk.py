@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import pytest
-
 from crimson.creatures.damage import creature_apply_damage
 from crimson.creatures.runtime import CreatureState
 from crimson.gameplay import GameplayState
@@ -36,7 +34,7 @@ def test_ion_gun_master_increases_ion_damage() -> None:
 
 
 def test_ion_gun_master_increases_ion_aoe_radius() -> None:
-    def _step(*, perk_player: int | None, preserve_bugs: bool = False) -> float:
+    def _step(*, perk_player: int | None) -> float:
         pool = ProjectilePool(size=1)
         proj_idx = pool.spawn(
             pos=Vec2(),
@@ -48,7 +46,7 @@ def test_ion_gun_master_increases_ion_aoe_radius() -> None:
         pool.entries[proj_idx].life_timer = 0.39
 
         creature = CreatureState(active=True, hp=10.0, pos=Vec2(105.0, 0.0), size=50.0)
-        state = GameplayState(preserve_bugs=preserve_bugs)
+        state = GameplayState()
         players = [PlayerState(index=0, pos=Vec2()), PlayerState(index=1, pos=Vec2())]
         if perk_player is not None:
             players[perk_player].perk_counts[int(PerkId.ION_GUN_MASTER)] = 1
@@ -72,17 +70,7 @@ def test_ion_gun_master_increases_ion_aoe_radius() -> None:
     assert _step(perk_player=0) < 10.0
 
 
-@pytest.mark.parametrize(
-    ("preserve_bugs", "expected_damage"),
-    [
-        (True, False),
-        (False, True),
-    ],
-)
-def test_ion_gun_master_selects_native_player_zero_or_corrected_any_player(
-    preserve_bugs: bool,
-    expected_damage: bool,
-) -> None:
+def test_ion_gun_master_applies_for_any_player_owning_it() -> None:
     pool = ProjectilePool(size=1)
     proj_idx = pool.spawn(
         pos=Vec2(),
@@ -94,7 +82,7 @@ def test_ion_gun_master_selects_native_player_zero_or_corrected_any_player(
     pool.entries[proj_idx].life_timer = 0.39
 
     creature = CreatureState(active=True, hp=10.0, pos=Vec2(105.0, 0.0), size=50.0)
-    state = GameplayState(preserve_bugs=preserve_bugs)
+    state = GameplayState()
     players = [PlayerState(index=0, pos=Vec2()), PlayerState(index=1, pos=Vec2())]
     players[1].perk_counts[int(PerkId.ION_GUN_MASTER)] = 1
 
@@ -111,4 +99,4 @@ def test_ion_gun_master_selects_native_player_zero_or_corrected_any_player(
         ),
     )
 
-    assert (creature.hp < 10.0) is expected_damage
+    assert creature.hp < 10.0

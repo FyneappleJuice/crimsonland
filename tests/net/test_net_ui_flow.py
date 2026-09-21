@@ -84,7 +84,6 @@ def test_loop_view_resolves_lan_action_using_pending_network_session(make_game_s
             rollback_max_ticks=8,
             reconnect_timeout_ms=15_000,
             input_delay_ticks=1,
-            preserve_bugs=False,
         ),
         auto_start=False,
     )
@@ -115,7 +114,6 @@ def test_network_lobby_panel_shows_room_code_not_session_id(make_game_state, moc
             rollback_max_ticks=8,
             reconnect_timeout_ms=15_000,
             input_delay_ticks=1,
-            preserve_bugs=False,
         ),
     )
     state.pending_network_session = pending
@@ -171,7 +169,6 @@ def test_network_lobby_panel_update_match_start_applies_state_and_transition(mak
             rollback_max_ticks=8,
             reconnect_timeout_ms=15_000,
             input_delay_ticks=1,
-            preserve_bugs=False,
         ),
     )
     state.pending_network_session = pending

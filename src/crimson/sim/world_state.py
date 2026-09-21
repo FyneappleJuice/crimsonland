@@ -121,7 +121,6 @@ class _WorldStepRuntime(ProjectileHitRuntime, CreatureDamageRuntime, PlayerDeath
             dt=float(self.dt),
             players=self.world.players,
             rng=self.world.state.rng,
-            preserve_bugs=bool(self.world.state.preserve_bugs),
             effects=self.world.state.effects,
             detail_preset=int(self.detail_preset),
             creature_damage_runtime=self,
@@ -277,7 +276,6 @@ class WorldState(msgspec.Struct):
         demo_mode_active: bool,
         hardcore: bool,
         quest_fail_retry_count: int,
-        preserve_bugs: bool = False,
     ) -> WorldState:
         spawn_env = SpawnEnv(
             terrain_width=float(world_size),
@@ -289,7 +287,6 @@ class WorldState(msgspec.Struct):
         state = build_gameplay_state()
         state.demo_mode_active = demo_mode_active
         state.hardcore = hardcore
-        state.preserve_bugs = preserve_bugs
         players: list[PlayerState] = []
         creatures = CreaturePool(env=spawn_env, effects=state.effects)
         return cls(
@@ -607,18 +604,12 @@ class WorldState(msgspec.Struct):
         # the frozen creature's walk cycle halts along with its movement.
         evil_targets: set[int] = set()
         if self.players:
-            if bool(self.state.preserve_bugs):
-                if perk_active(self.players[0], PerkId.EVIL_EYES):
-                    evil_target = int(self.players[0].evil_eyes_target_creature)
-                    if evil_target >= 0:
-                        evil_targets.add(evil_target)
-            else:
-                for player in self.players:
-                    if float(player.health) <= 0.0 or not perk_active(player, PerkId.EVIL_EYES):
-                        continue
-                    evil_target = int(player.evil_eyes_target_creature)
-                    if evil_target >= 0:
-                        evil_targets.add(evil_target)
+            for player in self.players:
+                if float(player.health) <= 0.0 or not perk_active(player, PerkId.EVIL_EYES):
+                    continue
+                evil_target = int(player.evil_eyes_target_creature)
+                if evil_target >= 0:
+                    evil_targets.add(evil_target)
         for idx, creature in enumerate(self.creatures.entries):
             if idx in evil_targets:
                 continue

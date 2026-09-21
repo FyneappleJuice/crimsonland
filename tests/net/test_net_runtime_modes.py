@@ -40,7 +40,6 @@ def test_rollback_runtime_is_selected_for_all_network_modes(
             rollback_max_ticks=8,
             reconnect_timeout_ms=15_000,
             input_delay_ticks=1,
-            preserve_bugs=False,
         ),
         auto_start=False,
     )

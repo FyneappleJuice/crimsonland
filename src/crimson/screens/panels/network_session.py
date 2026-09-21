@@ -297,7 +297,6 @@ class NetworkSessionPanelView(PanelMenuView):
                 rollback_max_ticks=8,
                 reconnect_timeout_ms=15_000,
                 input_delay_ticks=1,
-                preserve_bugs=False,
             )
         else:
             if not self._host.strip():
@@ -325,7 +324,6 @@ class NetworkSessionPanelView(PanelMenuView):
                 rollback_max_ticks=8,
                 reconnect_timeout_ms=15_000,
                 input_delay_ticks=1,
-                preserve_bugs=False,
             )
 
         pending = PendingNetworkSession(

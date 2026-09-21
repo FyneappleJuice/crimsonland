@@ -225,25 +225,13 @@ def test_projectile_kill_awards_xp_same_step() -> None:
     assert events.deaths[0].xp_awarded == 10
 
 
-@pytest.mark.parametrize(
-    ("preserve_bugs", "expected_sfx"),
-    (
-        (False, SfxId.TROOPER_DIE_01),
-        (True, SfxId.TROOPER_INPAIN_01),
-    ),
-)
-def test_world_step_trooper_death_sfx_respects_preserve_bugs(
-    mocker,
-    preserve_bugs: bool,
-    expected_sfx: SfxId,
-) -> None:
+def test_world_step_trooper_death_sfx_uses_death_bank_by_default(mocker) -> None:
     world_size = 1024.0
     world = WorldState.build(
         world_size=world_size,
         demo_mode_active=True,
         hardcore=False,
         quest_fail_retry_count=0,
-        preserve_bugs=preserve_bugs,
     )
     world.players.append(PlayerState(index=0, pos=Vec2(512.0, 512.0)))
 
@@ -289,7 +277,7 @@ def test_world_step_trooper_death_sfx_respects_preserve_bugs(
         perk_progression_enabled=False,
     )
 
-    assert events.sfx == [expected_sfx]
+    assert events.sfx == [SfxId.TROOPER_DIE_01]
     assert_rng_progression(
         rng,
         before_calls=before_calls,

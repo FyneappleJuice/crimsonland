@@ -110,7 +110,6 @@ class GameOverUi(msgspec.Struct):
     base_dir: Path
 
     config: CrimsonConfig
-    preserve_bugs: bool = False
 
     input_text: str = ""
     input_caret: int = 0
@@ -562,7 +561,7 @@ class GameOverUi(msgspec.Struct):
                 )
 
             weapon_id = record.most_used_weapon_id
-            weapon_name = weapon_display_name(weapon_id, preserve_bugs=bool(self.preserve_bugs))
+            weapon_name = weapon_display_name(weapon_id)
             name_w = self._text_width(font, weapon_name, 1.0 * scale)
             name_pos = Vec2(card_origin.x + max(0.0, (32.0 * scale - name_w * 0.5)), row_pos.y + 32.0 * scale)
             self._draw_small(font, weapon_name, name_pos, 1.0 * scale, hint_color)
@@ -616,11 +615,7 @@ class GameOverUi(msgspec.Struct):
         if self._hover_hit_ratio > 0.5:
             t = (self._hover_hit_ratio - 0.5) * 2.0
             col = rl.Color(label_color.r, label_color.g, label_color.b, int(255 * alpha * t))
-            hit_ratio_tooltip = (
-                "The % of shot bullets hit the target"
-                if bool(self.preserve_bugs)
-                else "The % of bullets that hit the target"
-            )
+            hit_ratio_tooltip = "The % of bullets that hit the target"
             self._draw_small(
                 font,
                 hit_ratio_tooltip,

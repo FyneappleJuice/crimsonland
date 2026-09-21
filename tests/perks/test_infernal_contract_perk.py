@@ -27,18 +27,14 @@ def test_infernal_contract_grants_levels_and_sets_low_health() -> None:
     assert other.health == f32(1.0)
 
 
-def test_infernal_contract_player_scope_follows_bug_mode() -> None:
-    for preserve_bugs, expected_health in (
-        (True, (f32(1.0), f32(1.0), 60.0)),
-        (False, (f32(1.0), f32(1.0), f32(1.0))),
-    ):
-        state = GameplayState(preserve_bugs=preserve_bugs)
-        players = [
-            PlayerState(index=0, pos=Vec2(), health=100.0),
-            PlayerState(index=1, pos=Vec2(), health=80.0),
-            PlayerState(index=2, pos=Vec2(), health=60.0),
-        ]
+def test_infernal_contract_applies_to_every_player() -> None:
+    state = GameplayState()
+    players = [
+        PlayerState(index=0, pos=Vec2(), health=100.0),
+        PlayerState(index=1, pos=Vec2(), health=80.0),
+        PlayerState(index=2, pos=Vec2(), health=60.0),
+    ]
 
-        perk_apply(state, players, PerkId.INFERNAL_CONTRACT)
+    perk_apply(state, players, PerkId.INFERNAL_CONTRACT)
 
-        assert tuple(player.health for player in players) == expected_health
+    assert tuple(player.health for player in players) == (f32(1.0), f32(1.0), f32(1.0))

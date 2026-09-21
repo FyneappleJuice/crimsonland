@@ -64,20 +64,3 @@ def test_long_distance_runner_plus_ramps_to_a_higher_cap() -> None:
         player_update(player, input_state, dt, state)
 
     assert_float_close(player.move_speed, f32(3.4))
-
-
-def test_preserve_mode_uses_player_zero_long_distance_runner_for_player_one() -> None:
-    state = GameplayState(preserve_bugs=True)
-    player0 = PlayerState(index=0, pos=Vec2())
-    player0.perk_counts[int(PerkId.LONG_DISTANCE_RUNNER)] = 1
-    player1 = PlayerState(index=1, pos=Vec2(), move_speed=2.1)
-
-    player_update(
-        player1,
-        PlayerInput(move=Vec2(1.0, 0.0), aim=Vec2(1.0, 0.0)),
-        0.1,
-        state,
-        players=[player0, player1],
-    )
-
-    assert_float_close(player1.move_speed, f32(2.2))

@@ -13,11 +13,10 @@ def update_pyrokinetic(ctx: PerksUpdateEffectsCtx) -> None:
     if ctx.creatures is None:
         return
 
-    players = ctx.players[:1] if ctx.state.preserve_bugs else ctx.players
-    for player in players:
+    for player in ctx.players:
         if not perk_active(player, PerkId.PYROKINETIC):
             continue
-        if (not ctx.state.preserve_bugs) and float(player.health) <= 0.0:
+        if float(player.health) <= 0.0:
             continue
 
         target = ctx.aim_target_for_player(player.index)

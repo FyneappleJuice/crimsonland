@@ -152,7 +152,6 @@ def test_lightning_is_its_own_damage_type_and_scaling_line() -> None:
             dt=0.016,
             players=[],
             rng=_rng(),
-            preserve_bugs=False,
             team_stats=team_stats,
         )
         _damage_lightning_damage_mult(ctx)

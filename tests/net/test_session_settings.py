@@ -28,7 +28,6 @@ def test_lockstep_session_settings_build_hello() -> None:
         mode_id=GameMode.QUESTS,
         player_count=9,
         quest_level=QuestLevel(2, 3),
-        preserve_bugs=True,
         tick_rate=0,
         input_delay_ticks=-5,
     )
@@ -44,7 +43,6 @@ def test_lockstep_session_settings_build_hello() -> None:
     assert hello.mode_id == GameMode.QUESTS
     assert hello.player_count == 4
     assert hello.quest_level == QuestLevel(2, 3)
-    assert hello.preserve_bugs is True
     assert hello.tick_rate == 1
     assert hello.input_delay_ticks == 0
     assert hello.host is False
@@ -55,7 +53,6 @@ def test_lockstep_session_settings_roundtrip_with_welcome_and_match_start() -> N
         mode_id=GameMode.RUSH,
         player_count=2,
         quest_level=QuestLevel(2, 2),
-        preserve_bugs=True,
         tick_rate=60,
         input_delay_ticks=3,
     )
@@ -90,7 +87,6 @@ def test_lockstep_session_settings_roundtrip_with_welcome_and_match_start() -> N
     assert start.mode_id == GameMode.RUSH
     assert start.player_count == 2
     assert start.quest_level == QuestLevel(2, 2)
-    assert start.preserve_bugs is True
     assert session_settings_from_match_start(start, tick_rate=60, input_delay_ticks=3) == settings
 
 
@@ -99,7 +95,6 @@ def test_relay_session_settings_roundtrip_from_room_create() -> None:
         mode_id=GameMode.RUSH,
         player_count=0,
         quest_level=None,
-        preserve_bugs=False,
         tick_rate=0,
         input_delay_ticks=-1,
         rollback_max_ticks=0,
@@ -123,7 +118,6 @@ def test_relay_session_settings_build_room_state_and_start() -> None:
         mode_id=GameMode.SURVIVAL,
         player_count=2,
         quest_level=QuestLevel(1, 1),
-        preserve_bugs=True,
         tick_rate=60,
         input_delay_ticks=2,
         rollback_max_ticks=6,

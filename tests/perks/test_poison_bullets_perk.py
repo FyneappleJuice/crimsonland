@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import pytest
-
 from crimson.bonuses import BonusId
 from crimson.creatures.spawn import CreatureFlags
 from crimson.effects import FxQueue, FxQueueRotated
@@ -66,17 +64,7 @@ def test_poison_bullets_sets_self_damage_flag_when_rng_hits() -> None:
     ] == [RngCallerStatic.PROJECTILE_UPDATE_POISON_BULLETS_GATE]
 
 
-@pytest.mark.parametrize(
-    ("preserve_bugs", "expected_poison"),
-    [
-        (True, False),
-        (False, True),
-    ],
-)
-def test_poison_bullets_selects_native_player_zero_or_corrected_any_player(
-    preserve_bugs: bool,
-    expected_poison: bool,
-) -> None:
+def test_poison_bullets_applies_for_any_player_owning_it() -> None:
     world_size = 1024.0
     world = WorldState.build(
         world_size=world_size,
@@ -84,7 +72,6 @@ def test_poison_bullets_selects_native_player_zero_or_corrected_any_player(
         hardcore=False,
         quest_fail_retry_count=0,
     )
-    world.state.preserve_bugs = preserve_bugs
     world.state.rng = ScriptedCrand(1, fallback=ScriptedCrand.Fallback.REPEAT_LAST)
 
     player0 = PlayerState(index=0, pos=Vec2(100.0, 100.0))
@@ -120,13 +107,13 @@ def test_poison_bullets_selects_native_player_zero_or_corrected_any_player(
     )
 
     assert events.hits
-    assert bool(creature.flags & CreatureFlags.SELF_DAMAGE_TICK) is expected_poison
+    assert bool(creature.flags & CreatureFlags.SELF_DAMAGE_TICK) is True
     poison_calls = [
         record
         for record in world.state.rng.records_since()
         if record.caller == RngCallerStatic.PROJECTILE_UPDATE_POISON_BULLETS_GATE
     ]
-    assert bool(poison_calls) is expected_poison
+    assert bool(poison_calls) is True
 
 
 def test_poison_bullets_does_not_set_flag_when_rng_misses() -> None:

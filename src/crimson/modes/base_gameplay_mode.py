@@ -395,7 +395,6 @@ class BaseGameplayMode:
             assets_root=self._assets_root,
             base_dir=self._base_dir,
             config=self.config,
-            preserve_bugs=ctx.preserve_bugs,
         )
 
         self.assets_dir = ctx.assets_dir
@@ -403,7 +402,6 @@ class BaseGameplayMode:
         self.demo_mode_active = bool(demo_mode_active)
         self.quest_fail_retry_count = int(quest_fail_retry_count)
         self.hardcore = bool(hardcore)
-        self.preserve_bugs = bool(ctx.preserve_bugs)
         self.audio = audio
         self.audio_rng = audio_rng
         self.rtx_mode = RtxRenderMode.CLASSIC
@@ -413,7 +411,6 @@ class BaseGameplayMode:
             demo_mode_active=bool(self.demo_mode_active),
             quest_fail_retry_count=int(self.quest_fail_retry_count),
             hardcore=bool(self.hardcore),
-            preserve_bugs=bool(self.preserve_bugs),
             config=self.config,
             audio=self.audio,
             audio_rng=self.audio_rng,
@@ -524,7 +521,6 @@ class BaseGameplayMode:
         runtime.demo_mode_active = bool(self.demo_mode_active)
         runtime.quest_fail_retry_count = int(self.quest_fail_retry_count)
         runtime.hardcore = bool(self.hardcore)
-        runtime.preserve_bugs = bool(self.preserve_bugs)
         runtime.config = self.config
         runtime.audio = self.audio
         runtime.audio_rng = self.audio_rng
@@ -628,9 +624,9 @@ class BaseGameplayMode:
             return
 
         target_indices: list[int] = []
-        target_players = self.sim_world.players[:1] if self.state.preserve_bugs else self.sim_world.players
+        target_players = self.sim_world.players
         for target_player in target_players:
-            if not self.state.preserve_bugs and float(target_player.health) <= 0.0:
+            if float(target_player.health) <= 0.0:
                 continue
             if perk_count_get(target_player, PerkId.DOCTOR) <= 0:
                 continue
@@ -672,10 +668,6 @@ class BaseGameplayMode:
         self.state: GameplayState = self.sim_world.state
         self.creatures: CreaturePool = self.sim_world.creatures
         self.player: PlayerState = self.sim_world.players[0]
-        preserve_bugs = self.state.preserve_bugs
-        self._local_input.set_preserve_bugs(preserve_bugs)
-        self._hud_state.preserve_bugs = preserve_bugs
-        self._game_over_ui.preserve_bugs = preserve_bugs
         # `GameplayState.status` is the simulation status (LAN may override it
         # with a deterministic session-local status to avoid split brain).
         self.state.status = self._status_sim
@@ -739,7 +731,6 @@ class BaseGameplayMode:
         return PerkMenuUiContext(
             player=self.player,
             violence_disabled=self.config.display.violence_disabled,
-            preserve_bugs=bool(self.state.preserve_bugs),
             shadows_enabled=self.config.display.shadows_enabled,
             resources=self.render_resources.resources,
             mouse=self._ui_mouse_pos(),

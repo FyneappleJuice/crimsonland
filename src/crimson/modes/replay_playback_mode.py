@@ -348,7 +348,6 @@ class ReplayPlaybackMode:
 
         quest_fail_retry_count = int(replay.header.quest_fail_retry_count)
         hardcore = bool(replay.header.hardcore)
-        preserve_bugs = bool(replay.header.preserve_bugs)
         rtx_mode = mode_from_rtx_flag(self._rtx)
 
         runtime = WorldRuntime(
@@ -357,7 +356,6 @@ class ReplayPlaybackMode:
             demo_mode_active=False,
             quest_fail_retry_count=int(quest_fail_retry_count),
             hardcore=bool(hardcore),
-            preserve_bugs=bool(preserve_bugs),
             config=self._config,
             audio=self._audio,
             audio_rng=self._audio_rng,
@@ -382,8 +380,6 @@ class ReplayPlaybackMode:
             sim_world.load_world_state(driver.world)
         except ReplayRunnerError as exc:  # pragma: no cover
             raise ValueError(f"unsupported replay game_mode_id: {int(replay.header.game_mode_id)}") from exc
-
-        self._hud_state.preserve_bugs = bool(sim_world.state.preserve_bugs)
 
         driver = self._driver
         assert driver is not None, "Replay driver must be initialized before replay view setup"

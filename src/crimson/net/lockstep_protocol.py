@@ -123,7 +123,6 @@ class Hello(msgspec.Struct, tag="hello", forbid_unknown_fields=True):
     tick_rate: PositiveInt = TICK_RATE
     input_delay_ticks: NonNegativeInt = INPUT_DELAY_TICKS
     quest_level: QuestLevel | None = None
-    preserve_bugs: bool = False
     host: bool = False
 
 
@@ -141,7 +140,6 @@ class Welcome(msgspec.Struct, tag="welcome", forbid_unknown_fields=True):
     input_delay_ticks: NonNegativeInt = INPUT_DELAY_TICKS
     seed: int = 0
     quest_level: QuestLevel | None = None
-    preserve_bugs: bool = False
     started: bool = False
 
 
@@ -171,7 +169,6 @@ class MatchStart(msgspec.Struct, tag="match_start", forbid_unknown_fields=True):
     seed: int = 0
     start_tick: NonNegativeInt = 0
     quest_level: QuestLevel | None = None
-    preserve_bugs: bool = False
     status: GameStatusData | None = None
 
 

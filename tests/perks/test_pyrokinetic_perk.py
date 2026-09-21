@@ -151,7 +151,7 @@ def test_perks_update_effects_pyrokinetic_keeps_native_36hz_proc_frame() -> None
 
 def test_perks_update_effects_pyrokinetic_defaults_to_first_alive_player_aim() -> None:
     rng = ScriptedCrand(0, fallback=ScriptedCrand.Fallback.REPEAT_LAST)
-    state = GameplayState(rng=rng, preserve_bugs=False)
+    state = GameplayState(rng=rng)
 
     player0 = PlayerState(index=0, pos=Vec2(), health=0.0)
     player1 = PlayerState(index=1, pos=Vec2())
@@ -176,34 +176,10 @@ def test_perks_update_effects_pyrokinetic_defaults_to_first_alive_player_aim() -
     ]
 
 
-def test_perks_update_effects_pyrokinetic_preserve_bugs_keeps_player0_only_targeting() -> None:
-    rng = ScriptedCrand(0, fallback=ScriptedCrand.Fallback.REPEAT_LAST)
-    state = GameplayState(rng=rng, preserve_bugs=True)
-
-    player0 = PlayerState(index=0, pos=Vec2(), health=0.0)
-    player1 = PlayerState(index=1, pos=Vec2())
-    player1.perk_counts[int(PerkId.PYROKINETIC)] = 1
-    player1.aim = Vec2(100.0, 200.0)
-
-    creature = CreatureState()
-    creature.active = True
-    creature.pos = Vec2(100.0, 200.0)
-    creature.lifecycle_stage = 16.0
-    creature.collision_timer = 0.1
-
-    fx_queue = FxQueue(capacity=8, max_count=8)
-
-    perks_update_effects(state, [player0, player1], 0.2, creatures=[creature], fx_queue=fx_queue)
-
-    assert_float_close(creature.collision_timer, 0.1)
-    assert fx_queue.count == 0
-    assert [record.caller for record in rng.records_since()] == []
-
-
 def test_perks_update_effects_pyrokinetic_default_targets_all_alive_players() -> None:
     dt = 0.2
     rng = ScriptedCrand(0, fallback=ScriptedCrand.Fallback.REPEAT_LAST)
-    state = GameplayState(rng=rng, preserve_bugs=False)
+    state = GameplayState(rng=rng)
 
     player0 = PlayerState(index=0, pos=Vec2())
     player1 = PlayerState(index=1, pos=Vec2())

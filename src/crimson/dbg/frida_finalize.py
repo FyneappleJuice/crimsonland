@@ -1538,7 +1538,6 @@ def _write_run_trace(
         mode_id=GameMode(int(run.mode_id)),
         player_count=int(run.replay_player_count),
         quest_level=(QuestLevel(int(run.quest_stage_major), int(run.quest_stage_minor)) if is_quest_run else None),
-        preserve_bugs=True,
         tick_rate=int(run.tick_rate),
     )
     replay_header = replay_header_from_session_settings(
@@ -1554,6 +1553,11 @@ def _write_run_trace(
     replay_header = msgspec.structs.replace(
         replay_header,
         initial_creature_pool=run.pool_residue,
+        # This replay is a direct capture of the real .exe's behavior via
+        # Frida, so it genuinely reproduces native bugs/quirks - unlike live
+        # sessions (which can never be anything but the fixed default
+        # behavior now), this header needs to say so.
+        preserve_bugs=True,
     )
     replay_ticks = [
         ReplayTick(

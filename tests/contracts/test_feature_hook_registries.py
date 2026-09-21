@@ -123,7 +123,6 @@ def test_step_dispatch_functions_execute_as_behavioral_smoke() -> None:
         demo_mode_active=False,
         hardcore=False,
         quest_fail_retry_count=0,
-        preserve_bugs=False,
     )
     fx_queue = FxQueue()
     fx_queue_rotated = FxQueueRotated()
