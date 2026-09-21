@@ -663,7 +663,7 @@ _PERK_TABLE = [
     PerkMeta(
         perk_id=PerkId.DESPERATION,
         name="Survival Instinct",
-        description="Something primal kicks in once things get dicey, and it does NOT want to die today. The lower your health drops, the less incoming damage actually gets through. Logic has left the building.",
+        description="Something primal kicks in once things get dicey, and it does NOT want to die today. The lower your health drops, the less incoming damage actually gets through.",
         flags=PERK_DEFAULT_FLAGS,
         prereq=(),
     ),

@@ -242,11 +242,11 @@ def _owner_to_player_index(owner: OwnerRef) -> int | None:
 
 # Rewrite-only: Domino Effect's free shot is fired from a snapshot of the
 # killer's weapon and perks (real fire_weapon(), not a flat placeholder
-# projectile) - but at 40% damage (60% less), since it's a freebie riding on
+# projectile) - but at 25% damage (75% less), since it's a freebie riding on
 # a kill you already got. Unlike Hollow Form's clone, active powerup timers
 # (Fire Bullets, Explosive Payload, Plasma Overload, Fork Shot, Speed,
 # Shield) are deliberately NOT copied onto this clone - see _fire_momentum_shot.
-MOMENTUM_DAMAGE_MULT = 0.4
+MOMENTUM_DAMAGE_MULT = 0.25
 
 
 def _fire_momentum_shot(
