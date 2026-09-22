@@ -29,14 +29,14 @@ class RunModId(IntEnum):
     FIRE_RATE = 0
     RELOAD_SPEED = 1
     CLIP_SIZE = 2
-    PROJECTILE_DAMAGE = 3
-    POWERUP_DURATION = 4
-    MOVE_SPEED = 5
-    PICKUP_RADIUS = 6
-    XP_GAIN = 7
-    SPREAD = 8
-    PROJECTILE_SPEED = 9
-    CRIT_CHANCE = 10
+    POWERUP_DURATION = 3
+    MOVE_SPEED = 4
+    PICKUP_RADIUS = 5
+    XP_GAIN = 6
+    SPREAD = 7
+    PROJECTILE_SPEED = 8
+    CRIT_CHANCE = 9
+    CRIT_MULTIPLIER = 10
     ALL_DAMAGE = 11
     DAMAGE_TYPE_BOOST = 12
     WEAPON_TYPE_BOOST = 13
@@ -95,7 +95,6 @@ _RUN_MOD_TABLE: list[RunModMeta] = [
     RunModMeta(RunModId.FIRE_RATE, "Fire Rate", "+2% fire rate."),
     RunModMeta(RunModId.RELOAD_SPEED, "Reload Speed", "-3% reload time."),
     RunModMeta(RunModId.CLIP_SIZE, "Clip Size", "+4% clip size."),
-    RunModMeta(RunModId.PROJECTILE_DAMAGE, "Projectile Damage", "+3% damage from any projectile weapon."),
     RunModMeta(RunModId.POWERUP_DURATION, "Power-up Duration", "+5% power-up duration."),
     RunModMeta(RunModId.MOVE_SPEED, "Move Speed", "+3% move speed."),
     RunModMeta(RunModId.PICKUP_RADIUS, "Pickup Radius", "+8% pickup radius."),
@@ -103,6 +102,7 @@ _RUN_MOD_TABLE: list[RunModMeta] = [
     RunModMeta(RunModId.SPREAD, "Spread", "-5% weapon spread buildup."),
     RunModMeta(RunModId.PROJECTILE_SPEED, "Projectile Speed", "+4% projectile speed."),
     RunModMeta(RunModId.CRIT_CHANCE, "Crit Chance", "+5% increased critical strike chance."),
+    RunModMeta(RunModId.CRIT_MULTIPLIER, "Crit Multiplier", "+10% crit multiplier."),
     RunModMeta(RunModId.ALL_DAMAGE, "All Damage", "+1.5% damage, all damage types."),
     RunModMeta(
         RunModId.DAMAGE_TYPE_BOOST,
@@ -133,7 +133,7 @@ _RUN_MOD_TABLE: list[RunModMeta] = [
     RunModMeta(
         RunModId.PERK_EFFICACY,
         "Perk Efficacy",
-        "+5% increased effectiveness of every perk you own.",
+        "+5% increased perk effectiveness.",
     ),
 ]
 

@@ -136,6 +136,11 @@ class PerkId(IntEnum):
     PLASMA_MASTERY = 93
     ROCKET_MASTERY = 94
 
+    # Rewrite-only: every non-DoT hit gets a [-1x, 4x] damage roll instead of
+    # its flat value (average +50%) - see creatures/damage.py's
+    # _damage_variance_mult. A hit can roll negative, which heals the target.
+    LOOSE_CANNON = 95
+
 
 # The four concrete masteries WEAPON_MASTERY resolves into - never offered as
 # their own pool entry (see perks/availability.py's build_perk_availability).
@@ -793,7 +798,7 @@ _PERK_TABLE = [
     PerkMeta(
         perk_id=PerkId.WILDCARD,
         name="Perk Gambler",
-        description="You stopped reading the fine print on your bonuses ages ago. Sometimes one turns out to be a full-blown perk in disguise. Sometimes it just goes wild and gives you way more than it should, though it always finds a way to make you pay for it, one way or another.",
+        description="You stopped reading the fine print ages ago. Sometimes one turns out to be a full-blown perk in disguise. Sometimes it just goes wild and gives you way more than it should, though it always finds a way to make you pay for it, one way or another.",
         flags=PERK_DEFAULT_FLAGS,
         prereq=(),
     ),
@@ -822,6 +827,13 @@ _PERK_TABLE = [
         perk_id=PerkId.ROCKET_MASTERY,
         name="Rocket Mastery",
         description="You know exactly where to point a rocket launcher. Your rockets, and everything caught in the blast, take a lot more damage.",
+        flags=PERK_DEFAULT_FLAGS,
+        prereq=(),
+    ),
+    PerkMeta(
+        perk_id=PerkId.LOOSE_CANNON,
+        name="Shot in the Dark",
+        description="Every shot's a shot in the dark now, and most of them land harder than you had any right to expect. Every so often you miss so badly the enemy comes out ahead. Not on purpose. Probably.",
         flags=PERK_DEFAULT_FLAGS,
         prereq=(),
     ),

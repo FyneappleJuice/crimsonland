@@ -559,7 +559,7 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
                     creatures=spawn_creatures,
                 ),
             )
-            state.secondary_projectiles.entries[int(secondary_proj_id)].crit_mult = roll_crit_mult(weapon_id, increased_chance=float(perk_player.stats.crit_chance))
+            state.secondary_projectiles.entries[int(secondary_proj_id)].crit_mult = roll_crit_mult(weapon_id, increased_chance=float(perk_player.stats.crit_chance), crit_mult=float(perk_player.stats.crit_mult))
         case ParticleStreamMode(style=style, slow=slow):
             counts_accuracy_shots = False
             # WPU for a stream weapon is +30% per-particle damage (fire rate is a
@@ -570,7 +570,7 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
                     angle=Vec2.from_heading(shot_angle).to_angle(),
                     owner=owner,
                 )
-                state.particles.entries[particle_id].crit_mult = roll_crit_mult(weapon_id, increased_chance=float(perk_player.stats.crit_chance))
+                state.particles.entries[particle_id].crit_mult = roll_crit_mult(weapon_id, increased_chance=float(perk_player.stats.crit_chance), crit_mult=float(perk_player.stats.crit_mult))
             else:
                 particle_id = state.particles.spawn_particle(
                     pos=muzzle,
@@ -580,7 +580,7 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
                 )
                 if style is not None:
                     state.particles.entries[particle_id].style_id = style
-                state.particles.entries[particle_id].crit_mult = roll_crit_mult(weapon_id, increased_chance=float(perk_player.stats.crit_chance))
+                state.particles.entries[particle_id].crit_mult = roll_crit_mult(weapon_id, increased_chance=float(perk_player.stats.crit_chance), crit_mult=float(perk_player.stats.crit_mult))
         case MultiPlasmaFanMode():
             # Multi-Plasma: 5-shot fixed spread using type 0x09 and 0x0B.
             shot_count = 5
@@ -604,7 +604,7 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
                 )
                 if energy_heat_mult != 1.0:
                     state.projectiles.entries[int(fan_proj_id)].energy_heat_mult = float(energy_heat_mult)
-                state.projectiles.entries[int(fan_proj_id)].crit_mult = roll_crit_mult(weapon_id, increased_chance=float(perk_player.stats.crit_chance))
+                state.projectiles.entries[int(fan_proj_id)].crit_mult = roll_crit_mult(weapon_id, increased_chance=float(perk_player.stats.crit_chance), crit_mult=float(perk_player.stats.crit_mult))
         case PlasmaOverloadMode():
             # Not native: Plasma Overload bonus - two Plasma Rifle bolts fired
             # side-by-side on the same heading (not a fan - no angle spread).
@@ -637,7 +637,7 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
                 )
                 if energy_heat_mult != 1.0:
                     state.projectiles.entries[int(bolt_proj_id)].energy_heat_mult = float(energy_heat_mult)
-                state.projectiles.entries[int(bolt_proj_id)].crit_mult = roll_crit_mult(weapon_id, increased_chance=float(perk_player.stats.crit_chance))
+                state.projectiles.entries[int(bolt_proj_id)].crit_mult = roll_crit_mult(weapon_id, increased_chance=float(perk_player.stats.crit_chance), crit_mult=float(perk_player.stats.crit_mult))
                 if weapon_id == WeaponId.TENET_GUN:
                     state.projectiles.entries[int(bolt_proj_id)].tenet_reverse = True
         case SwarmerDumpMode():
@@ -661,7 +661,7 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
                         creatures=creatures,
                     ),
                 )
-                state.secondary_projectiles.entries[int(swarmer_proj_id)].crit_mult = roll_crit_mult(weapon_id, increased_chance=float(perk_player.stats.crit_chance))
+                state.secondary_projectiles.entries[int(swarmer_proj_id)].crit_mult = roll_crit_mult(weapon_id, increased_chance=float(perk_player.stats.crit_chance), crit_mult=float(perk_player.stats.crit_mult))
                 angle = angle + step
             # Native subtracts the full clip value, zeroing the ammo even when
             # the clip was fractional or negative.
@@ -679,7 +679,7 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
                 aim,
                 shots_fired_this_clip=shots_fired_this_clip,
                 weapon_power_up=weapon_power_up_active,
-                crit_mult=roll_crit_mult(weapon_id, increased_chance=float(perk_player.stats.crit_chance)),
+                crit_mult=roll_crit_mult(weapon_id, increased_chance=float(perk_player.stats.crit_chance), crit_mult=float(perk_player.stats.crit_mult)),
             )
         case ArcStrikeMode():
             # Arc Gun: no projectile - flag a chain-lightning strike for the
@@ -691,7 +691,7 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
                 player,
                 aim,
                 weapon_power_up=weapon_power_up_active,
-                crit_mult=roll_crit_mult(weapon_id, increased_chance=float(perk_player.stats.crit_chance)),
+                crit_mult=roll_crit_mult(weapon_id, increased_chance=float(perk_player.stats.crit_chance), crit_mult=float(perk_player.stats.crit_mult)),
             )
     if 0 <= int(player.index) < len(state.shots_fired):
         if counts_accuracy_shots:

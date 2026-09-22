@@ -18,7 +18,6 @@ RUN_MOD_STAT_MODS: dict[RunModId, tuple[StatMod, ...]] = {
     RunModId.FIRE_RATE: (more("shot_cooldown_mult", -0.02, source="run_mod:fire_rate"),),
     RunModId.RELOAD_SPEED: (more("reload_time_mult", -0.03, source="run_mod:reload_speed"),),
     RunModId.CLIP_SIZE: (increased("clip_size_mult", 0.04, source="run_mod:clip_size"),),
-    RunModId.PROJECTILE_DAMAGE: (increased("damage_mult_projectile", 0.03, source="run_mod:projectile_damage"),),
     RunModId.POWERUP_DURATION: (increased("bonus_duration_mult", 0.05, source="run_mod:powerup_duration"),),
     RunModId.MOVE_SPEED: (increased("move_speed_mult", 0.03, source="run_mod:move_speed"),),
     RunModId.PICKUP_RADIUS: (increased("pickup_radius_mult", 0.08, source="run_mod:pickup_radius"),),
@@ -31,6 +30,9 @@ RUN_MOD_STAT_MODS: dict[RunModId, tuple[StatMod, ...]] = {
     # this must be flat() to accumulate correctly (increased() would always
     # resolve to 0.0 * (1 + n) = 0.0 regardless of stacks).
     RunModId.CRIT_CHANCE: (flat("crit_chance", 0.05, source="run_mod:crit_chance"),),
+    # crit_mult's identity is already nonzero (2.0, the base crit multiplier) -
+    # a flat +0.1 per stack, same "+0.1" every time regardless of stack count.
+    RunModId.CRIT_MULTIPLIER: (flat("crit_mult", 0.1, source="run_mod:crit_multiplier"),),
     # The one truly universal damage bucket - weaker than any of the
     # damage-type or weapon-type buckets below, by design.
     RunModId.ALL_DAMAGE: (increased("damage_mult", 0.015, source="run_mod:all_damage"),),

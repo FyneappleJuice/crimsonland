@@ -25,6 +25,7 @@ from ...ui.perk_menu import (
     draw_menu_item,
     draw_ui_text,
     menu_item_hit_rect,
+    wrap_ui_text,
 )
 from ...ui.run_mod_menu import (
     RUN_MOD_MENU_TRANSITION_MS,
@@ -219,7 +220,21 @@ class RunModMenuController:
 
         selected = choices[self._selected_index]
         desc = run_mod_choice_display_description(selected, violence_disabled=int(ctx.violence_disabled))
-        draw_ui_text(ctx.resources, desc, computed.desc.top_left, scale=scale, color=UI_TEXT_COLOR)
+        # Not native: most run-mod descriptions are one short line, but a
+        # Wildcard-replaced slot shows a full perk description (2-3 sentences)
+        # and needs to wrap to the panel's own width instead of running past
+        # its right edge. Also clip to however many lines actually fit above
+        # the Cancel button, so an especially long one doesn't draw over it.
+        desc_lines = wrap_ui_text(ctx.resources, desc, max_width=computed.desc.w, scale=scale)
+        line_h = ctx.resources.small_font.cell_size * scale
+        max_lines = max(1, int(computed.desc.h // line_h)) if line_h > 0 else len(desc_lines)
+        draw_ui_text(
+            ctx.resources,
+            "\n".join(desc_lines[:max_lines]),
+            computed.desc.top_left,
+            scale=scale,
+            color=UI_TEXT_COLOR,
+        )
 
         cancel_w = button_width(
             ctx.resources, self._cancel_button.label, scale=scale, force_wide=self._cancel_button.force_wide,

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import random as _random
 from collections.abc import Callable
 
 import msgspec
@@ -43,6 +44,18 @@ ADRENALINE_RUSH_BONUS = 0.25
 # is Deep Freeze's actual payoff now - the freeze itself was never going to
 # out-compete Evil Eyes' unconditional, permanent freeze on CC alone.
 COLD_SNAP_FROZEN_TARGET_BONUS = 0.30
+
+# Loose Cannon: every non-DoT hit rolls a multiplier in this range instead of
+# dealing its flat value. Average of [-1, 4] is 1.5, i.e. +50% average damage -
+# the same "presentation/build variance, not run state" reasoning as
+# weapon_runtime/crit.py's own private RNG applies here too: this fires on
+# essentially every hit in the game once owned, so it needs a long-lived,
+# continuously-advancing RNG (not a fresh reseed per hit, which would give
+# every hit within the same tick the identical roll whenever nothing else
+# happened to advance the shared sim RNG in between).
+LOOSE_CANNON_MIN_MULT = -1.0
+LOOSE_CANNON_MAX_MULT = 4.0
+_LOOSE_CANNON_RNG = _random.Random(0x100CA33)
 
 # Not native: run mods (crimson.run_mods) - per-weapon-archetype damage bonus,
 # independent of damage_mult_* (damage TYPE). No UTILITY entry (no direct damage).
@@ -154,6 +167,33 @@ def _damage_generic_damage_mult(ctx: _CreatureDamageCtx) -> None:
     mult = float(ctx.team_stats.damage_mult)
     if mult != 1.0:
         ctx.damage = x87_pc24_mul(ctx.damage, f32(mult))
+
+
+def _is_dot_damage(ctx: _CreatureDamageCtx) -> bool:
+    """True for a ticking DoT/AoE event, as opposed to a discrete hit -
+    Self-tick (poison) is always a DoT; Fire/Explosion/Ion are a DoT only on
+    their non-direct-hit half (ignite tick, blast-radius tick, ion cloud
+    tick - see is_projectile_hit). Everything else (Bullet/Plasma/Energy/
+    Lightning/Melee, and any direct hit at all) is a discrete hit."""
+
+    if ctx.damage_type == CreatureDamageType.SELF_TICK:
+        return True
+    if ctx.damage_type in (CreatureDamageType.FIRE, CreatureDamageType.EXPLOSION, CreatureDamageType.ION):
+        return not ctx.is_projectile_hit
+    return False
+
+
+def _damage_variance_mult(ctx: _CreatureDamageCtx) -> None:
+    """Loose Cannon: every non-DoT hit rolls a multiplier in
+    [LOOSE_CANNON_MIN_MULT, LOOSE_CANNON_MAX_MULT] instead of dealing its
+    flat value. This can roll negative - a "hit" that heals the target."""
+
+    if not _damage_perk_active(ctx, PerkId.LOOSE_CANNON):
+        return
+    if _is_dot_damage(ctx):
+        return
+    mult = _LOOSE_CANNON_RNG.uniform(LOOSE_CANNON_MIN_MULT, LOOSE_CANNON_MAX_MULT)
+    ctx.damage = f32(float(ctx.damage) * mult)
 
 
 def _damage_projectile_damage_mult(ctx: _CreatureDamageCtx) -> None:
@@ -520,6 +560,10 @@ def creature_apply_damage(
 
     for step in _CREATURE_DAMAGE_ALIVE_STEPS.get(ctx.damage_type, ()):
         step(ctx)
+
+    # Not native: Loose Cannon - applied last, against the fully resolved
+    # damage, so it varies whatever every prior bonus/multiplier landed on.
+    _damage_variance_mult(ctx)
 
     creature.hp = x87_pc24_sub(creature.hp, ctx.damage)
     creature.vel = Vec2(

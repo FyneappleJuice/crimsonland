@@ -56,15 +56,16 @@ def crit_chance_for_weapon(weapon_id: WeaponId, *, increased_chance: float = 0.0
     return base * (1.0 + float(increased_chance))
 
 
-def roll_crit_mult(weapon_id: WeaponId, *, increased_chance: float = 0.0) -> float:
+def roll_crit_mult(weapon_id: WeaponId, *, increased_chance: float = 0.0, crit_mult: float = CRIT_MULTIPLIER) -> float:
     """The single outgoing multiplier for one shot/pellet/bolt/tick - 1.0 on
-    a miss, CRIT_MULTIPLIER on a crit. Meant to be rolled once per discrete
-    damage event (once per pellet/rocket/particle/swing/chain-strike) and
-    reused across anything that event goes on to hit (e.g. a piercing
-    bullet, a rocket's detonation AoE)."""
+    a miss, `crit_mult` (stats.crit_mult, run mods' Crit Multiplier bucket) on
+    a crit. Meant to be rolled once per discrete damage event (once per
+    pellet/rocket/particle/swing/chain-strike) and reused across anything
+    that event goes on to hit (e.g. a piercing bullet, a rocket's detonation
+    AoE)."""
     chance = crit_chance_for_weapon(weapon_id, increased_chance=increased_chance)
     if chance > 0.0 and _CRIT_RNG.random() < chance:
-        return CRIT_MULTIPLIER
+        return crit_mult
     return 1.0
 
 
@@ -82,6 +83,7 @@ def roll_primary_crit(
     bonus_crit_mult: float = 0.0,
     lucky_power: float = 0.0,
     increased_chance: float = 0.0,
+    crit_mult: float = CRIT_MULTIPLIER,
 ) -> tuple[float, bool]:
     """Like `roll_crit_mult`, but also reports whether this particular roll
     crit (needed by perks that react to a real crit landing, e.g. Cold Snap's
@@ -105,12 +107,12 @@ def roll_primary_crit(
         effective_chance = 1.0 - (1.0 - chance) ** lucky_power
         is_crit = force_crit or _CRIT_RNG.random() < effective_chance
         if is_crit:
-            return CRIT_MULTIPLIER + bonus_crit_mult, True
+            return crit_mult + bonus_crit_mult, True
         return 1.0, False
 
     is_crit = force_crit or (chance > 0.0 and _CRIT_RNG.random() < chance)
     if is_crit:
-        return CRIT_MULTIPLIER + bonus_crit_mult, True
+        return crit_mult + bonus_crit_mult, True
     return 1.0, False
 
 

@@ -34,7 +34,7 @@ _WEAPON_MASTERY_SUB_ROLL: dict[CreatureDamageType, PerkId] = {
 }
 
 # Same bias ratio as the run-mod Elemental/Weapon Affinity sub-rolls.
-_WEAPON_MASTERY_CURRENT_WEAPON_BIAS = 2.0
+_WEAPON_MASTERY_CURRENT_WEAPON_BIAS = 3.0
 
 
 def _resolve_weapon_mastery(state: GameplayState, player: PlayerState) -> PerkId | None:

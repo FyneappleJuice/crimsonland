@@ -48,7 +48,7 @@ _WEAPON_TYPE_SUB_ROLL: dict[WeaponArchetype, RunModId] = {
 # Current-weapon bias for the sub-rolls below: the entry matching whatever
 # the player is currently holding is this many times as likely as every
 # other entry.
-_CURRENT_WEAPON_WEIGHT_BIAS = 2.0
+_CURRENT_WEAPON_WEIGHT_BIAS = 3.0
 
 # Wildcard (PerkId.WILDCARD): independently, per secondary slot - not once per
 # offer - a 10% chance to become a real primary-perk offer instead, else a

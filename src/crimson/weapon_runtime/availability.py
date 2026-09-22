@@ -27,11 +27,10 @@ _TENET_GUN_RARE_RNG = _random.Random(0x7E7E7)
 
 # Fork: the rewrite-only weapons, folded into the main roster - always
 # available in every mode so they drop from the normal Weapon bonus.
-_FORK_ROSTER_WEAPON_IDS: tuple[WeaponId, ...] = (
-    WeaponId.EVIL_SCYTHE,
-    WeaponId.RAYGUN,
-    WeaponId.TENET_GUN,
-)
+# Evil Scythe/Arc Gun (RAYGUN) are temporarily pulled out via INACTIVE_WEAPON_IDS
+# below while they get balanced further - only Tenet Gun needs to stay here,
+# since its id sits outside the 1-33 range the second loop below covers.
+_FORK_ROSTER_WEAPON_IDS: tuple[WeaponId, ...] = (WeaponId.TENET_GUN,)
 
 # Weapons kept out of the normal Weapon-bonus drop pool entirely, regardless
 # of unlock progress:
@@ -57,6 +56,9 @@ _NON_PLAYER_WEAPON_IDS: tuple[WeaponId, ...] = (
 # excluded from drops/unlocks and, for Shrinkifier 5K, its native scripted
 # Survival handout (see gameplay.py::survival_update_weapon_handouts). Move an
 # id back out of this tuple to reactivate it.
+#
+# Evil Scythe and Arc Gun (RAYGUN) are here temporarily while they get
+# balanced further - move them back to _FORK_ROSTER_WEAPON_IDS to reactivate.
 INACTIVE_WEAPON_IDS: tuple[WeaponId, ...] = (
     WeaponId.SUBMACHINE_GUN,
     WeaponId.BLOW_TORCH,
@@ -65,6 +67,8 @@ INACTIVE_WEAPON_IDS: tuple[WeaponId, ...] = (
     WeaponId.PLAGUE_SPREADER_GUN,
     WeaponId.BUBBLEGUN,
     WeaponId.RAINBOW_GUN,
+    WeaponId.EVIL_SCYTHE,
+    WeaponId.RAYGUN,
 )
 
 

@@ -108,20 +108,37 @@ def test_xp_gain_run_mod_scales_award_experience_from_reward() -> None:
     assert modded.experience > base.experience
 
 
-# --- new axis: projectile damage ----------------------------------------
-
-
-def test_projectile_damage_run_mod_moves_its_stat() -> None:
-    player = _player_with_run_mods(RunModId.PROJECTILE_DAMAGE)
-    assert player.stats.damage_mult_projectile == pytest.approx(1.03)
-
-
 # --- new axis: crit chance -----------------------------------------------
 
 
 def test_crit_chance_run_mod_moves_its_stat() -> None:
     player = _player_with_run_mods(RunModId.CRIT_CHANCE)
     assert player.stats.crit_chance == pytest.approx(0.05)
+
+
+# --- new axis: crit multiplier --------------------------------------------
+
+
+def test_crit_multiplier_run_mod_moves_its_stat() -> None:
+    player = _player_with_run_mods(RunModId.CRIT_MULTIPLIER)
+    assert player.stats.crit_mult == pytest.approx(2.1)
+
+
+def test_crit_multiplier_run_mod_stacks_flat() -> None:
+    player = _player_with_run_mods(RunModId.CRIT_MULTIPLIER, RunModId.CRIT_MULTIPLIER, RunModId.CRIT_MULTIPLIER)
+    assert player.stats.crit_mult == pytest.approx(2.3)
+
+
+def test_crit_multiplier_run_mod_reaches_roll_crit_mult() -> None:
+    from crimson.weapon_runtime.crit import roll_crit_mult
+
+    player = _player_with_run_mods(RunModId.CRIT_MULTIPLIER)
+    # A huge increased_chance drives chance well past 1.0, forcing a guaranteed
+    # crit so the resolved crit_mult value can be asserted deterministically.
+    boosted = roll_crit_mult(WeaponId.PISTOL, increased_chance=1000.0, crit_mult=float(player.stats.crit_mult))
+    base = roll_crit_mult(WeaponId.PISTOL, increased_chance=1000.0)
+    assert boosted == pytest.approx(2.1)
+    assert base == pytest.approx(2.0)
 
 
 def test_crit_chance_run_mod_scales_the_weapons_own_base_chance() -> None:
