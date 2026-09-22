@@ -45,7 +45,14 @@ def _select_jinxed_accident_target(ctx: PerksUpdateEffectsCtx) -> PlayerState:
 def update_jinxed_timer(ctx: PerksUpdateEffectsCtx) -> None:
     timer = f32(float(ctx.state.jinxed_timer))
     if timer >= 0.0:
-        rate_mult = like_clockwork_rate_mult(ctx.players[0]) if ctx.players else 1.0
+        # Not native: Perk Efficacy is Jinxed's frequency knob (unlike the
+        # other proc perks, where Efficacy stays damage-only and Like
+        # Clockwork alone owns frequency) - Jinxed has no damage number to
+        # scale, so it gets the frequency axis instead.
+        if ctx.players:
+            rate_mult = like_clockwork_rate_mult(ctx.players[0]) * float(ctx.players[0].stats.perk_efficacy)
+        else:
+            rate_mult = 1.0
         ctx.state.jinxed_timer = x87_pc24_sub(timer, f32(float(ctx.dt) * rate_mult))
 
 
@@ -64,8 +71,11 @@ def update_jinxed(ctx: PerksUpdateEffectsCtx) -> None:
     ):
         player = _select_jinxed_accident_target(ctx)
         # Rewrite-only: the accident is a self-inflicted, non-enemy cost, so it
-        # must never be the thing that actually kills the player.
-        player.health = max(1.0, float(x87_pc24_sub(f32(float(player.health)), f32(5.0))))
+        # must never be the thing that actually kills the player. Perk
+        # Efficacy shrinks this cost (see update_jinxed_timer for why
+        # Efficacy is frequency, not damage, for this perk specifically).
+        self_damage = f32(5.0 / float(ctx.players[0].stats.perk_efficacy))
+        player.health = max(1.0, float(x87_pc24_sub(f32(float(player.health)), self_damage)))
         if ctx.fx_queue is not None:
             ctx.fx_queue.add_random(
                 pos=player.pos,

@@ -126,6 +126,13 @@ class Projectile(msgspec.Struct):
     # into the weapon's own damage_scale (weapons.py) instead of into this
     # multiplier, so a plain miss is exactly 1.0 here.
     crit_mult: float = 1.0
+    # Rewrite-only: outgoing Perk Efficacy multiplier stamped at spawn for a
+    # canned perk-proc burst (Man Bomb/Hot Tempered/Fire Cough/Angry Reloader)
+    # - these spawn a fixed-damage-type projectile independent of the player's
+    # actual weapon, so their own damage number needs its own per-instance
+    # multiplier rather than reading a shared damage_mult_* bucket. 1.0 = not
+    # a perk-proc bolt / no Perk Efficacy stacks.
+    perk_damage_mult: float = 1.0
     # Rewrite-only: whether this specific pellet actually rolled a crit (not
     # just "crit_mult != 1.0" - a non-crit shot can still carry a nonzero
     # multiplier here from a perk like Pendulum's damage-phase bonus). Only

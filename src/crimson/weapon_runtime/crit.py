@@ -47,23 +47,32 @@ CRIT_CHANCE_BY_ARCHETYPE: dict[WeaponArchetype, float] = {
 _CRIT_RNG = _random.Random(0xC817)
 
 
-def crit_chance_for_weapon(weapon_id: WeaponId) -> float:
-    return CRIT_CHANCE_BY_ARCHETYPE.get(weapon_tags(WeaponId(weapon_id)).archetype, 0.0)
+def crit_chance_for_weapon(weapon_id: WeaponId, *, increased_chance: float = 0.0) -> float:
+    """`increased_chance` is stats.crit_chance - a summed "increased %" (e.g.
+    0.05 = +5%) applied against the weapon's own base chance, PoE-style, not
+    a flat add. A weapon with 0% base chance (Flamethrower, Arc) stays at 0%
+    regardless, same as any other multiplier on a zero base."""
+    base = CRIT_CHANCE_BY_ARCHETYPE.get(weapon_tags(WeaponId(weapon_id)).archetype, 0.0)
+    return base * (1.0 + float(increased_chance))
 
 
-def roll_crit_mult(weapon_id: WeaponId) -> float:
+def roll_crit_mult(weapon_id: WeaponId, *, increased_chance: float = 0.0) -> float:
     """The single outgoing multiplier for one shot/pellet/bolt/tick - 1.0 on
     a miss, CRIT_MULTIPLIER on a crit. Meant to be rolled once per discrete
     damage event (once per pellet/rocket/particle/swing/chain-strike) and
     reused across anything that event goes on to hit (e.g. a piercing
     bullet, a rocket's detonation AoE)."""
-    chance = crit_chance_for_weapon(weapon_id)
+    chance = crit_chance_for_weapon(weapon_id, increased_chance=increased_chance)
     if chance > 0.0 and _CRIT_RNG.random() < chance:
         return CRIT_MULTIPLIER
     return 1.0
 
 
-DIAMOND_FLASK_DOUBLE_MULT = 2.0
+# Diamond Flask's "roll N times, crit on any success" - expressed as a
+# continuous success-probability formula (1 - (1-chance)^power) instead of
+# literally rolling `power` times, so Perk Efficacy can scale `power` smoothly
+# (2.1, 2.2, ...) instead of only ever landing on whole extra rolls.
+DIAMOND_FLASK_BASE_POWER = 2.0
 
 
 def roll_primary_crit(
@@ -71,32 +80,32 @@ def roll_primary_crit(
     *,
     force_crit: bool = False,
     bonus_crit_mult: float = 0.0,
-    lucky: bool = False,
+    lucky_power: float = 0.0,
+    increased_chance: float = 0.0,
 ) -> tuple[float, bool]:
     """Like `roll_crit_mult`, but also reports whether this particular roll
     crit (needed by perks that react to a real crit landing, e.g. Cold Snap's
     freeze) and lets a caller force/boost the roll (Death Wish, Overdue).
 
-    `lucky` (Diamond Flask) rolls the crit chance twice and crits on either
-    success; if *both* rolls succeed, the crit multiplier is itself doubled.
-    No compensation math needed here - see the module docstring; the
-    unbuffed baseline is already neutral before any of these bonuses apply.
+    `lucky_power` (Diamond Flask, `DIAMOND_FLASK_BASE_POWER` scaled by Perk
+    Efficacy) raises the crit chance to `1 - (1-chance)^lucky_power` - the
+    probability that at least one of `lucky_power` independent rolls at the
+    base chance would succeed, without needing `lucky_power` to be a whole
+    number. 0.0 = off (plain single roll). No compensation math needed here -
+    see the module docstring; the unbuffed baseline is already neutral before
+    any of these bonuses apply.
 
     Scoped to the player's own direct trigger-pull (fire.py's primary pellet
     loop) only - not threaded through every crit call site, since none of the
     perks that need this act on bonus-spawned projectiles.
     """
-    chance = crit_chance_for_weapon(weapon_id)
+    chance = crit_chance_for_weapon(weapon_id, increased_chance=increased_chance)
 
-    if lucky and chance > 0.0:
-        roll1 = _CRIT_RNG.random() < chance
-        roll2 = _CRIT_RNG.random() < chance
-        is_crit = force_crit or roll1 or roll2
+    if lucky_power > 0.0 and chance > 0.0:
+        effective_chance = 1.0 - (1.0 - chance) ** lucky_power
+        is_crit = force_crit or _CRIT_RNG.random() < effective_chance
         if is_crit:
-            mult = CRIT_MULTIPLIER + bonus_crit_mult
-            if (not force_crit) and roll1 and roll2:
-                mult *= DIAMOND_FLASK_DOUBLE_MULT
-            return mult, True
+            return CRIT_MULTIPLIER + bonus_crit_mult, True
         return 1.0, False
 
     is_crit = force_crit or (chance > 0.0 and _CRIT_RNG.random() < chance)

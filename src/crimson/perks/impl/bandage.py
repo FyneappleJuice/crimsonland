@@ -13,11 +13,12 @@ def apply_bandage(ctx: PerkApplyCtx) -> None:
         # Heal only alive players (original-bugs.md item 3).
         if player.health <= 0.0:
             continue
+        # Not native: Perk Efficacy scales the heal roll.
         amount = float(
             ctx.state.rng.rand_tagged(RngCallerStatic.PERK_APPLY_BANDAGE_HEAL)
             % 50
             + 1,
-        )
+        ) * float(player.stats.perk_efficacy)
         health = f32(player.health)
         # Intended behavior from in-game text: restore up to 50% HP.
         player.health = soul_tether_clamp_and_gain(player, float(x87_pc24_add(health, amount)))

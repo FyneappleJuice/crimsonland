@@ -104,6 +104,8 @@ class _WorldStepRuntime(ProjectileHitRuntime, CreatureDamageRuntime, PlayerDeath
         damage_type: int,
         impulse: Vec2,
         owner: OwnerRef,
+        *,
+        is_projectile_hit: bool = False,
     ) -> None:
         idx = int(creature_index)
         if not (0 <= idx < len(self.world.creatures.entries)):
@@ -124,6 +126,7 @@ class _WorldStepRuntime(ProjectileHitRuntime, CreatureDamageRuntime, PlayerDeath
             effects=self.world.state.effects,
             detail_preset=int(self.detail_preset),
             creature_damage_runtime=self,
+            is_projectile_hit=is_projectile_hit,
         )
 
     def on_creature_lethal(

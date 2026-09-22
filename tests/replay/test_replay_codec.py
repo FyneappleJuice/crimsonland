@@ -34,6 +34,7 @@ from crimson.sim.input_providers import (
     GameFrameRngAdvanceOperation,
     PerkMenuOpenCommand,
     PerkPickCommand,
+    RunModPickCommand,
     TypoBackspaceCommand,
     TypoCharCommand,
     TypoSubmitCommand,
@@ -123,6 +124,21 @@ def test_replay_codec_roundtrip_postlude_menu_open() -> None:
     assert decoded.ticks[0].prelude == []
     assert decoded.ticks[0].postlude == [PerkMenuOpenCommand(player_index=0)]
     assert decoded.ticks[0].commands == []
+
+
+def test_replay_codec_roundtrip_run_mod_pick_command() -> None:
+    header = ReplayHeader(game_mode_id=GameMode.SURVIVAL, seed=0x1234, tick_rate=60, player_count=1)
+    rec = ReplayRecorder(header)
+    rec.record_tick([PlayerInput()])
+    rec.record_tick(
+        [PlayerInput()],
+        commands=[RunModPickCommand(player_index=0, choice_index=1)],
+    )
+    replay = rec.finish()
+
+    decoded = load_replay(dump_replay(replay))
+    assert decoded.ticks[1].prelude == [RunModPickCommand(player_index=0, choice_index=1)]
+    assert decoded.ticks[1].commands == []
 
 
 def test_replay_codec_roundtrip_typo_commands_and_name_sources() -> None:
@@ -517,6 +533,16 @@ def test_replay_codec_rejects_invalid_perk_choice_index(choice_index: int) -> No
     tick["prelude"] = [{"type": "perk_pick", "player_index": 0, "choice_index": choice_index}]
 
     with pytest.raises(ReplayCodecError, match="choice_index must be in 0..6"):
+        load_replay(_dump_wire(replay_obj))
+
+
+@pytest.mark.parametrize("choice_index", [-1, 3])
+def test_replay_codec_rejects_invalid_run_mod_choice_index(choice_index: int) -> None:
+    replay_obj = _minimal_wire_replay_obj()
+    tick = cast("dict[str, object]", cast("list[object]", replay_obj["ticks"])[0])
+    tick["prelude"] = [{"type": "run_mod_pick", "player_index": 0, "choice_index": choice_index}]
+
+    with pytest.raises(ReplayCodecError, match="choice_index must be in 0..2"):
         load_replay(_dump_wire(replay_obj))
 
 

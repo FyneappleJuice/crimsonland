@@ -33,7 +33,11 @@ def update_death_clock(ctx: PerksUpdateEffectsCtx) -> None:
 
     # Native gates this effect on shared/player-0 perk state, then applies health
     # drain to every active local player.
-    drain = x87_pc24_mul(f32(float(ctx.dt)), f32(3.33333325))
+    # Not native: Perk Efficacy stretches the 30s countdown by slowing the
+    # drain rate (health resets to 100 on pickup, so a slower drain is more
+    # seconds before it reaches 0).
+    efficacy = float(ctx.players[0].stats.perk_efficacy)
+    drain = x87_pc24_mul(f32(float(ctx.dt)), f32(3.33333325 / efficacy))
     for player in ctx.players:
         if float(player.health) <= 0.0:
             player.health = 0.0

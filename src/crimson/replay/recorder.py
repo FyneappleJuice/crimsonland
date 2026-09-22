@@ -11,6 +11,7 @@ from ..sim.input_providers import (
     ReplayPostludeOperation,
     ReplayPreludeOperation,
     ReplayTickCommand,
+    RunModPickCommand,
     TypoBackspaceCommand,
     TypoCharCommand,
     TypoSubmitCommand,
@@ -74,7 +75,7 @@ class ReplayRecorder:
         replay_commands: list[ReplayTickCommand] = []
         for command in commands or ():
             match command:
-                case PerkMenuOpenCommand() | PerkPickCommand():
+                case PerkMenuOpenCommand() | PerkPickCommand() | RunModPickCommand():
                     replay_prelude.append(command)
                 case TypoCharCommand() | TypoBackspaceCommand() | TypoSubmitCommand():
                     replay_commands.append(command)

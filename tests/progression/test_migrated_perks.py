@@ -75,25 +75,30 @@ def test_stacked_bonus_duration_sources_compose() -> None:
 
 
 def test_single_damage_perks_match_their_old_constants() -> None:
-    # Doctor / Barrel Greaser are about aim + barrel, not the ammo, so they feed
-    # the projectile layer (kinetic bullet + energy/plasma).
+    # Doctor / Barrel Greaser / Uranium Filled Bullets all ride the same
+    # shared "projectile" bucket (kinetic bullet + energy/plasma/ion, plus
+    # fire/explosion's direct-hit half only).
     assert _player_with(PerkId.DOCTOR).stats.damage_mult_projectile == pytest.approx(1.2)
     assert _player_with(PerkId.BARREL_GREASER).stats.damage_mult_projectile == pytest.approx(1.4)
-    # Uranium slugs are kinetic lead only.
-    assert _player_with(PerkId.URANIUM_FILLED_BULLETS).stats.damage_mult_bullet == pytest.approx(2.0)
+    assert _player_with(PerkId.URANIUM_FILLED_BULLETS).stats.damage_mult_projectile == pytest.approx(1.5)
     assert _player_with(PerkId.DOCTOR).stats.damage_mult_bullet == pytest.approx(1.0)
-    assert _player_with(PerkId.URANIUM_FILLED_BULLETS).stats.damage_mult_projectile == pytest.approx(1.0)
+    assert _player_with(PerkId.URANIUM_FILLED_BULLETS).stats.damage_mult == pytest.approx(1.0)
+    assert _player_with(PerkId.URANIUM_FILLED_BULLETS).stats.damage_mult_bullet == pytest.approx(1.0)
 
 
 def test_stacked_damage_perks_fold_per_layer() -> None:
     stats = _player_with(PerkId.DOCTOR, PerkId.BARREL_GREASER, PerkId.URANIUM_FILLED_BULLETS).stats
-    assert stats.damage_mult_projectile == pytest.approx(1.2 * 1.4)
-    assert stats.damage_mult_bullet == pytest.approx(2.0)
+    assert stats.damage_mult_projectile == pytest.approx(1.2 * 1.4 * 1.5)
+
+
+def test_uranium_filled_bullets_plus_doubles_the_projectile_bucket() -> None:
+    stats = _player_with(PerkId.URANIUM_FILLED_BULLETS, PerkId.URANIUM_FILLED_BULLETS_PLUS).stats
+    assert stats.damage_mult_projectile == pytest.approx(2.0)
 
 
 def test_fire_and_ion_damage_perks_feed_their_own_stats() -> None:
     assert _player_with(PerkId.PYROMANIAC).stats.damage_mult_fire == pytest.approx(1.5)
-    assert _player_with(PerkId.ION_GUN_MASTER).stats.damage_mult_ion == pytest.approx(1.2)
+    assert _player_with(PerkId.ION_GUN_MASTER).stats.damage_mult_ion == pytest.approx(1.5)
 
 
 # --- clip perks ----------------------------------------------------

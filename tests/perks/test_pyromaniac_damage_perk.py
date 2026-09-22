@@ -4,13 +4,12 @@ from crimson.creatures.damage import creature_apply_damage
 from crimson.creatures.runtime import CreatureState
 from crimson.owner_ref import OwnerRef
 from crimson.perks import PerkId
-from crimson.rng_caller_static import RngCallerStatic
 from crimson.sim.state_types import PlayerState
 from grim.geom import Vec2
 from tests.support.helpers import ScriptedCrand, assert_float_close
 
 
-def test_pyromaniac_increases_fire_damage_and_consumes_rng() -> None:
+def test_pyromaniac_increases_fire_damage() -> None:
     creature = CreatureState(active=True, hp=100.0, size=50.0)
     player = PlayerState(index=0, pos=Vec2())
     player.perk_counts[int(PerkId.PYROMANIAC)] = 1
@@ -29,7 +28,6 @@ def test_pyromaniac_increases_fire_damage_and_consumes_rng() -> None:
 
     assert killed is False
     assert_float_close(creature.hp, 85.0)
-    assert rand.calls == 1
-    assert [record.caller for record in rand.records_since()] == [
-        RngCallerStatic.CREATURE_APPLY_DAMAGE_PYROMANIAC,
-    ]
+    # Not native: the RNG draw the original game made here was removed - this
+    # project no longer chases native RNG-stream parity for build content.
+    assert rand.calls == 0

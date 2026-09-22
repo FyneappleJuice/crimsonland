@@ -107,8 +107,10 @@ class RecordingCreatureDamageRuntime(DirectCreatureDamageRuntime):
         damage_type: int,
         impulse: Vec2,
         owner: OwnerRef,
+        *,
+        is_projectile_hit: bool = False,
     ) -> None:
-        _ = owner
+        _ = owner, is_projectile_hit
         idx = int(creature_index)
         damage_value = float(damage)
         self.calls.append((idx, damage_value, int(damage_type), impulse, owner))
@@ -120,6 +122,7 @@ class RecordingCreatureDamageRuntime(DirectCreatureDamageRuntime):
             int(damage_type),
             impulse,
             owner,
+            is_projectile_hit=is_projectile_hit,
         )
 
     def kill_creature_no_corpse(self, creature_index: int, owner: OwnerRef) -> None:

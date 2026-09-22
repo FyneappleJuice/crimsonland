@@ -61,6 +61,16 @@ def flag(name: str, *, source: str = "") -> StatMod:
     return StatMod(stat=name, op=ModOp.FLAG, source=source)
 
 
+def negated(mod: StatMod) -> StatMod:
+    """The same stat/op, with the delta flipped - "the opposite direction of
+    this same knob" (Wildcard's upgrade penalty). Undefined for FLAG/OVERRIDE,
+    which have no directional delta to flip."""
+
+    if mod.op in (ModOp.FLAG, ModOp.OVERRIDE):
+        raise ValueError(f"cannot negate a {mod.op.value} StatMod")
+    return msgspec.structs.replace(mod, value=-mod.value)
+
+
 def resolve_stats(mods: Iterable[StatMod]) -> PlayerStats:
     """Fold `mods` into a `PlayerStats`. Order-independent for numbers."""
 

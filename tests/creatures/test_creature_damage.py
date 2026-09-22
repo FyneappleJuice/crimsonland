@@ -13,6 +13,7 @@ from crimson.creatures.runtime import CreaturePool, CreatureState
 from crimson.creatures.spawn import CreatureFlags, CreatureTypeId
 from crimson.effects_atlas import EffectId
 from crimson.gameplay import GameplayState
+from crimson.math_parity import f32, x87_pc24_mul, x87_pc24_sub
 from crimson.owner_ref import OwnerRef
 from crimson.perks import PerkId
 from crimson.rng_caller_static import RngCallerStatic
@@ -133,7 +134,7 @@ def test_damage_type1_global_perks_apply_with_non_player_owner() -> None:
     )
 
     assert killed is True
-    assert creature.hp == -131.92474365234375
+    assert creature.hp == -80.43323516845703
 
 
 def test_damage_perks_use_any_player_owning_them() -> None:
@@ -155,7 +156,7 @@ def test_damage_perks_use_any_player_owning_them() -> None:
     )
 
     assert killed is False
-    assert_float_close(creature.hp, 80.0)
+    assert_float_close(creature.hp, 85.0)
 
 
 def test_stacked_bullet_damage_perks_fold_into_one_multiply() -> None:
@@ -188,6 +189,100 @@ def test_stacked_bullet_damage_perks_fold_into_one_multiply() -> None:
 
     assert killed is True
     assert creature.hp == -3.9215087890625
+
+
+def test_owner_exempt_from_run_mod_affinity_ignores_elemental_affinity_run_mod() -> None:
+    # Man Bomb/Hot Tempered/Angry Reloader/Fire Cough all spawn their canned
+    # burst with OwnerRef.without_run_mod_affinity() - a matching Elemental
+    # Affinity pick (here: Ion Damage) must not scale the hit.
+    from crimson.run_mods.ids import RunModId
+
+    player = PlayerState(index=0, pos=Vec2())
+    player.run_mod_counts[int(RunModId.ION_DAMAGE)] = 1
+
+    creature = CreatureState(active=True, hp=100.0, size=50.0, flags=CreatureFlags(0))
+    creature_apply_damage(
+        creature,
+        damage_amount=10.0,
+        damage_type=CreatureDamageType.ION,
+        impulse=Vec2(),
+        owner=OwnerRef.from_player(0).without_run_mod_affinity(),
+        dt=0.016,
+        players=[player],
+        rng=ScriptedCrand(0, fallback=ScriptedCrand.Fallback.REPEAT_LAST),
+    )
+
+    assert_float_close(creature.hp, 90.0)
+
+
+def test_owner_exempt_from_run_mod_affinity_ignores_weapon_affinity_run_mod() -> None:
+    # Weapon Affinity (Pistol Damage) must not scale a Mr. Melee-style
+    # MELEE hit even though the player is currently holding a pistol.
+    from crimson.run_mods.ids import RunModId
+    from crimson.sim.state_types import WeaponSlot
+    from crimson.weapons import WeaponId
+
+    player = PlayerState(index=0, pos=Vec2(), weapon=WeaponSlot(weapon_id=WeaponId.PISTOL))
+    player.run_mod_counts[int(RunModId.PISTOL_DAMAGE)] = 1
+
+    creature = CreatureState(active=True, hp=100.0, size=50.0, flags=CreatureFlags(0))
+    creature_apply_damage(
+        creature,
+        damage_amount=25.0,
+        damage_type=CreatureDamageType.MELEE,
+        impulse=Vec2(),
+        owner=OwnerRef.from_player(0).without_run_mod_affinity(),
+        dt=0.016,
+        players=[player],
+        rng=ScriptedCrand(0, fallback=ScriptedCrand.Fallback.REPEAT_LAST),
+    )
+
+    assert_float_close(creature.hp, 75.0)
+
+
+def test_owner_exempt_from_run_mod_affinity_still_gets_all_damage_run_mod() -> None:
+    from crimson.run_mods.ids import RunModId
+
+    player = PlayerState(index=0, pos=Vec2())
+    player.run_mod_counts[int(RunModId.ALL_DAMAGE)] = 1
+
+    creature = CreatureState(active=True, hp=100.0, size=50.0, flags=CreatureFlags(0))
+    creature_apply_damage(
+        creature,
+        damage_amount=10.0,
+        damage_type=CreatureDamageType.ION,
+        impulse=Vec2(),
+        owner=OwnerRef.from_player(0).without_run_mod_affinity(),
+        dt=0.016,
+        players=[player],
+        rng=ScriptedCrand(0, fallback=ScriptedCrand.Fallback.REPEAT_LAST),
+    )
+
+    expected_damage = x87_pc24_mul(f32(10.0), f32(1.015))
+    assert_float_close(creature.hp, x87_pc24_sub(f32(100.0), expected_damage))
+
+
+def test_owner_exempt_from_run_mod_affinity_still_gets_real_perk_interactions() -> None:
+    # Ion Gun Master and Pyromaniac are native perks, not run mods - they
+    # still boost Man Bomb's/Fire Cough's own exempt damage even though the
+    # new run-mod Elemental Affinity bucket does not.
+    player = PlayerState(index=0, pos=Vec2())
+    player.perk_counts[int(PerkId.ION_GUN_MASTER)] = 1
+
+    creature = CreatureState(active=True, hp=100.0, size=50.0, flags=CreatureFlags(0))
+    creature_apply_damage(
+        creature,
+        damage_amount=10.0,
+        damage_type=CreatureDamageType.ION,
+        impulse=Vec2(),
+        owner=OwnerRef.from_player(0).without_run_mod_affinity(),
+        dt=0.016,
+        players=[player],
+        rng=ScriptedCrand(0, fallback=ScriptedCrand.Fallback.REPEAT_LAST),
+    )
+
+    # Ion Mastery: x1.5 -> 10 * 1.5 = 15.0
+    assert_float_close(creature.hp, 85.0)
 
 
 def test_damage_float_parameter_rounds_at_the_native_abi_boundary() -> None:

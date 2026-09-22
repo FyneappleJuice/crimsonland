@@ -17,9 +17,10 @@ from ..perks import PerkId
 from ..perks.helpers import perk_active
 from ..perks.impl.bane_of_legends import BANE_OF_LEGENDS_KILL_BONUS, BANE_OF_LEGENDS_PENALTY
 from ..perks.impl.delicate_watch import DELICATE_WATCH_BONUS
-from ..progression import PlayerStats, resolve_team_stats
+from ..progression import PlayerStats, resolve_team_stats, resolve_team_stats_perks_only
 from ..rng_caller_static import RngCallerStatic
 from ..sim.state_types import PlayerState
+from ..weapon_runtime.tags import WeaponArchetype, weapon_tags
 from .damage_runtime import CreatureDamageRuntime
 from .damage_types import CreatureDamageType
 from .runtime import CreatureState
@@ -43,6 +44,20 @@ ADRENALINE_RUSH_BONUS = 0.25
 # out-compete Evil Eyes' unconditional, permanent freeze on CC alone.
 COLD_SNAP_FROZEN_TARGET_BONUS = 0.30
 
+# Not native: run mods (crimson.run_mods) - per-weapon-archetype damage bonus,
+# independent of damage_mult_* (damage TYPE). No UTILITY entry (no direct damage).
+_ARCHETYPE_DAMAGE_STAT: dict[WeaponArchetype, str] = {
+    WeaponArchetype.PISTOL: "damage_mult_archetype_pistol",
+    WeaponArchetype.RIFLE: "damage_mult_archetype_rifle",
+    WeaponArchetype.SMG: "damage_mult_archetype_smg",
+    WeaponArchetype.SHOTGUN: "damage_mult_archetype_shotgun",
+    WeaponArchetype.MINIGUN: "damage_mult_archetype_minigun",
+    WeaponArchetype.CANNON: "damage_mult_archetype_cannon",
+    WeaponArchetype.FLAMETHROWER: "damage_mult_archetype_flamethrower",
+    WeaponArchetype.ARC: "damage_mult_archetype_arc",
+    WeaponArchetype.MELEE: "damage_mult_archetype_melee",
+}
+
 
 def _any_player_has_perk(players: list[PlayerState], perk_id: PerkId) -> bool:
     return any(perk_active(player, perk_id) for player in players)
@@ -65,6 +80,18 @@ class _CreatureDamageCtx(msgspec.Struct):
     # affixes (crimson.progression). Reads perk_counts directly, so it is
     # correct without depending on the per-tick player.stats cache.
     team_stats: PlayerStats = PlayerStats()
+    # Not native: same as `team_stats`, but with run-mod contributions
+    # excluded when `owner.no_run_mod_affinity` is set (see OwnerRef). Used
+    # only by the per-damage-type multiplier functions and the weapon-
+    # archetype block below - everything else (generic All Damage, the
+    # shooter build-perk block) still reads the full `team_stats`.
+    elemental_type_stats: PlayerStats = PlayerStats()
+    # Not native: Fire, Explosion, and Ion each cover two distinct damage
+    # events under one damage_type - only the direct-hit half is a genuine
+    # "projectile" hit. Call sites set this True only for that half; Bullet/
+    # Plasma/Energy have no second event to distinguish from, so their
+    # projectile-mult step is unconditional (no flag needed).
+    is_projectile_hit: bool = False
 
 
 _CreatureDamageStep = Callable[[_CreatureDamageCtx], None]
@@ -118,6 +145,17 @@ def creature_death_sfx_for_slot(type_id: CreatureTypeId, sound_slot: int) -> Sfx
     return options[slot]
 
 
+def _damage_generic_damage_mult(ctx: _CreatureDamageCtx) -> None:
+    """Not native: run mods' "All-Damage" bucket (stats.damage_mult) - the one
+    truly universal multiplier, applied regardless of damage_type (unlike
+    every damage_mult_* bucket below, which is dispatched per-type and so
+    never reaches MELEE/EXPLOSION/SELF_TICK hits)."""
+
+    mult = float(ctx.team_stats.damage_mult)
+    if mult != 1.0:
+        ctx.damage = x87_pc24_mul(ctx.damage, f32(mult))
+
+
 def _damage_projectile_damage_mult(ctx: _CreatureDamageCtx) -> None:
     """Outgoing multiplier for any main-pool projectile hit (kinetic + energy).
 
@@ -136,7 +174,7 @@ def _damage_kinetic_bullet_damage_mult(ctx: _CreatureDamageCtx) -> None:
     Feeds stats.damage_mult_bullet. Does NOT touch energy/plasma.
     """
 
-    mult = float(ctx.team_stats.damage_mult_bullet)
+    mult = float(ctx.elemental_type_stats.damage_mult_bullet)
     if mult != 1.0:
         ctx.damage = x87_pc24_mul(ctx.damage, f32(mult))
 
@@ -148,7 +186,7 @@ def _damage_plasma_damage_mult(ctx: _CreatureDamageCtx) -> None:
     ramp is applied earlier, on the projectile itself (energy_heat_mult).
     """
 
-    mult = float(ctx.team_stats.damage_mult_plasma)
+    mult = float(ctx.elemental_type_stats.damage_mult_plasma)
     if mult != 1.0:
         ctx.damage = x87_pc24_mul(ctx.damage, f32(mult))
 
@@ -160,12 +198,16 @@ def _damage_energy_damage_mult(ctx: _CreatureDamageCtx) -> None:
     only - its own bucket, separate from plasma.
     """
 
-    mult = float(ctx.team_stats.damage_mult_energy)
+    mult = float(ctx.elemental_type_stats.damage_mult_energy)
     if mult != 1.0:
         ctx.damage = x87_pc24_mul(ctx.damage, f32(mult))
 
 
-def _damage_type1_living_fortress(ctx: _CreatureDamageCtx) -> None:
+def _damage_living_fortress_mult(ctx: _CreatureDamageCtx) -> None:
+    """Not native/generic: Living Fortress now applies to every damage type,
+    not just Bullet/Plasma/Energy - "you deal more damage" shouldn't stop
+    working just because you're punching or standing in an explosion."""
+
     if not _damage_perk_active(ctx, PerkId.LIVING_FORTRESS):
         return
     for player in ctx.players:
@@ -203,27 +245,40 @@ def _damage_type1_heading_jitter(ctx: _CreatureDamageCtx) -> None:
 
 
 def _damage_type7_ion_damage_mult(ctx: _CreatureDamageCtx) -> None:
-    # Ion Gun Master's damage bump (x1.2). Its ion blast-radius bump stays in
+    # Ion Mastery's damage bump (x1.5). Its ion blast-radius bump stays in
     # projectile_pool.py.
-    mult = float(ctx.team_stats.damage_mult_ion)
+    mult = float(ctx.elemental_type_stats.damage_mult_ion)
+    if mult != 1.0:
+        ctx.damage = x87_pc24_mul(ctx.damage, f32(mult))
+
+
+def _damage_explosion_damage_mult(ctx: _CreatureDamageCtx) -> None:
+    # Not native: Rocket Mastery. Unconditional for the whole type (both the
+    # direct impact and the blast-radius tick), same shape as Ion Mastery/
+    # Pyromaniac boosting all of their type - no run-mod bucket exists for
+    # Explosion, so there's nothing here to exempt from.
+    mult = float(ctx.team_stats.damage_mult_explosion)
     if mult != 1.0:
         ctx.damage = x87_pc24_mul(ctx.damage, f32(mult))
 
 
 def _damage_lightning_damage_mult(ctx: _CreatureDamageCtx) -> None:
     # Chain lightning (Arc Gun) - its own scaling line (crimson.progression).
+    # Not part of the run-mod Elemental Affinity exemption (no perk in that
+    # set deals lightning damage), so this deliberately still reads
+    # team_stats, not elemental_type_stats.
     mult = float(ctx.team_stats.damage_mult_lightning)
     if mult != 1.0:
         ctx.damage = x87_pc24_mul(ctx.damage, f32(mult))
 
 
 def _damage_type4_fire_damage_mult(ctx: _CreatureDamageCtx) -> None:
-    # Pyromaniac (x1.5). The trailing RNG draw is native and only happens when
-    # a fire-damage multiplier is in play, matching the old perk gate.
-    mult = float(ctx.team_stats.damage_mult_fire)
+    # Pyromaniac (x1.5). Reads elemental_type_stats (not team_stats) so Fire
+    # Cough's own canned burst can be exempted from the run-mod Fire Damage
+    # bucket while Pyromaniac's real perk-vs-perk interaction still applies.
+    mult = float(ctx.elemental_type_stats.damage_mult_fire)
     if mult != 1.0:
         ctx.damage = x87_pc24_mul(ctx.damage, f32(mult))
-        ctx.rng.rand_tagged(RngCallerStatic.CREATURE_APPLY_DAMAGE_PYROMANIAC)
 
 
 def _damage_lethal_ranged_shock_burst(
@@ -288,23 +343,28 @@ _CREATURE_DAMAGE_PRE_STEPS: dict[int, tuple[_CreatureDamageStep, ...]] = {
     CreatureDamageType.BULLET: (
         _damage_kinetic_bullet_damage_mult,
         _damage_projectile_damage_mult,
-        _damage_type1_living_fortress,
     ),
     CreatureDamageType.PLASMA: (
         _damage_projectile_damage_mult,
         _damage_plasma_damage_mult,
-        _damage_type1_living_fortress,
     ),
     CreatureDamageType.ENERGY: (
         _damage_projectile_damage_mult,
         _damage_energy_damage_mult,
-        _damage_type1_living_fortress,
     ),
 }
 
 _CREATURE_DAMAGE_GLOBAL_PRE_STEPS: dict[int, tuple[_CreatureDamageStep, ...]] = {
+    # Ion Mastery's own bump applies unconditionally to every ion hit - both
+    # the direct bolt impact and the lingering AoE cloud tick (behaviors.py's
+    # _linger_ion_aoe). The projectile bucket does not: see is_projectile_hit's
+    # gated check below, which only the direct impact sets.
     CreatureDamageType.ION: (_damage_type7_ion_damage_mult,),
     CreatureDamageType.LIGHTNING: (_damage_lightning_damage_mult,),
+    # Rocket Mastery, same unconditional shape - both the direct impact and
+    # the blast-radius tick. The projectile bucket is still separately gated
+    # by is_projectile_hit below (direct impact only).
+    CreatureDamageType.EXPLOSION: (_damage_explosion_damage_mult,),
 }
 
 
@@ -323,6 +383,7 @@ def creature_apply_damage(
     dt: float,
     players: list[PlayerState],
     rng: CrandLike,
+    is_projectile_hit: bool = False,
 ) -> bool:
     """Apply damage to a creature, returning True if the hit killed it.
 
@@ -332,11 +393,17 @@ def creature_apply_damage(
     - Death side-effects (handle_death, doubled lethal impulse, then shock burst /
       death SFX) are handled by the caller in native order.
     - `damage_type` is a native integer category; call sites must supply it.
+    - `is_projectile_hit`: not native. Only meaningful for FIRE, EXPLOSION,
+      and ION, which each cover two distinct damage events sharing one
+      damage_type - set True only for the "direct hit" half (flame particle
+      contact, rocket impact, ion bolt impact), never the DoT/AoE half
+      (ignite tick, blast-radius tick, lingering ion cloud tick).
     """
 
     creature.last_hit_owner = owner
     creature.hit_flash_timer = f32(0.2)
 
+    team_stats = resolve_team_stats(players)
     ctx = _CreatureDamageCtx(
         creature=creature,
         damage=f32(damage_amount),
@@ -345,17 +412,36 @@ def creature_apply_damage(
         owner=owner,
         dt=f32(dt),
         players=players,
+        is_projectile_hit=bool(is_projectile_hit),
         rng=rng,
         # Native applies these damage perks if *any* player owns them, not
         # attributed to the shooter.
-        team_stats=resolve_team_stats(players),
+        team_stats=team_stats,
+        elemental_type_stats=(resolve_team_stats_perks_only(players) if owner.no_run_mod_affinity else team_stats),
     )
+
+    _damage_generic_damage_mult(ctx)
+    _damage_living_fortress_mult(ctx)
 
     for step in _CREATURE_DAMAGE_GLOBAL_PRE_STEPS.get(ctx.damage_type, ()):
         step(ctx)
 
     for step in _CREATURE_DAMAGE_PRE_STEPS.get(ctx.damage_type, ()):
         step(ctx)
+
+    # Not native: Fire, Explosion, and Ion each cover two distinct damage
+    # events sharing one damage_type (Fire: particle hit + ignite DoT;
+    # Explosion: direct impact + blast-radius tick; Ion: direct bolt impact +
+    # lingering AoE cloud tick) - only the direct-hit half, not its DoT/AoE
+    # sibling, gets the projectile bucket (Doctor/Barrel Greaser/Uranium
+    # Filled Bullets). Bullet/Plasma/Energy have no second event to
+    # distinguish from, so they stay unconditional in the PRE_STEPS dict above.
+    if ctx.is_projectile_hit and ctx.damage_type in (
+        CreatureDamageType.FIRE,
+        CreatureDamageType.EXPLOSION,
+        CreatureDamageType.ION,
+    ):
+        _damage_projectile_damage_mult(ctx)
 
     # Rewrite-only: monster rarity affix resistances + regen-pause bookkeeping.
     if creature.rarity:
@@ -372,31 +458,48 @@ def creature_apply_damage(
         shooter_idx = ctx.owner.player_index()
         shooter = ctx.players[shooter_idx] if shooter_idx is not None and 0 <= shooter_idx < len(ctx.players) else None
         if shooter is not None:
+            # Not native: run mods' "Weapon Type" bucket - keyed off the
+            # shooter's currently-equipped weapon (not the weapon that
+            # actually fired this specific shot, matching how the rest of
+            # this shooter-perk block already resolves "the shooter" at hit
+            # time). Value is read team-wide, same sharing rule as every
+            # damage_mult_* bucket above. Reads elemental_type_stats so this
+            # bucket can be exempted the same way as the per-type multipliers.
+            archetype_stat = _ARCHETYPE_DAMAGE_STAT.get(weapon_tags(shooter.weapon.weapon_id).archetype)
+            if archetype_stat is not None:
+                archetype_mult = float(getattr(ctx.elemental_type_stats, archetype_stat))
+                if archetype_mult != 1.0:
+                    ctx.damage = f32(float(ctx.damage) * archetype_mult)
             hp_frac = float(creature.hp) / float(creature.max_hp)
-            if perk_active(shooter, PerkId.COUP_DE_GRACE) and hp_frac <= COUP_DE_GRACE_HP_FRACTION:
+            # Not native: Perk Efficacy scales each of these shooter-perk
+            # bonuses at its own call site - see run_mods/ids.py's
+            # PERK_EFFICACY entry for the full survey of what each one means.
+            efficacy = float(shooter.stats.perk_efficacy)
+            if perk_active(shooter, PerkId.COUP_DE_GRACE) and hp_frac <= COUP_DE_GRACE_HP_FRACTION * efficacy:
                 ctx.damage = f32(max(float(ctx.damage), float(creature.hp)))
             elif perk_active(shooter, PerkId.STEADY_HANDS) and hp_frac >= STEADY_HANDS_HP_FRACTION:
-                ctx.damage = f32(float(ctx.damage) * (1.0 + STEADY_HANDS_BONUS))
+                ctx.damage = f32(float(ctx.damage) * (1.0 + STEADY_HANDS_BONUS * efficacy))
             if perk_active(shooter, PerkId.KINETIC_DISCIPLINE) and float(shooter.kinetic_charge) > 0.0:
                 ctx.damage = f32(
-                    float(ctx.damage) * (1.0 + KINETIC_DISCIPLINE_MAX_BONUS * float(shooter.kinetic_charge)),
+                    float(ctx.damage)
+                    * (1.0 + KINETIC_DISCIPLINE_MAX_BONUS * efficacy * float(shooter.kinetic_charge)),
                 )
             if (
                 perk_active(shooter, PerkId.ADRENALINE_RUSH)
                 and float(shooter.adrenaline_rush_window_timer) > 0.0
             ):
-                ctx.damage = f32(float(ctx.damage) * (1.0 + ADRENALINE_RUSH_BONUS))
+                ctx.damage = f32(float(ctx.damage) * (1.0 + ADRENALINE_RUSH_BONUS * efficacy))
             if perk_active(shooter, PerkId.BANE_OF_LEGENDS):
-                bane_mult = 1.0 - BANE_OF_LEGENDS_PENALTY
+                bane_mult = 1.0 - BANE_OF_LEGENDS_PENALTY / efficacy
                 if float(shooter.bane_of_legends_timer) > 0.0:
-                    bane_mult *= 1.0 + BANE_OF_LEGENDS_KILL_BONUS
+                    bane_mult *= 1.0 + BANE_OF_LEGENDS_KILL_BONUS * efficacy
                 ctx.damage = f32(float(ctx.damage) * bane_mult)
             if perk_active(shooter, PerkId.DELICATE_WATCH):
-                ctx.damage = f32(float(ctx.damage) * (1.0 + DELICATE_WATCH_BONUS))
+                ctx.damage = f32(float(ctx.damage) * (1.0 + DELICATE_WATCH_BONUS * efficacy))
             if perk_active(shooter, PerkId.HIT_LIST) and float(shooter.hit_list_bonus) > 0.0:
-                ctx.damage = f32(float(ctx.damage) * (1.0 + float(shooter.hit_list_bonus)))
+                ctx.damage = f32(float(ctx.damage) * (1.0 + float(shooter.hit_list_bonus) * efficacy))
             if perk_active(shooter, PerkId.COLD_SNAP) and creature.is_frozen:
-                ctx.damage = f32(float(ctx.damage) * (1.0 + COLD_SNAP_FROZEN_TARGET_BONUS))
+                ctx.damage = f32(float(ctx.damage) * (1.0 + COLD_SNAP_FROZEN_TARGET_BONUS * efficacy))
 
     if ctx.damage_type in (
         CreatureDamageType.BULLET,
@@ -448,6 +551,7 @@ def creature_apply_damage_with_lethal_followup(
     effects: EffectPool | None = None,
     detail_preset: int = 5,
     creature_damage_runtime: CreatureDamageRuntime,
+    is_projectile_hit: bool = False,
 ) -> bool:
     """Apply damage and run a required lethal follow-up exactly on death transition.
 
@@ -469,6 +573,7 @@ def creature_apply_damage_with_lethal_followup(
         dt=float(dt),
         players=players,
         rng=rng,
+        is_projectile_hit=is_projectile_hit,
     )
     if killed and death_start_needed:
 

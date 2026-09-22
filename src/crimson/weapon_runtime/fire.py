@@ -33,7 +33,7 @@ from ..sim.input import PlayerInput
 from ..sim.state_types import GameplayState, PlayerState
 from ..weapons import WEAPON_TABLE, WeaponId, weapon_entry_for_projectile_type_id
 from .assign import player_start_reload, weapon_entry
-from .crit import roll_crit_mult, roll_primary_crit
+from .crit import DIAMOND_FLASK_BASE_POWER, roll_crit_mult, roll_primary_crit
 from .fire_recipes import (
     ArcStrikeMode,
     MaskCenteredJitter,
@@ -272,6 +272,10 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
     state.survival_reward_fire_seen = True
 
     if perk_fire_ready:
+        # Not native: Perk Efficacy makes both of these cheaper to use, not
+        # stronger - the perk's whole value proposition is firing on an empty
+        # clip for less, so "more efficacious" reads as "less costly."
+        efficacy = float(perk_player.stats.perk_efficacy)
         if use_regression_bullets:
             ammo_class = int(weapon.ammo_class) if weapon.ammo_class is not None else 0
 
@@ -281,7 +285,7 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
             # Pistol shot cost 240 XP - many kills' worth). Toned down to 20x
             # so it's usable across the roster without removing the cliff
             # (ammo_class 1 weapons still fire it the cheapest).
-            factor = 4.0 if ammo_class == 1 else 20.0
+            factor = (4.0 if ammo_class == 1 else 20.0) / efficacy
             player.experience = int(float(player.experience) - reload_time * factor)
             if player.experience < 0:
                 player.experience = 0
@@ -290,7 +294,7 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
 
             from ..player_damage import player_take_damage
 
-            cost = 0.15 if ammo_class == 1 else 1.0
+            cost = (0.15 if ammo_class == 1 else 1.0) / efficacy
             player_take_damage(
                 state,
                 player,
@@ -322,6 +326,11 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
     else:
         spread_heat_base = weapon_spread_heat
     spread_inc = x87_pc24_mul(spread_heat_base, f32(1.3))
+
+    # Not native: run mods (crimson.run_mods.RunModId.SPREAD).
+    spread_mult = float(perk_player.stats.spread_mult)
+    if spread_mult != 1.0:
+        spread_inc = float(f32(float(spread_inc) * spread_mult))
 
     # Fastshot (x0.88), Sharpshooter (x1.05) and any new fire-rate content are
     # folded into stats.shot_cooldown_mult by crimson.progression. A single
@@ -424,26 +433,31 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
 
     # Rewrite-only: Death Wish / Overdue only touch the player's own direct
     # trigger-pull (PrimaryPelletsMode below), computed once per fire_weapon
-    # call rather than per pellet.
+    # call rather than per pellet. Perk Efficacy widens Death Wish's trigger
+    # window and strengthens/lengthens Overdue's bonus window.
+    crit_perk_efficacy = float(perk_player.stats.perk_efficacy)
     death_wish_force_crit = perk_active(perk_player, PerkId.DEATH_WISH) and float(
         player.health,
-    ) <= DEATH_WISH_HEALTH_THRESHOLD
+    ) <= DEATH_WISH_HEALTH_THRESHOLD * crit_perk_efficacy
     overdue_bonus_crit_mult = 0.0
     if perk_active(perk_player, PerkId.OVERDUE):
         if int(player.overdue_streak) >= OVERDUE_STREAK_THRESHOLD:
             # Streak just broke the threshold: open (or refresh) the window
             # instead of boosting only this one roll.
             player.overdue_streak = 0
-            player.overdue_window_timer = OVERDUE_WINDOW_DURATION
+            player.overdue_window_timer = OVERDUE_WINDOW_DURATION * crit_perk_efficacy
         if float(player.overdue_window_timer) > 0.0:
-            overdue_bonus_crit_mult = OVERDUE_BONUS_CRIT_MULT
+            overdue_bonus_crit_mult = OVERDUE_BONUS_CRIT_MULT * crit_perk_efficacy
 
     # Rewrite-only: Pendulum's damage-phase bonus, baked into crit_mult
     # alongside the crit roll below so it applies regardless of crit outcome.
     pendulum_dmg_mult = pendulum_damage_mult(state, player)
 
-    # Rewrite-only: Diamond Flask - crit chance rolls twice (Lucky).
-    diamond_flask_lucky = perk_active(perk_player, PerkId.DIAMOND_FLASK)
+    # Rewrite-only: Diamond Flask - crit chance rolls `lucky_power` times
+    # (Lucky), power scaled by Perk Efficacy.
+    diamond_flask_power = (
+        DIAMOND_FLASK_BASE_POWER * crit_perk_efficacy if perk_active(perk_player, PerkId.DIAMOND_FLASK) else 0.0
+    )
 
     match recipe.mode:
         case PrimaryPelletsMode(type_id=type_id, count=count, jitter=jitter_rule, speed_scale=speed_rule):
@@ -504,7 +518,8 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
                     weapon_id,
                     force_crit=death_wish_force_crit,
                     bonus_crit_mult=overdue_bonus_crit_mult,
-                    lucky=diamond_flask_lucky,
+                    lucky_power=diamond_flask_power,
+                    increased_chance=float(perk_player.stats.crit_chance),
                 )
                 state.projectiles.entries[int(proj_id)].crit_mult = pellet_crit_mult * pendulum_dmg_mult
                 state.projectiles.entries[int(proj_id)].did_crit = pellet_did_crit
@@ -544,7 +559,7 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
                     creatures=spawn_creatures,
                 ),
             )
-            state.secondary_projectiles.entries[int(secondary_proj_id)].crit_mult = roll_crit_mult(weapon_id)
+            state.secondary_projectiles.entries[int(secondary_proj_id)].crit_mult = roll_crit_mult(weapon_id, increased_chance=float(perk_player.stats.crit_chance))
         case ParticleStreamMode(style=style, slow=slow):
             counts_accuracy_shots = False
             # WPU for a stream weapon is +30% per-particle damage (fire rate is a
@@ -555,7 +570,7 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
                     angle=Vec2.from_heading(shot_angle).to_angle(),
                     owner=owner,
                 )
-                state.particles.entries[particle_id].crit_mult = roll_crit_mult(weapon_id)
+                state.particles.entries[particle_id].crit_mult = roll_crit_mult(weapon_id, increased_chance=float(perk_player.stats.crit_chance))
             else:
                 particle_id = state.particles.spawn_particle(
                     pos=muzzle,
@@ -565,7 +580,7 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
                 )
                 if style is not None:
                     state.particles.entries[particle_id].style_id = style
-                state.particles.entries[particle_id].crit_mult = roll_crit_mult(weapon_id)
+                state.particles.entries[particle_id].crit_mult = roll_crit_mult(weapon_id, increased_chance=float(perk_player.stats.crit_chance))
         case MultiPlasmaFanMode():
             # Multi-Plasma: 5-shot fixed spread using type 0x09 and 0x0B.
             shot_count = 5
@@ -589,7 +604,7 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
                 )
                 if energy_heat_mult != 1.0:
                     state.projectiles.entries[int(fan_proj_id)].energy_heat_mult = float(energy_heat_mult)
-                state.projectiles.entries[int(fan_proj_id)].crit_mult = roll_crit_mult(weapon_id)
+                state.projectiles.entries[int(fan_proj_id)].crit_mult = roll_crit_mult(weapon_id, increased_chance=float(perk_player.stats.crit_chance))
         case PlasmaOverloadMode():
             # Not native: Plasma Overload bonus - two Plasma Rifle bolts fired
             # side-by-side on the same heading (not a fan - no angle spread).
@@ -622,7 +637,7 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
                 )
                 if energy_heat_mult != 1.0:
                     state.projectiles.entries[int(bolt_proj_id)].energy_heat_mult = float(energy_heat_mult)
-                state.projectiles.entries[int(bolt_proj_id)].crit_mult = roll_crit_mult(weapon_id)
+                state.projectiles.entries[int(bolt_proj_id)].crit_mult = roll_crit_mult(weapon_id, increased_chance=float(perk_player.stats.crit_chance))
                 if weapon_id == WeaponId.TENET_GUN:
                     state.projectiles.entries[int(bolt_proj_id)].tenet_reverse = True
         case SwarmerDumpMode():
@@ -646,7 +661,7 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
                         creatures=creatures,
                     ),
                 )
-                state.secondary_projectiles.entries[int(swarmer_proj_id)].crit_mult = roll_crit_mult(weapon_id)
+                state.secondary_projectiles.entries[int(swarmer_proj_id)].crit_mult = roll_crit_mult(weapon_id, increased_chance=float(perk_player.stats.crit_chance))
                 angle = angle + step
             # Native subtracts the full clip value, zeroing the ammo even when
             # the clip was fractional or negative.
@@ -664,7 +679,7 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
                 aim,
                 shots_fired_this_clip=shots_fired_this_clip,
                 weapon_power_up=weapon_power_up_active,
-                crit_mult=roll_crit_mult(weapon_id),
+                crit_mult=roll_crit_mult(weapon_id, increased_chance=float(perk_player.stats.crit_chance)),
             )
         case ArcStrikeMode():
             # Arc Gun: no projectile - flag a chain-lightning strike for the
@@ -676,7 +691,7 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
                 player,
                 aim,
                 weapon_power_up=weapon_power_up_active,
-                crit_mult=roll_crit_mult(weapon_id),
+                crit_mult=roll_crit_mult(weapon_id, increased_chance=float(perk_player.stats.crit_chance)),
             )
     if 0 <= int(player.index) < len(state.shots_fired):
         if counts_accuracy_shots:
@@ -712,7 +727,8 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
         # trigger a reload either.
         # Rewrite-only: Free Rounds - a private roll to skip this shot's ammo
         # cost outright.
-        free_round = perk_active(perk_player, PerkId.FREE_ROUNDS) and _FREE_ROUNDS_RNG.random() < FREE_ROUNDS_CHANCE
+        free_round_chance = FREE_ROUNDS_CHANCE * float(perk_player.stats.perk_efficacy)
+        free_round = perk_active(perk_player, PerkId.FREE_ROUNDS) and _FREE_ROUNDS_RNG.random() < free_round_chance
         if not free_round:
             player.weapon.ammo = float(player.weapon.ammo) - float(ammo_cost)
     reload_start_gate_open = bool(player.weapon.reload_timer <= 0.0)

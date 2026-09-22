@@ -24,7 +24,7 @@ def tick_man_bomb(ctx: PlayerPerkTickCtx) -> None:
         float(ctx.dt) * like_clockwork_rate_mult(ctx.perk_player),
     )
     if ctx.player.man_bomb_timer > ctx.state.perk_intervals.man_bomb:
-        owner = ctx.owner_ref_for_player_projectiles(ctx.state, ctx.player.index)
+        owner = ctx.owner_ref_for_player_projectiles(ctx.state, ctx.player.index).without_run_mod_affinity()
         for idx in range(8):
             type_id = ProjectileTemplateId.ION_MINIGUN if ((idx & 1) == 0) else ProjectileTemplateId.ION_RIFLE
             caller = (
@@ -45,6 +45,7 @@ def tick_man_bomb(ctx: PlayerPerkTickCtx) -> None:
                 type_id=type_id,
                 owner=owner,
                 owner_player_index=ctx.player.index,
+                perk_damage_mult=float(ctx.perk_player.stats.perk_efficacy),
             )
         ctx.state.sfx_queue.append(SfxId.EXPLOSION_SMALL)
 

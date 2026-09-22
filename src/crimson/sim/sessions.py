@@ -20,6 +20,7 @@ from ..quests.runtime import tick_quest_completion_transition
 from ..quests.timeline import quest_spawn_table_empty, tick_quest_mode_spawns
 from ..quests.types import SpawnEntry
 from ..rng_caller_static import RngCallerStatic
+from ..run_mods.selection import run_mod_selection_open_choices, run_mod_selection_pick
 from ..tutorial.runtime import tutorial_before_step, tutorial_input_transform, tutorial_post_step
 from ..typo.runtime import apply_typo_command, typo_before_step, typo_input_transform, typo_mid_step, typo_post_step
 from ..weapon_runtime import weapon_assign_player
@@ -34,6 +35,7 @@ from .input_providers import (
     PerkPickCommand,
     ReplayPostludeOperation,
     ReplayPreludeOperation,
+    RunModPickCommand,
     TypoBackspaceCommand,
     TypoCharCommand,
     TypoSubmitCommand,
@@ -414,6 +416,18 @@ class DeterministicSession(msgspec.Struct):
                     )
                     if picked is not None:
                         post_apply_sfx.append(SfxId.UI_BONUS)
+                case RunModPickCommand(choice_index=choice_index):
+                    timing = self.timing_for_dt(dt)
+                    run_mod_picked = run_mod_selection_pick(
+                        self.world.state,
+                        self.world.players,
+                        self.world.state.run_mod_selection,
+                        choice_index,
+                        dt=timing.dt_sim,
+                        creatures=self.world.creatures.entries,
+                    )
+                    if run_mod_picked is not None:
+                        post_apply_sfx.append(SfxId.UI_BONUS)
                 case PerkMenuOpenCommand():
                     perk_selection_open_choices(
                         self.world.state,
@@ -421,6 +435,11 @@ class DeterministicSession(msgspec.Struct):
                         self.world.state.perk_selection,
                         game_mode=self.game_mode,
                         player_count=len(self.world.players),
+                    )
+                    run_mod_selection_open_choices(
+                        self.world.state,
+                        self.world.state.run_mod_selection,
+                        self.world.players,
                     )
                 case _:
                     raise RuntimeError(f"unhandled replay prelude operation: {type(operation).__name__}")
@@ -438,6 +457,11 @@ class DeterministicSession(msgspec.Struct):
                         self.world.state.perk_selection,
                         game_mode=self.game_mode,
                         player_count=len(self.world.players),
+                    )
+                    run_mod_selection_open_choices(
+                        self.world.state,
+                        self.world.state.run_mod_selection,
+                        self.world.players,
                     )
                 case _:
                     raise RuntimeError(f"unhandled replay postlude operation: {type(operation).__name__}")
@@ -472,6 +496,17 @@ class DeterministicSession(msgspec.Struct):
                     )
                     if picked is not None:
                         post_apply_sfx.append(SfxId.UI_BONUS)
+                case RunModPickCommand(choice_index=ci):
+                    run_mod_picked = run_mod_selection_pick(
+                        self.world.state,
+                        self.world.players,
+                        self.world.state.run_mod_selection,
+                        ci,
+                        dt=timing.dt_sim,
+                        creatures=self.world.creatures.entries,
+                    )
+                    if run_mod_picked is not None:
+                        post_apply_sfx.append(SfxId.UI_BONUS)
                 case PerkMenuOpenCommand():
                     perk_selection_open_choices(
                         self.world.state,
@@ -479,6 +514,11 @@ class DeterministicSession(msgspec.Struct):
                         self.world.state.perk_selection,
                         game_mode=self.game_mode,
                         player_count=len(self.world.players),
+                    )
+                    run_mod_selection_open_choices(
+                        self.world.state,
+                        self.world.state.run_mod_selection,
+                        self.world.players,
                     )
                 case TypoCharCommand() | TypoBackspaceCommand() | TypoSubmitCommand():
                     if self.game_mode != GameMode.TYPO:

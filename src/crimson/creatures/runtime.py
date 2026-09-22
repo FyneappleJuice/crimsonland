@@ -52,6 +52,7 @@ from ..perks.helpers import perk_active
 from ..perks.impl.bane_of_legends import BANE_OF_LEGENDS_WINDOW_DURATION
 from ..perks.impl.hit_list import HIT_LIST_BONUS_PER_KILL, HIT_LIST_MAX_BONUS
 from ..player_damage import PlayerDeathRuntime, player_take_damage
+from ..progression import resolve_team_stats
 from ..projectiles.types import ProjectileTemplateId
 from ..rng_caller_static import RngCallerStatic
 from ..sim.state_types import GameplayState, PlayerState
@@ -327,9 +328,12 @@ def _fire_momentum_shot(
         )
     except Exception:
         return
+    # Not native: Perk Efficacy lessens Domino Effect's own penalty instead of
+    # deepening it, capped at full (unpenalized) damage.
+    momentum_mult = min(1.0, MOMENTUM_DAMAGE_MULT * float(killer.stats.perk_efficacy))
     for i, entry in enumerate(state.projectiles.entries):
         if entry.active and i not in before_active:
-            entry.crit_mult = float(entry.crit_mult) * MOMENTUM_DAMAGE_MULT
+            entry.crit_mult = float(entry.crit_mult) * momentum_mult
             # Tag the owner (not the projectile) so a kill this shot lands
             # carries the flag all the way to creature.last_hit_owner, which
             # is exactly what _start_death checks - no need to plumb a new
@@ -337,7 +341,7 @@ def _fire_momentum_shot(
             entry.owner = msgspec.structs.replace(entry.owner, via_domino_effect=True)
     for i, entry in enumerate(state.secondary_projectiles.entries):
         if entry.active and i not in before_secondary_active:
-            entry.crit_mult = float(entry.crit_mult) * MOMENTUM_DAMAGE_MULT
+            entry.crit_mult = float(entry.crit_mult) * momentum_mult
             entry.owner = msgspec.structs.replace(entry.owner, via_domino_effect=True)
 
 
@@ -668,14 +672,16 @@ def _creature_interaction_contact_damage(ctx: _CreatureInteractionCtx) -> None:
         from .damage import creature_apply_damage_with_lethal_followup
 
         # Rewrite-only: Mr. Melee++ doubles the flat counterattack damage.
-        mr_melee_damage = 50.0 if perk_active(perk_player, PerkId.MR_MELEE_PLUS) else 25.0
+        # Not native: Perk Efficacy scales this flat damage further.
+        mr_melee_base = 50.0 if perk_active(perk_player, PerkId.MR_MELEE_PLUS) else 25.0
+        mr_melee_damage = mr_melee_base * float(perk_player.stats.perk_efficacy)
         creature_apply_damage_with_lethal_followup(
             creature,
             creature_index=int(ctx.creature_index),
             damage_amount=mr_melee_damage,
             damage_type=CreatureDamageType.MELEE,
             impulse=Vec2(),
-            owner=OwnerRef.from_player(int(ctx.player.index)),
+            owner=OwnerRef.from_player(int(ctx.player.index)).without_run_mod_affinity(),
             dt=ctx.dt,
             players=ctx.players,
             rng=ctx.rng,
@@ -1151,6 +1157,15 @@ class CreaturePool:
         # Native AI7 timer math uses `frame_dt_ms` integer slots with ftol-style
         # truncation semantics.
         dt_ms = ftol_ms_i32(float(dt)) if dt > 0.0 else 0
+        # Not native: SELF_TICK-bucket damage (Poison Bullets already routes
+        # through creature_apply_damage_with_lethal_followup; Plaguebearer and
+        # Radioactive below are direct hp writes) is scaled by the generic
+        # "All Damage" run mod only - SELF_TICK has no per-type dispatch entry
+        # in creatures/damage.py, so the unconditional generic multiplier is
+        # the only boost that can ever reach it. Resolved once per tick, not
+        # per creature; 1.0 (a no-op) when no All Damage stacks are picked, so
+        # native math is bit-for-bit unchanged for a run with no run mods.
+        self_tick_damage_mult = float(resolve_team_stats(players).damage_mult) if players else 1.0
         creature_damage_runtime = _CreaturePoolCreatureDamageRuntime(
             pool=self,
             state=state,
@@ -1170,10 +1185,21 @@ class CreaturePool:
                 return False
             damage_amount = 0.0
             creature_flags = int(creature.flags)
+            # Not native: Perk Efficacy strengthens Veins of Poison/Toxic
+            # Avenger's own tick specifically - not Poison Bullets, which
+            # shares the same weak-tier flag but isn't part of this survey.
+            poison_efficacy = 1.0
+            owner_idx = creature.last_hit_owner.player_index()
+            owner_player = players[owner_idx] if owner_idx is not None and 0 <= owner_idx < len(players) else None
+            if owner_player is not None and (
+                perk_active(owner_player, PerkId.VEINS_OF_POISON)
+                or perk_active(owner_player, PerkId.TOXIC_AVENGER)
+            ):
+                poison_efficacy = float(owner_player.stats.perk_efficacy)
             if (creature_flags & _FLAG_SELF_DAMAGE_TICK_STRONG) != 0:
-                damage_amount = x87_pc24_mul(dt, 180.0)
+                damage_amount = x87_pc24_mul(dt, 180.0 * poison_efficacy)
             elif (creature_flags & _FLAG_SELF_DAMAGE_TICK) != 0:
-                damage_amount = x87_pc24_mul(dt, 60.0)
+                damage_amount = x87_pc24_mul(dt, 60.0 * poison_efficacy)
             if damage_amount <= 0.0:
                 return False
 
@@ -1322,7 +1348,8 @@ class CreaturePool:
                         float(creature.collision_timer),
                         f32(CONTACT_DAMAGE_PERIOD),
                     )
-                    creature.hp = x87_pc24_sub(float(creature.hp), f32(15.0))
+                    plague_damage = x87_pc24_mul(f32(15.0), self_tick_damage_mult)
+                    creature.hp = x87_pc24_sub(float(creature.hp), plague_damage)
                     plague_killed = False
                     if creature.hp < 0.0:
                         state.plaguebearer_infection_count += 1
@@ -1499,8 +1526,11 @@ class CreaturePool:
                 if creature.collision_timer < 0.0 and float(creature.hp) > 0.0:
                     creature.collision_timer = CONTACT_DAMAGE_PERIOD
                     pulse_damage = x87_pc24_mul(
-                        x87_pc24_sub(f32(100.0), target_dist),
-                        f32(0.3),
+                        x87_pc24_mul(
+                            x87_pc24_sub(f32(100.0), target_dist),
+                            f32(0.3),
+                        ),
+                        self_tick_damage_mult,
                     )
                     creature.hp = x87_pc24_sub(float(creature.hp), pulse_damage)
                     if fx_queue is not None:
@@ -1994,13 +2024,20 @@ class CreaturePool:
 
         xp_awarded = 0
         if killer is not None:
+            # Not native: run mods (crimson.run_mods.RunModId.XP_GAIN).
+            xp_mult = float(killer.stats.xp_mult)
+            # Not native: Perk Efficacy scales Bloody Mess's own bonus portion
+            # (the +0.3/+0.6 above the 1.0 baseline), not the whole multiplier.
+            efficacy = float(killer.stats.perk_efficacy)
             # Rewrite-only: Bloody Mess++ upgrades the kill-XP multiplier x1.3 -> x1.6.
             if perk_active(killer, PerkId.BLOODY_MESS_QUICK_LEARNER_PLUS):
-                xp_awarded = award_experience(state, killer, int(float(creature.reward_value) * 1.6))
+                bloody_mess_mult = 1.0 + 0.6 * efficacy
+                xp_awarded = award_experience(state, killer, int(float(creature.reward_value) * bloody_mess_mult * xp_mult))
             elif perk_active(killer, PerkId.BLOODY_MESS_QUICK_LEARNER):
-                xp_awarded = award_experience(state, killer, int(float(creature.reward_value) * 1.3))
+                bloody_mess_mult = 1.0 + 0.3 * efficacy
+                xp_awarded = award_experience(state, killer, int(float(creature.reward_value) * bloody_mess_mult * xp_mult))
             else:
-                xp_awarded = award_experience_from_reward(state, killer, float(creature.reward_value))
+                xp_awarded = award_experience_from_reward(state, killer, float(creature.reward_value) * xp_mult)
 
         if players:
             state.bonus_pool.try_spawn_on_kill(

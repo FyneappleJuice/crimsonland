@@ -5,7 +5,7 @@ from ..persistence.save_status import GameStatus
 from ..quests.level import QuestLevel
 from ..sim.state_types import PERK_COUNT_SIZE, GameplayState, PlayerState
 from .helpers import perk_count_get
-from .ids import PERK_BY_ID, PerkFlags, PerkId
+from .ids import PERK_BY_ID, PERK_MASTERY_CONCRETE_IDS, PerkFlags, PerkId
 
 
 def build_perk_availability(*, status: GameStatus | None) -> list[bool]:
@@ -14,13 +14,22 @@ def build_perk_availability(*, status: GameStatus | None) -> list[bool]:
     Not native: the mod's roguelite direction drops native quest-gated perk
     unlocks entirely - `status` is kept in the signature for existing callers
     but no longer gates anything here. `ANTIPERK` stays excluded - it's a
-    hidden placeholder, not real content.
+    hidden placeholder, not real content. `ANXIOUS_LOADER` is disabled by
+    design decision (weak/unfun perk) - kept in the enum/tables so existing
+    picks in old saves/replays still resolve, just never offered again. The
+    four concrete masteries (`PERK_MASTERY_CONCRETE_IDS`) are excluded the
+    same way ANXIOUS_LOADER is - they're only reachable through
+    WEAPON_MASTERY's own resolution (perks/selection.py), never offered as
+    their own pool entry.
     """
     _ = status
     available = [False] * PERK_COUNT_SIZE
     for perk_id in PERK_BY_ID:
         available[int(perk_id)] = True
     available[int(PerkId.ANTIPERK)] = False
+    available[int(PerkId.ANXIOUS_LOADER)] = False
+    for concrete_id in PERK_MASTERY_CONCRETE_IDS:
+        available[int(concrete_id)] = False
     return available
 
 
@@ -42,6 +51,13 @@ def perk_can_offer(
         and state.hardcore
         and state.quest_level == QuestLevel(2, 10)
         and perk_id in (PerkId.POISON_BULLETS, PerkId.VEINS_OF_POISON, PerkId.PLAGUEBEARER)
+    ):
+        return False
+
+    # Not native: Weapon Mastery has nothing left to resolve into once the
+    # player owns all four concrete masteries.
+    if perk_id == PerkId.WEAPON_MASTERY and all(
+        perk_count_get(player, concrete_id) > 0 for concrete_id in PERK_MASTERY_CONCRETE_IDS
     ):
         return False
 

@@ -54,6 +54,9 @@ def update_soul_tether_decay(ctx: PerksUpdateEffectsCtx) -> None:
         if player.soul_tether_shield <= 0.0:
             continue
 
+        # Not native: Perk Efficacy slows the decay rate, so the shield lasts
+        # longer once it starts draining.
+        efficacy = float(player.stats.perk_efficacy)
         remaining_dt = dt
         if player.soul_tether_decay_delay_timer > 0.0:
             consumed = min(float(player.soul_tether_decay_delay_timer), remaining_dt)
@@ -66,7 +69,7 @@ def update_soul_tether_decay(ctx: PerksUpdateEffectsCtx) -> None:
         if remaining_dt > 0.0 and player.soul_tether_decay_delay_timer <= 0.0:
             player.soul_tether_shield = max(
                 0.0,
-                float(player.soul_tether_shield) - SOUL_TETHER_DECAY_RATE * remaining_dt,
+                float(player.soul_tether_shield) - (SOUL_TETHER_DECAY_RATE / efficacy) * remaining_dt,
             )
 
 

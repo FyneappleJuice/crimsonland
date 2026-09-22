@@ -283,6 +283,7 @@ class ProjectilePool:
         entry.reserved = 0.0
         entry.energy_heat_mult = 1.0
         entry.crit_mult = 1.0
+        entry.perk_damage_mult = 1.0
         entry.did_crit = False
         entry.pierce_left = 0.0
         entry.speed_scale = 1.0
@@ -334,6 +335,12 @@ class ProjectilePool:
         team_stats = resolve_team_stats(perk_players)
         barrel_greaser_active = team_stats.has("projectile_double_steps")
         ion_gun_master_active = float(team_stats.damage_mult_ion) != 1.0
+        # Not native: run mods (crimson.run_mods.RunModId.PROJECTILE_SPEED).
+        # Scales each per-tick step's size; Barrel Greaser above instead
+        # doubles the step *count* for player-owned bolts - the two compose
+        # independently (see the docstring note where PROJECTILE_SPEED is
+        # defined in run_mods/ids.py for the full explanation).
+        projectile_speed_mult = float(team_stats.projectile_speed_mult)
         for player in perk_players:
             perk_counts = player.perk_counts
             if 0 <= poison_idx < len(perk_counts) and int(perk_counts[poison_idx]) > 0:
@@ -548,18 +555,19 @@ class ProjectilePool:
             # operation in the integration chain rounds to a 24-bit significand.
             # Transcendental results stay wide until the first multiply.
             heading_radians = x87_pc24_sub(float(proj.angle), NATIVE_HALF_PI)
+            effective_speed_scale = float(proj.speed_scale) * projectile_speed_mult
             step_x = x87_pc24_cos_mul(
                 heading_radians,
                 dt,
                 20.0,
-                proj.speed_scale,
+                effective_speed_scale,
                 3.0,
             )
             step_y = x87_pc24_sin_mul(
                 heading_radians,
                 dt,
                 20.0,
-                proj.speed_scale,
+                effective_speed_scale,
                 3.0,
             )
             dir_x = math.cos(heading_radians)
@@ -715,6 +723,9 @@ class ProjectilePool:
                     if proj.crit_mult != 1.0:
                         # Crit compensation/multiplier, stamped on the bolt when it was fired.
                         damage_amount = float(f32(float(damage_amount) * float(proj.crit_mult)))
+                    if proj.perk_damage_mult != 1.0:
+                        # Perk Efficacy, stamped on a perk-proc bolt when it was fired.
+                        damage_amount = float(f32(float(damage_amount) * float(proj.perk_damage_mult)))
                     if proj.did_crit:
                         # Rewrite-only: Cold Snap - a real crit (not just the
                         # compensation-only multiplier) freezes the target.
@@ -743,6 +754,7 @@ class ProjectilePool:
                                 impulse=impulse,
                                 owner=proj.owner,
                                 creature_damage_runtime=creature_damage_runtime,
+                                is_projectile_hit=True,
                             )
                             creature_spatial.sync_index(int(hit_idx))
                             if proj.pierce_left >= 1.0:
@@ -761,6 +773,7 @@ class ProjectilePool:
                                 impulse=impulse,
                                 owner=proj.owner,
                                 creature_damage_runtime=creature_damage_runtime,
+                                is_projectile_hit=True,
                             )
                             creature_spatial.sync_index(int(hit_idx))
                             proj.damage_pool -= float(creature.hp)

@@ -36,6 +36,7 @@ from .perks import PerkId
 from .perks.helpers import perk_active
 from .perks.runtime.player_ticks import apply_player_perk_ticks
 from .perks.state import PerkEffectIntervals, PerkSelectionState
+from .run_mods.state import RunModSelectionState
 from .player_damage import PlayerDeathRuntime
 from .projectiles.runtime import (
     ProjectilePool,
@@ -131,6 +132,9 @@ class GameplayState(msgspec.Struct):
     jinxed_timer: float = 0.0
     plaguebearer_infection_count: int = 0
     perk_selection: PerkSelectionState = msgspec.field(default_factory=PerkSelectionState)
+    # Not native: mirrors perk_selection's pending_count 1:1 (see
+    # survival_check_level_up) but for the separate, per-run-only run-mod pool.
+    run_mod_selection: RunModSelectionState = msgspec.field(default_factory=RunModSelectionState)
     sfx_queue: list[SfxId] = msgspec.field(default_factory=list)
     game_mode: GameMode = GameMode.SURVIVAL
     demo_mode_active: bool = False
@@ -264,8 +268,17 @@ def survival_level_threshold(level: int) -> int:
     return int(1000.0 + (math.pow(float(level), 1.8) * 1000.0))
 
 
-def survival_check_level_up(player: PlayerState, perk_state: PerkSelectionState) -> int:
-    """Advance survival levels if XP exceeds thresholds, returning number of level-ups."""
+def survival_check_level_up(
+    player: PlayerState,
+    perk_state: PerkSelectionState,
+    run_mod_state: RunModSelectionState | None = None,
+) -> int:
+    """Advance survival levels if XP exceeds thresholds, returning number of level-ups.
+
+    `run_mod_state` mirrors `perk_state.pending_count` 1:1 (every perk offer
+    also offers a run-mod pick) - omitted by callers that deliberately don't
+    offer run mods (tutorial mode).
+    """
 
     # Native progression advances at most one level per update tick even when
     # XP jumps across multiple thresholds in a single frame.
@@ -273,6 +286,9 @@ def survival_check_level_up(player: PlayerState, perk_state: PerkSelectionState)
         player.level += 1
         perk_state.pending_count += 1
         perk_state.choices_dirty = True
+        if run_mod_state is not None:
+            run_mod_state.pending_count += 1
+            run_mod_state.choices_dirty = True
         return 1
     return 0
 
@@ -285,7 +301,7 @@ def survival_progression_update(
 
     if not players:
         return
-    survival_check_level_up(players[0], state.perk_selection)
+    survival_check_level_up(players[0], state.perk_selection, state.run_mod_selection)
 
 
 _SURVIVAL_RECENT_DEATH_CENTROID_SCALE = f32(0.33333334)
@@ -512,8 +528,11 @@ def _player_accelerate_move_speed(player: PlayerState, perk_player: PlayerState,
             player.move_speed = float(f32(float(player.move_speed) + float(acceleration)))
         player.move_speed = float(f32(float(player.move_speed) + float(dt)))
         # Rewrite-only: Long Distance Runner++ raises the warmed-up top speed
-        # cap further (2.8 -> 3.4), same ramp shape otherwise.
-        speed_cap = f32(3.4) if perk_active(perk_player, PerkId.LONG_DISTANCE_RUNNER_PLUS) else f32(2.8)
+        # cap further (2.8 -> 3.4), same ramp shape otherwise. Perk Efficacy
+        # scales the bonus above the 2.0 baseline speed, not the whole cap.
+        efficacy = float(perk_player.stats.perk_efficacy)
+        cap_bonus = 1.4 if perk_active(perk_player, PerkId.LONG_DISTANCE_RUNNER_PLUS) else 0.8
+        speed_cap = f32(2.0 + cap_bonus * efficacy)
         if player.move_speed > speed_cap:
             player.move_speed = speed_cap
     else:
@@ -755,6 +774,8 @@ def player_update(
     speed_multiplier = float(player.speed_multiplier)
     if speed_bonus_active:
         speed_multiplier += 1.0
+    # Not native: run mods (crimson.run_mods.RunModId.MOVE_SPEED).
+    speed_multiplier *= float(player.stats.move_speed_mult)
 
     movement_dt = float(dt)
     if state.time_scale_active and movement_dt > 0.0:
@@ -989,7 +1010,8 @@ def player_update(
         player.living_fortress_timer = 0.0
     reload_scale = 1.0
     if reload_stationary and perk_active(perk_player, PerkId.STATIONARY_RELOADER):
-        reload_scale = 3.0
+        # Not native: Perk Efficacy scales the bonus above the 1x baseline.
+        reload_scale = 1.0 + 2.0 * float(perk_player.stats.perk_efficacy)
 
     # Reload + reload perks.
     if (
@@ -1037,9 +1059,10 @@ def player_update(
                     count=count,
                     angle_offset=0.1,
                     type_id=ProjectileTemplateId.PLASMA_MINIGUN,
-                    owner=_owner_ref_for_player_projectiles(state, player.index),
+                    owner=_owner_ref_for_player_projectiles(state, player.index).without_run_mod_affinity(),
                     owner_player_index=player.index,
                     players=players,
+                    perk_damage_mult=float(perk_player.stats.perk_efficacy),
                 )
                 state.bonus_spawn_guard = False
                 state.sfx_queue.append(SfxId.EXPLOSION_SMALL)

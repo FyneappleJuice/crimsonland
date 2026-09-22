@@ -241,8 +241,8 @@ def test_perk_generate_choices_caches_offerability_checks(mocker) -> None:
 
     mocker.patch.object(selection_mod, "perk_can_offer", side_effect=_counting_perk_can_offer)
     choices = selection_mod.perk_generate_choices(state, player, game_mode=GameMode.QUESTS, player_count=1, count=7)
-    # Rewrite-only: adding new PerkIds (most recently the Hit List batch,
-    # 2026-09-20) raises PERK_ID_MAX each time, which shifts this reference stream -
+    # Rewrite-only: adding new PerkIds (most recently the mastery family)
+    # raises PERK_ID_MAX each time, which shifts this reference stream -
     # recomputed by running, same method as the other reference tests above.
     assert choices == [
         PerkId.INSTANT_WINNER,

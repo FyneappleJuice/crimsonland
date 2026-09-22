@@ -144,6 +144,9 @@ class Particle(msgspec.Struct):
     # Rewrite-only: outgoing crit multiplier stamped at spawn (weapon_runtime/
     # crit.py) - one roll per particle, reused across every tick it damages.
     crit_mult: float = 1.0
+    # Rewrite-only: Pyrokinetic's Perk Efficacy multiplier, stamped at spawn.
+    # 1.0 for every other particle source (Flamethrower/Blow Torch/HR Flamer).
+    perk_damage_mult: float = 1.0
 
 
 class ParticlePool:
@@ -180,6 +183,7 @@ class ParticlePool:
         angle: float,
         intensity: float = 1.0,
         owner: OwnerRef = OwnerRef.from_local_player(0),
+        perk_damage_mult: float = 1.0,
     ) -> int:
         """Port of `fx_spawn_particle` (0x00420130)."""
 
@@ -201,6 +205,7 @@ class ParticlePool:
         entry.target_id = -1
         entry.owner = owner
         entry.crit_mult = 1.0
+        entry.perk_damage_mult = float(perk_damage_mult)
         return idx
 
     def spawn_particle_slow(
@@ -230,6 +235,7 @@ class ParticlePool:
         entry.target_id = -1
         entry.owner = owner
         entry.crit_mult = 1.0
+        entry.perk_damage_mult = 1.0
         return idx
 
     def iter_active(self) -> list[Particle]:
@@ -442,6 +448,9 @@ class ParticlePool:
                         # now boosts the flamethrower via emission rate, not this.
                         if flame_damage_mult != 1.0:
                             damage = max(0.0, float(f32(float(damage) * float(flame_damage_mult))))
+                        if entry.perk_damage_mult != 1.0:
+                            # Perk Efficacy - Pyrokinetic's own bonus, stamped at spawn.
+                            damage = max(0.0, float(f32(float(damage) * float(entry.perk_damage_mult))))
                         flammability_gain = IGNITE_FLAMMABILITY_PER_HIT * float(entry.intensity)
                         if entry.crit_mult != 1.0:
                             # Crit compensation/multiplier, stamped on the particle
@@ -459,6 +468,7 @@ class ParticlePool:
                                     4,
                                     Vec2(),
                                     entry.owner,
+                                    is_projectile_hit=True,
                                 )
                             else:
                                 creature.hp -= float(damage)
@@ -501,7 +511,12 @@ class ParticlePool:
                                 extra = creatures[extra_idx]
                                 if creature_damage_runtime is not None:
                                     creature_damage_runtime.apply_creature_damage(
-                                        int(extra_idx), float(damage), 4, Vec2(), entry.owner,
+                                        int(extra_idx),
+                                        float(damage),
+                                        4,
+                                        Vec2(),
+                                        entry.owner,
+                                        is_projectile_hit=True,
                                     )
                                 else:
                                     extra.hp -= float(damage)

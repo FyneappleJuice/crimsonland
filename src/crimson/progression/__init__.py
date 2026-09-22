@@ -26,6 +26,7 @@ from .sources import (
     refresh_player_stats,
     resolve_player_stats,
     resolve_team_stats,
+    resolve_team_stats_perks_only,
 )
 from .stats import PlayerStats
 
@@ -40,4 +41,5 @@ __all__ = [
     "resolve_player_stats",
     "resolve_stats",
     "resolve_team_stats",
+    "resolve_team_stats_perks_only",
 ]

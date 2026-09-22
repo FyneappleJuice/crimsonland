@@ -22,7 +22,9 @@ def harvester_scythe_on_crit(player: PlayerState) -> None:
         return
     if float(player.health) <= 0.0:
         return
+    # Not native: Perk Efficacy scales the heal-per-crit.
+    heal = HARVESTER_SCYTHE_HEAL_PER_CRIT * float(player.stats.perk_efficacy)
     player.health = soul_tether_clamp_and_gain(
         player,
-        float(x87_pc24_add(f32(float(player.health)), HARVESTER_SCYTHE_HEAL_PER_CRIT)),
+        float(x87_pc24_add(f32(float(player.health)), heal)),
     )

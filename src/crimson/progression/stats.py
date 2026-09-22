@@ -35,8 +35,24 @@ STAT_IDENTITIES: dict[str, float] = {
     "pierce_add": 0.0,
     "projectile_speed_mult": 1.0,
     "spread_mult": 1.0,
-    "crit_chance": 0.0,          # 0..1
+    # Sum of "increased crit chance" percentages (0.05 = +5%), applied against
+    # whatever the equipped weapon's own base crit chance is
+    # (weapon_runtime/crit.py) - not a standalone 0..1 probability itself.
+    "crit_chance": 0.0,
     "crit_mult": 2.0,
+    # Not native: per-weapon-archetype damage bonus (weapon_runtime/tags.py's
+    # WeaponArchetype), independent of damage_mult_* (damage TYPE) - a Plasma
+    # Rifle benefits from both damage_mult_plasma and this Rifle multiplier at
+    # once. No UTILITY entry (Shrinkifier 5K etc. deal no direct damage).
+    "damage_mult_archetype_pistol": 1.0,
+    "damage_mult_archetype_rifle": 1.0,
+    "damage_mult_archetype_smg": 1.0,
+    "damage_mult_archetype_shotgun": 1.0,
+    "damage_mult_archetype_minigun": 1.0,
+    "damage_mult_archetype_cannon": 1.0,
+    "damage_mult_archetype_flamethrower": 1.0,
+    "damage_mult_archetype_arc": 1.0,
+    "damage_mult_archetype_melee": 1.0,
     # --- defense ------------------------------------------------------
     "damage_taken_mult": 1.0,
     "max_health_mult": 1.0,
@@ -48,6 +64,13 @@ STAT_IDENTITIES: dict[str, float] = {
     "bonus_duration_mult": 1.0,  # timed power-up duration
     "pickup_radius_mult": 1.0,
     "luck": 0.0,                 # generic "better rolls" knob for new content
+    # Not native: run mods' "Perk Efficacy" bucket - a generic amplifier read
+    # directly by individual perks' own hard-wired formulas (perks/impl/*.py,
+    # creatures/damage.py's shooter-perk block, player_damage.py, weapon_runtime/
+    # fire.py), not by the progression pipeline itself. Each perk decides what
+    # "more efficacious" means for its own numbers - see run_mods/ids.py's
+    # PERK_EFFICACY entry for the full list of what it touches.
+    "perk_efficacy": 1.0,
 }
 
 
@@ -72,6 +95,15 @@ class PlayerStats(msgspec.Struct, frozen=True):
     spread_mult: float = 1.0
     crit_chance: float = 0.0
     crit_mult: float = 2.0
+    damage_mult_archetype_pistol: float = 1.0
+    damage_mult_archetype_rifle: float = 1.0
+    damage_mult_archetype_smg: float = 1.0
+    damage_mult_archetype_shotgun: float = 1.0
+    damage_mult_archetype_minigun: float = 1.0
+    damage_mult_archetype_cannon: float = 1.0
+    damage_mult_archetype_flamethrower: float = 1.0
+    damage_mult_archetype_arc: float = 1.0
+    damage_mult_archetype_melee: float = 1.0
     # defense
     damage_taken_mult: float = 1.0
     max_health_mult: float = 1.0
@@ -83,6 +115,7 @@ class PlayerStats(msgspec.Struct, frozen=True):
     bonus_duration_mult: float = 1.0
     pickup_radius_mult: float = 1.0
     luck: float = 0.0
+    perk_efficacy: float = 1.0
     # mechanical toggles (keystones / curses); empty by default
     flags: frozenset[str] = frozenset()
 

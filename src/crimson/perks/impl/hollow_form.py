@@ -85,7 +85,8 @@ def _spawn_hollow_form_clone(player: PlayerState) -> None:
         hollow_form_snapshot=None,
     )
     player.hollow_form_pos = player.pos
-    player.hollow_form_active_timer = HOLLOW_FORM_ACTIVE_DURATION
+    # Not native: Perk Efficacy extends how long the clone stays active.
+    player.hollow_form_active_timer = HOLLOW_FORM_ACTIVE_DURATION * float(player.stats.perk_efficacy)
 
 
 def _advance_clone_weapon_timers(clone: PlayerState, dt: float) -> None:

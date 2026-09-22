@@ -122,6 +122,31 @@ class PerkId(IntEnum):
     HIT_LIST = 87
     DELICATE_WATCH = 88
     HARVESTER_SCYTHE = 89
+    WILDCARD = 90
+
+    # Rewrite-only: damage-type "mastery" family. WEAPON_MASTERY is a meta
+    # slot (mirrors run_mods' DAMAGE_TYPE_BOOST) - the only one ever drawn
+    # from the pool; it resolves at generation time into one of the four
+    # concrete masteries below, weighted toward the player's current weapon
+    # and excluding whichever ones are already owned. The four concretes are
+    # never offered directly (see availability.py) - only reachable through
+    # WEAPON_MASTERY's resolution, same shape as run_mods' hidden sub-targets.
+    WEAPON_MASTERY = 91
+    BULLET_MASTERY = 92
+    PLASMA_MASTERY = 93
+    ROCKET_MASTERY = 94
+
+
+# The four concrete masteries WEAPON_MASTERY resolves into - never offered as
+# their own pool entry (see perks/availability.py's build_perk_availability).
+PERK_MASTERY_CONCRETE_IDS: frozenset[PerkId] = frozenset(
+    (
+        PerkId.ION_GUN_MASTER,
+        PerkId.BULLET_MASTERY,
+        PerkId.PLASMA_MASTERY,
+        PerkId.ROCKET_MASTERY,
+    ),
+)
 
 
 class PerkMeta(msgspec.Struct, frozen=True):
@@ -492,8 +517,8 @@ _PERK_TABLE = [
     ),
     PerkMeta(
         perk_id=PerkId.ION_GUN_MASTER,
-        name="Ion Gun Master",
-        description="You're good with ion weapons. You're so good that not only your shots do slightly more damage but your ion blast radius is also increased.",
+        name="Ion Mastery",
+        description="You're good with ion weapons. Your shots hit a lot harder now, and your ion blast radius is bigger too.",
         flags=PERK_DEFAULT_FLAGS,
         prereq=(),
     ),
@@ -762,6 +787,41 @@ _PERK_TABLE = [
         perk_id=PerkId.HARVESTER_SCYTHE,
         name="Critical Care",
         description="Somehow, every critical hit doubles as first aid. It's not much, just enough to keep you standing a little longer than you should. Call it a professional courtesy between you and whatever you just shot.",
+        flags=PERK_DEFAULT_FLAGS,
+        prereq=(),
+    ),
+    PerkMeta(
+        perk_id=PerkId.WILDCARD,
+        name="Perk Gambler",
+        description="You stopped reading the fine print on your bonuses ages ago. Sometimes one turns out to be a full-blown perk in disguise. Sometimes it just goes wild and gives you way more than it should, though it always finds a way to make you pay for it, one way or another.",
+        flags=PERK_DEFAULT_FLAGS,
+        prereq=(),
+    ),
+    PerkMeta(
+        perk_id=PerkId.WEAPON_MASTERY,
+        name="Weapon Mastery",
+        description="You're about to get real good with one kind of weapon. Which kind depends on what you're holding when it happens.",
+        flags=PERK_DEFAULT_FLAGS,
+        prereq=(),
+    ),
+    PerkMeta(
+        perk_id=PerkId.BULLET_MASTERY,
+        name="Bullet Mastery",
+        description="You've spent enough time behind kinetic weapons that it shows. Every bullet you put downrange now hits noticeably harder.",
+        flags=PERK_DEFAULT_FLAGS,
+        prereq=(),
+    ),
+    PerkMeta(
+        perk_id=PerkId.PLASMA_MASTERY,
+        name="Plasma Mastery",
+        description="You've got a real feel for plasma weapons now. Every bolt you fire packs a lot more punch.",
+        flags=PERK_DEFAULT_FLAGS,
+        prereq=(),
+    ),
+    PerkMeta(
+        perk_id=PerkId.ROCKET_MASTERY,
+        name="Rocket Mastery",
+        description="You know exactly where to point a rocket launcher. Your rockets, and everything caught in the blast, take a lot more damage.",
         flags=PERK_DEFAULT_FLAGS,
         prereq=(),
     ),

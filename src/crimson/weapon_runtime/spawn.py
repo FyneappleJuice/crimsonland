@@ -129,6 +129,7 @@ def projectile_spawn(
     owner: OwnerRef,
     owner_player_index: int | None = None,
     hits_players: bool = False,
+    perk_damage_mult: float = 1.0,
 ) -> int:
     # Mirror `projectile_spawn` (0x00420440) Fire Bullets override.
     uses_player_projectile_path = owner.is_player()
@@ -185,6 +186,8 @@ def projectile_spawn(
     )
     if tenet_reverse:
         state.projectiles.entries[int(proj_id)].tenet_reverse = True
+    if perk_damage_mult != 1.0:
+        state.projectiles.entries[int(proj_id)].perk_damage_mult = float(perk_damage_mult)
     return proj_id
 
 
@@ -198,6 +201,7 @@ def spawn_projectile_ring(
     owner: OwnerRef,
     owner_player_index: int | None = None,
     players: list[PlayerState] | None = None,
+    perk_damage_mult: float = 1.0,
 ) -> None:
     if count <= 0:
         return
@@ -213,4 +217,5 @@ def spawn_projectile_ring(
             type_id=type_id,
             owner=owner,
             owner_player_index=owner_player_index,
+            perk_damage_mult=perk_damage_mult,
         )

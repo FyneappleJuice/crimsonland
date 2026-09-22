@@ -102,6 +102,7 @@ def _apply_damage_to_creature(
     impulse: Vec2,
     owner: OwnerRef,
     creature_damage_runtime: CreatureDamageRuntime,
+    is_projectile_hit: bool = False,
 ) -> None:
     if damage <= 0.0:
         return
@@ -114,6 +115,7 @@ def _apply_damage_to_creature(
         int(damage_type),
         impulse,
         owner,
+        is_projectile_hit=is_projectile_hit,
     )
 
 

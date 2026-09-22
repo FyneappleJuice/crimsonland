@@ -21,6 +21,15 @@ class PerkPickCommand(msgspec.Struct, tag="perk_pick", frozen=True, forbid_unkno
     choice_index: int
 
 
+class RunModPickCommand(msgspec.Struct, tag="run_mod_pick", frozen=True, forbid_unknown_fields=True):
+    """Not native: picks from the secondary run-mod list. `PerkMenuOpenCommand`
+    already rolls both choice lists atomically on open (see sim/sessions.py),
+    so no separate open command is needed for this pool."""
+
+    player_index: int
+    choice_index: int
+
+
 class GameFrameRngAdvanceOperation(
     msgspec.Struct,
     tag="game_frame_rng_advance",
@@ -46,10 +55,17 @@ class TypoSubmitCommand(msgspec.Struct, tag="typo_submit", frozen=True, forbid_u
 
 
 type GameCommand = (
-    PerkMenuOpenCommand | PerkPickCommand | TypoCharCommand | TypoBackspaceCommand | TypoSubmitCommand
+    PerkMenuOpenCommand
+    | PerkPickCommand
+    | RunModPickCommand
+    | TypoCharCommand
+    | TypoBackspaceCommand
+    | TypoSubmitCommand
 )
 
-type ReplayPreludeOperation = GameFrameRngAdvanceOperation | PerkMenuOpenCommand | PerkPickCommand
+type ReplayPreludeOperation = (
+    GameFrameRngAdvanceOperation | PerkMenuOpenCommand | PerkPickCommand | RunModPickCommand
+)
 type ReplayPostludeOperation = PerkMenuOpenCommand
 type ReplayTickCommand = TypoCharCommand | TypoBackspaceCommand | TypoSubmitCommand
 

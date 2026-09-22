@@ -3,7 +3,7 @@ from __future__ import annotations
 from crimson.creatures.runtime import CREATURE_LIFECYCLE_ALIVE, CreaturePool
 from crimson.creatures.spawn import CreatureFlags
 from crimson.gameplay import GameplayState
-from crimson.math_parity import f32, x87_pc24_add, x87_pc24_sub
+from crimson.math_parity import f32, x87_pc24_add, x87_pc24_mul, x87_pc24_sub
 from crimson.perks import PerkId
 from crimson.perks.runtime.apply import perk_apply
 from crimson.sim.state_types import PlayerState
@@ -64,6 +64,35 @@ def test_plaguebearer_infection_tick_deals_damage_on_timer_wrap() -> None:
     )
     assert_float_close(creature.collision_timer, expected_timer)
     assert_float_close(creature.hp, 85.0)
+
+
+def test_plaguebearer_infection_tick_scales_with_all_damage_run_mod() -> None:
+    # Not native: the flat 15.0 plague tick is scaled by the generic
+    # "All Damage" run mod (stats.damage_mult) - the only run-mod bucket that
+    # reaches it, since this is a direct hp write with no damage_type and
+    # therefore no per-type dispatch entry to hang an Elemental Affinity
+    # boost on (see creatures/runtime.py's self_tick_damage_mult).
+    from crimson.run_mods.ids import RunModId
+
+    dt = 0.2
+    state = GameplayState()
+    player = PlayerState(index=0, pos=Vec2(500.0, 500.0))
+    player.run_mod_counts[int(RunModId.ALL_DAMAGE)] = 1
+
+    pool = CreaturePool()
+    creature = pool.entries[0]
+    creature.active = True
+    creature.flags = CreatureFlags.ANIM_PING_PONG
+    creature.plague_infected = True
+    creature.collision_timer = 0.1
+    creature.pos = Vec2(100.0, 100.0)
+    creature.hp = 100.0
+    creature.lifecycle_stage = CREATURE_LIFECYCLE_ALIVE
+
+    pool.update(dt, options=make_creature_update_options(state=state, players=[player]))
+
+    expected_damage = x87_pc24_mul(f32(15.0), 1.015)
+    assert_float_close(creature.hp, x87_pc24_sub(f32(100.0), expected_damage))
 
 
 def test_plaguebearer_spreads_between_nearby_creatures() -> None:

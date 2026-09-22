@@ -21,9 +21,11 @@ def update_regeneration(ctx: PerksUpdateEffectsCtx) -> None:
         return
     dt = f32(float(ctx.dt))
 
-    heal_amount = dt
+    # Not native: Perk Efficacy scales the heal rate.
+    efficacy = float(ctx.players[0].stats.perk_efficacy)
+    heal_amount = x87_pc24_mul(dt, f32(efficacy))
     if perk_active(ctx.players[0], PerkId.GREATER_REGENERATION):
-        heal_amount = x87_pc24_mul(dt, f32(2.0))
+        heal_amount = x87_pc24_mul(dt, f32(2.0 * efficacy))
 
     for player in ctx.players:
         if float(player.health) <= 0.0:

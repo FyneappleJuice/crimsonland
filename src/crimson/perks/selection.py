@@ -1,16 +1,19 @@
 from __future__ import annotations
 
+import random as _random
 from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
+from ..creatures.damage_types import CreatureDamageType
 from ..game_modes import GameMode
 from ..quests.level import QuestLevel
 from ..rng_caller_static import RngCallerStatic
 from ..sim.state_types import GameplayState, PlayerState
+from ..weapon_runtime.tags import weapon_tags
 from ..weapons import WeaponId
 from .availability import perk_can_offer
-from .helpers import perk_active
-from .ids import PERK_BY_ID, PerkFlags, PerkId
+from .helpers import perk_active, perk_count_get
+from .ids import PERK_BY_ID, PERK_MASTERY_CONCRETE_IDS, PerkFlags, PerkId
 from .runtime.apply import perk_apply
 from .state import PerkSelectionState
 
@@ -18,6 +21,45 @@ if TYPE_CHECKING:
     from ..creatures.runtime import CreatureState
 
 PERK_ID_MAX = max(int(perk_id) for perk_id in PERK_BY_ID)
+
+# Weapon Mastery's resolution targets, keyed by the damage type each one
+# boosts (mirrors run_mods' DAMAGE_TYPE_BOOST sub-roll table). No Fire/Energy
+# entry - Pyromaniac already fills fire's slot unbiased, and nothing occupies
+# energy yet.
+_WEAPON_MASTERY_SUB_ROLL: dict[CreatureDamageType, PerkId] = {
+    CreatureDamageType.BULLET: PerkId.BULLET_MASTERY,
+    CreatureDamageType.PLASMA: PerkId.PLASMA_MASTERY,
+    CreatureDamageType.ION: PerkId.ION_GUN_MASTER,
+    CreatureDamageType.EXPLOSION: PerkId.ROCKET_MASTERY,
+}
+
+# Same bias ratio as the run-mod Elemental/Weapon Affinity sub-rolls.
+_WEAPON_MASTERY_CURRENT_WEAPON_BIAS = 2.0
+
+
+def _resolve_weapon_mastery(state: GameplayState, player: PlayerState) -> PerkId | None:
+    """Resolve WEAPON_MASTERY to one of its not-yet-owned concrete targets,
+    weighted toward whatever damage type the player's current weapon deals.
+    Returns None only if every concrete is already owned (shouldn't happen -
+    perk_can_offer already gates WEAPON_MASTERY itself on this)."""
+
+    candidates = [
+        perk_id for perk_id in PERK_MASTERY_CONCRETE_IDS if perk_count_get(player, perk_id) <= 0
+    ]
+    if not candidates:
+        return None
+    current_damage_type = weapon_tags(player.weapon.weapon_id).damage_type
+    weights = [
+        _WEAPON_MASTERY_CURRENT_WEAPON_BIAS
+        if _WEAPON_MASTERY_SUB_ROLL.get(current_damage_type) == perk_id
+        else 1.0
+        for perk_id in candidates
+    ]
+    # Not native: rewrite-only content. Read (not draw) the shared sim RNG's
+    # current state, same private-RNG convention run_mods/selection.py uses,
+    # so this doesn't perturb the native-parity `state.rng` sequence.
+    rng = _random.Random(int(state.rng.state))
+    return rng.choices(candidates, weights=weights, k=1)[0]
 
 _DEATH_CLOCK_BLOCKED: frozenset[PerkId] = frozenset(
     (
@@ -196,6 +238,18 @@ def perk_generate_choices(
                 and (state.rng.rand_tagged(RngCallerStatic.PERKS_GENERATE_CHOICES_RARITY_GATE) & 3) == 1
             ):
                 continue
+
+            # Not native: Weapon Mastery is a meta slot - resolve it to a
+            # concrete mastery right here, before it's ever placed in
+            # `choices` or shown to the player (no click-to-reveal gamble,
+            # same as run_mods' Elemental/Weapon Affinity). Everything below
+            # (duplicate-in-this-batch check, already-owned check) then just
+            # works on the resolved id for free.
+            if perk_id == PerkId.WEAPON_MASTERY:
+                resolved = _resolve_weapon_mastery(state, player)
+                if resolved is None:
+                    continue
+                perk_id = resolved
 
             meta = PERK_BY_ID.get(perk_id)
             flags = meta.flags if meta is not None else PerkFlags(0)

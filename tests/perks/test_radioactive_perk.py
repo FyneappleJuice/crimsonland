@@ -54,6 +54,46 @@ def test_radioactive_tick_deals_damage_and_spawns_fx() -> None:
     assert fx_queue.count == 1
 
 
+def test_radioactive_pulse_scales_with_all_damage_run_mod() -> None:
+    # Not native: same SELF_TICK-bucket generic scaling as Plaguebearer - the
+    # pulse is a direct hp write with no damage_type, so only the generic
+    # "All Damage" run mod (stats.damage_mult) can ever reach it.
+    from crimson.run_mods.ids import RunModId
+
+    dt = 0.2
+    state = GameplayState()
+
+    player = PlayerState(index=0, pos=Vec2())
+    player.perk_counts[int(PerkId.RADIOACTIVE)] = 1
+    player.run_mod_counts[int(RunModId.ALL_DAMAGE)] = 1
+
+    pool = CreaturePool()
+    creature = pool.entries[0]
+    creature.active = True
+    creature.flags = CreatureFlags.ANIM_PING_PONG
+    creature.pos = Vec2(46.0, 0.0)
+    creature.hp = 50.0
+    creature.lifecycle_stage = CREATURE_LIFECYCLE_ALIVE
+    creature.collision_timer = 0.1
+
+    pool.update(
+        dt,
+        options=make_creature_update_options(
+            state=state,
+            players=[player],
+            rng=ScriptedCrand(0, fallback=ScriptedCrand.Fallback.REPEAT_LAST),
+        ),
+    )
+
+    dist_after_move = x87_pc24_hypot(
+        x87_pc24_sub(creature.pos.x, player.pos.x),
+        x87_pc24_sub(creature.pos.y, player.pos.y),
+    )
+    base_pulse = x87_pc24_mul(x87_pc24_sub(f32(100.0), dist_after_move), f32(0.3))
+    boosted_pulse = x87_pc24_mul(base_pulse, 1.015)
+    assert_float_close(creature.hp, x87_pc24_sub(f32(50.0), boosted_pulse))
+
+
 def test_radioactive_kill_awards_base_xp_and_bypasses_death_multipliers() -> None:
     dt = 0.2
     state = GameplayState()

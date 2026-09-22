@@ -4,7 +4,7 @@ from crimson.game_modes import GameMode
 from crimson.gameplay import GameplayState
 from crimson.perks import PerkId
 from crimson.perks.availability import build_perk_availability, perk_can_offer
-from crimson.perks.ids import PERK_BY_ID
+from crimson.perks.ids import PERK_BY_ID, PERK_MASTERY_CONCRETE_IDS
 from crimson.sim.state_types import PlayerState
 from grim.geom import Vec2
 
@@ -19,8 +19,9 @@ def test_antiperk_is_excluded_by_availability_not_offer_predicate() -> None:
 def test_every_perk_is_unlocked_regardless_of_quest_progress() -> None:
     # Not native: the mod drops quest-gated perk unlocks entirely.
     available = build_perk_availability(status=None)
+    disabled = {PerkId.ANTIPERK, PerkId.ANXIOUS_LOADER} | PERK_MASTERY_CONCRETE_IDS
     for perk_id in PERK_BY_ID:
-        if perk_id == PerkId.ANTIPERK:
+        if perk_id in disabled:
             assert not available[int(perk_id)]
         else:
             assert available[int(perk_id)]

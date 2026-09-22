@@ -23,6 +23,17 @@ class OwnerRef(msgspec.Struct, frozen=True):
     # part of `to_legacy()`/`from_legacy()` - it's a same-tick anti-recursion
     # guard, not run state that needs to survive a save/replay round-trip.
     via_domino_effect: bool = False
+    # Not native: set on self-contained perk-proc damage (Man Bomb, Hot
+    # Tempered, Angry Reloader, Fire Cough, Mr. Melee) that spawns a canned
+    # projectile/hit of a fixed damage type rather than scaling the player's
+    # actual equipped weapon. Damage tagged this way is exempt from the
+    # run-mod Elemental Affinity (damage_mult_bullet/plasma/energy/ion/fire)
+    # and Weapon Affinity (damage_mult_archetype_*) buckets specifically -
+    # see creatures/damage.py's `resolve_team_stats_perks_only` use - but
+    # still gets the generic All Damage multiplier and any real native
+    # perk-vs-perk interaction that happens to share the same stat field
+    # (Ion Gun Master -> Man Bomb, Pyromaniac -> Fire Cough).
+    no_run_mod_affinity: bool = False
 
     @classmethod
     def none(cls) -> OwnerRef:
@@ -89,6 +100,9 @@ class OwnerRef(msgspec.Struct, frozen=True):
         if 0 <= idx < int(creature_count):
             return int(idx)
         return None
+
+    def without_run_mod_affinity(self) -> OwnerRef:
+        return msgspec.structs.replace(self, no_run_mod_affinity=True)
 
 __all__ = [
     "LOCAL_PLAYER_OWNER_ID",

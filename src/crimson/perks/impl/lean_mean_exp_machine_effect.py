@@ -20,19 +20,21 @@ def update_lean_mean_exp_machine(ctx: PerksUpdateEffectsCtx) -> None:
         # Native `perks_update_effects` uses global `perk_count_get` and awards the
         # periodic XP tick only to player 0 (`player_experience[0]`).
         player0 = ctx.players[0]
+        # Not native: Perk Efficacy scales this trickle's rate.
+        efficacy = float(player0.stats.perk_efficacy)
         # Rewrite-only: floor each tier at a flat minimum so a single copy is
         # worth taking on its own, not just a per-copy trickle that only adds
         # up once you're stacking several - scaling past the floor still
         # works normally once the linear term overtakes it.
         perk_count = perk_count_get(player0, PerkId.LEAN_MEAN_EXP_MACHINE)
         if perk_count > 0:
-            player0.experience += max(20, perk_count * 10)
+            player0.experience += max(20, round(perk_count * 10 * efficacy))
 
         # Rewrite-only: Lean Mean Exp Machine++ adds a second, larger trickle on
         # the same timer rather than replacing the base rate.
         plus_count = perk_count_get(player0, PerkId.LEAN_MEAN_EXP_MACHINE_PLUS)
         if plus_count > 0:
-            player0.experience += max(40, plus_count * 20)
+            player0.experience += max(40, round(plus_count * 20 * efficacy))
 
 
 HOOKS = PerkHooks(

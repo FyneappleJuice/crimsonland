@@ -88,13 +88,15 @@ def test_doctor_and_barrel_greaser_scale_both_kinetic_and_plasma() -> None:
     assert _apply(CreatureDamageType.PLASMA, PerkId.BARREL_GREASER) == pytest.approx(base_p * 1.4, rel=1e-4)
 
 
-def test_uranium_filled_bullets_is_kinetic_only() -> None:
+def test_uranium_filled_bullets_boosts_every_damage_type() -> None:
+    # Reworked from a bullet-only bucket (damage_mult_bullet) to a generic
+    # one (damage_mult) - every damage type gets the same x1.5.
     base_b = _apply(CreatureDamageType.BULLET)
     base_p = _apply(CreatureDamageType.PLASMA)
     base_e = _apply(CreatureDamageType.ENERGY)
-    assert _apply(CreatureDamageType.BULLET, PerkId.URANIUM_FILLED_BULLETS) == pytest.approx(base_b * 2.0, rel=1e-4)
-    assert _apply(CreatureDamageType.PLASMA, PerkId.URANIUM_FILLED_BULLETS) == pytest.approx(base_p, rel=1e-4)
-    assert _apply(CreatureDamageType.ENERGY, PerkId.URANIUM_FILLED_BULLETS) == pytest.approx(base_e, rel=1e-4)
+    assert _apply(CreatureDamageType.BULLET, PerkId.URANIUM_FILLED_BULLETS) == pytest.approx(base_b * 1.5, rel=1e-4)
+    assert _apply(CreatureDamageType.PLASMA, PerkId.URANIUM_FILLED_BULLETS) == pytest.approx(base_p * 1.5, rel=1e-4)
+    assert _apply(CreatureDamageType.ENERGY, PerkId.URANIUM_FILLED_BULLETS) == pytest.approx(base_e * 1.5, rel=1e-4)
 
 
 def test_energy_pre_steps_run_projectile_then_energy_layer() -> None:

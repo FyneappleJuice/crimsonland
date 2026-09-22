@@ -41,6 +41,7 @@ from ..perks.runtime.effects_context import creature_find_in_radius
 from ..perks.selection import perk_selection_open_choices
 from ..persistence.highscores import HighScoreRecord
 from ..render.rtx.mode import RtxRenderMode
+from ..run_mods.selection import run_mod_selection_open_choices
 from ..replay import Replay, ReplayClaimedStatsSnapshot, dump_replay
 from ..replay.checkpoints import (
     FORMAT_VERSION as CHECKPOINTS_FORMAT_VERSION,
@@ -77,6 +78,7 @@ from ..sim.input_providers import (
     PerkMenuOpenCommand,
     PerkPickCommand,
     ResolvedTick,
+    RunModPickCommand,
     TickSupply,
 )
 from ..sim.presentation_reactions import (
@@ -93,6 +95,7 @@ from ..weapon_runtime import most_used_weapon_id_for_player
 from ..world.runtime import WorldRuntime
 from .components.highscore_record_builder import shots_from_state
 from .components.perk_menu_controller import PerkMenuController, PerkMenuRuntime, PerkMenuUiContext
+from .components.run_mod_menu_controller import RunModMenuController
 
 if TYPE_CHECKING:
     from ..creatures.runtime import CreatureDeath, CreaturePool
@@ -150,6 +153,17 @@ class _ModePerkMenuRuntime(PerkMenuRuntime):
 
     def on_close(self) -> None:
         self.mode._perk_menu_closed()
+
+    def play_sfx(self, sfx_id: SfxId) -> None:
+        self.mode.audio_bridge.router.play_sfx(sfx_id)
+
+
+class _ModeRunModMenuRuntime(PerkMenuRuntime):
+    """Not native: separate from _ModePerkMenuRuntime so closing the run-mod
+    panel doesn't fire the perk prompt's on_close reset (each panel's Cancel
+    only needs to resolve its own list; see base_gameplay_mode._open_perk_menu_ui)."""
+
+    mode: BaseGameplayMode
 
     def play_sfx(self, sfx_id: SfxId) -> None:
         self.mode.audio_bridge.router.play_sfx(sfx_id)
@@ -724,6 +738,9 @@ class BaseGameplayMode:
     def _perk_menu_runtime(self) -> PerkMenuRuntime:
         return _ModePerkMenuRuntime(mode=self)
 
+    def _run_mod_menu_runtime(self) -> PerkMenuRuntime:
+        return _ModeRunModMenuRuntime(mode=self)
+
     def _perk_menu_closed(self) -> None:
         return None
 
@@ -743,6 +760,7 @@ class BaseGameplayMode:
         players: list[PlayerState],
         game_mode: GameMode,
         player_count: int,
+        run_mod_menu: RunModMenuController | None = None,
     ) -> None:
         if menu.active:
             return
@@ -757,7 +775,11 @@ class BaseGameplayMode:
             player_count=int(player_count),
         )
         assert choices, "perk menu open requires prepared perk choices"
+        run_mod_choices = run_mod_selection_open_choices(self.state, self.state.run_mod_selection, players)
+        assert run_mod_choices, "perk menu open requires prepared run-mod choices"
         menu.open_menu()
+        if run_mod_menu is not None:
+            run_mod_menu.open_menu()
         self.enqueue_input_command(PerkMenuOpenCommand(player_index=0))
 
     def _ui_mouse_pos(self) -> rl.Vector2:
@@ -832,6 +854,14 @@ class BaseGameplayMode:
     def record_perk_pick_command(self, choice_index: int, *, player_index: int = 0) -> None:
         self.enqueue_input_command(
             PerkPickCommand(
+                player_index=int(player_index),
+                choice_index=int(choice_index),
+            ),
+        )
+
+    def record_run_mod_pick_command(self, choice_index: int, *, player_index: int = 0) -> None:
+        self.enqueue_input_command(
+            RunModPickCommand(
                 player_index=int(player_index),
                 choice_index=int(choice_index),
             ),

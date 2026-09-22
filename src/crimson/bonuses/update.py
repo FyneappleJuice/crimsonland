@@ -136,9 +136,11 @@ def bonus_telekinetic_update(
         player.bonus_aim_hover_index = int(idx)
         player.bonus_aim_hover_timer_ms += dt_ms
 
-        if player.bonus_aim_hover_timer_ms <= BONUS_TELEKINETIC_PICKUP_MS:
-            continue
         if not perk_active(player, PerkId.TELEKINETIC):
+            continue
+        # Not native: Perk Efficacy shortens the required hover time.
+        pickup_threshold_ms = BONUS_TELEKINETIC_PICKUP_MS / float(player.stats.perk_efficacy)
+        if player.bonus_aim_hover_timer_ms <= pickup_threshold_ms:
             continue
         if entry.picked or entry.bonus_id == BonusId.UNUSED:
             continue

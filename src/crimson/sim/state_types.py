@@ -9,6 +9,7 @@ from grim.geom import Vec2
 from ..bonuses.ids import BonusId
 from ..math_parity import f32
 from ..progression.stats import PlayerStats
+from ..run_mods.ids import RUN_MOD_COUNT_SIZE
 from ..weapons import WeaponId
 
 PERK_COUNT_SIZE = 0x80
@@ -140,6 +141,15 @@ class PlayerState(msgspec.Struct):
     level: int = 1
 
     perk_counts: list[int] = msgspec.field(default_factory=lambda: [0] * PERK_COUNT_SIZE)
+    # Not native: how many times each run mod (crimson.run_mods) has been
+    # picked this run - a separate, per-run-only pool from perks and from the
+    # persistent crimson.meta.relics grid. Sized to len(RunModId) exactly.
+    run_mod_counts: list[int] = msgspec.field(default_factory=lambda: [0] * RUN_MOD_COUNT_SIZE)
+    # Not native: a separate negative-direction stack, fed only by Wildcard's
+    # "upgrade" outcome (run_mods/selection.py) - each entry here applies that
+    # run mod's own StatMods inverted (worse), independent of - and additive
+    # with - any normal positive stacks of the same id in run_mod_counts.
+    run_mod_penalty_counts: list[int] = msgspec.field(default_factory=lambda: [0] * RUN_MOD_COUNT_SIZE)
     # Not native: resolved build stats (crimson.progression). Recomputed each
     # sim tick from perks + affixes + modifiers; all-default until content
     # registers StatMods, so native runs are unaffected.

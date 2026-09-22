@@ -195,6 +195,7 @@ class SecondaryProjectilePool:
             *,
             owner: OwnerRef,
             impulse: Vec2 = Vec2(),
+            is_projectile_hit: bool = False,
         ) -> None:
             _apply_damage_to_creature(
                 creatures,
@@ -204,6 +205,7 @@ class SecondaryProjectilePool:
                 impulse=impulse,
                 owner=owner,
                 creature_damage_runtime=creature_damage_runtime,
+                is_projectile_hit=is_projectile_hit,
             )
 
         rng = Crand(0)
@@ -558,6 +560,7 @@ class SecondaryProjectilePool:
                     damage,
                     owner=entry.owner,
                     impulse=impulse,
+                    is_projectile_hit=True,
                 )
                 creature_spatial.sync_index(int(hit_idx))
 

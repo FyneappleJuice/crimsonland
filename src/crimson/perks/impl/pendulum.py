@@ -36,10 +36,11 @@ def pendulum_effective_phase(state: GameplayState, player: PlayerState) -> bool:
 def pendulum_damage_mult(state: GameplayState, player: PlayerState) -> float:
     if not perk_active(player, PerkId.PENDULUM) or pendulum_effective_phase(state, player):
         return 1.0
-    return 1.0 + PENDULUM_DAMAGE_BONUS
+    # Not native: Perk Efficacy scales both of Pendulum's phases.
+    return 1.0 + PENDULUM_DAMAGE_BONUS * float(player.stats.perk_efficacy)
 
 
 def pendulum_fire_rate_mult(state: GameplayState, player: PlayerState) -> float:
     if not perk_active(player, PerkId.PENDULUM) or not pendulum_effective_phase(state, player):
         return 1.0
-    return 1.0 - PENDULUM_FIRE_RATE_BONUS
+    return 1.0 - PENDULUM_FIRE_RATE_BONUS * float(player.stats.perk_efficacy)

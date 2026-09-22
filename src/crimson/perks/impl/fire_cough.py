@@ -31,7 +31,7 @@ def tick_fire_cough(ctx: PlayerPerkTickCtx) -> None:
     if ctx.player.fire_cough_timer <= ctx.state.perk_intervals.fire_cough:
         return
 
-    owner = ctx.owner_ref_for_player_projectiles(ctx.state, ctx.player.index)
+    owner = ctx.owner_ref_for_player_projectiles(ctx.state, ctx.player.index).without_run_mod_affinity()
     ctx.state.sfx_queue.append(SfxId.AUTORIFLE_FIRE)
     ctx.state.sfx_queue.append(SfxId.PLASMAMINIGUN_FIRE)
 
@@ -57,6 +57,7 @@ def tick_fire_cough(ctx: PlayerPerkTickCtx) -> None:
         type_id=ProjectileTemplateId.FIRE_BULLETS,
         owner=owner,
         owner_player_index=ctx.player.index,
+        perk_damage_mult=float(ctx.perk_player.stats.perk_efficacy),
     )
 
     vel = Vec2.from_angle(aim_heading) * 25.0

@@ -15,13 +15,13 @@ Weapon affixes, map modifiers and curses will register through the
 `extra_sources` argument of `collect_player_stat_mods`; nothing else changes.
 """
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from itertools import chain
 from typing import TYPE_CHECKING
 
 from ..perks.helpers import perk_count_get
 from ..perks.ids import PerkId
-from .modifiers import StatMod, flag, flat, increased, more, resolve_stats
+from .modifiers import StatMod, flag, flat, increased, more, negated, resolve_stats
 from .stats import PlayerStats
 
 if TYPE_CHECKING:
@@ -65,13 +65,16 @@ PERK_STAT_MODS: dict[PerkId, tuple[StatMod, ...]] = {
     # rule stays a raw perk check in bonuses/selection.py + bonuses/pool.py.)
     PerkId.MY_FAVOURITE_WEAPON: (flat("clip_size_add", 2.0, source="perk:my_favourite_weapon"),),
     # --- outgoing damage ---------------------------------------
-    # creatures/damage.py: kinetic-bullet damage += itself (x2). Lead only - a
-    # uranium slug is meaningless for a plasma bolt, so this does NOT touch energy.
-    PerkId.URANIUM_FILLED_BULLETS: (more("damage_mult_bullet", 1.0, source="perk:uranium_filled_bullets"),),
+    # creatures/damage.py: projectile-bucket damage *= 1.5. Reworked from a
+    # bullet-only x2/x3 to the shared "projectile" bucket (x1.5/x2) - every
+    # damage type's direct-hit half (Bullet/Plasma/Energy always, Ion/Fire/
+    # Explosion when is_projectile_hit is set) rides this same bucket as
+    # Doctor/Barrel Greaser, so it no longer goes dead on non-kinetic weapons.
+    PerkId.URANIUM_FILLED_BULLETS: (more("damage_mult_projectile", 0.5, source="perk:uranium_filled_bullets"),),
     # Tier upgrade (rewrite-only): combined with URANIUM_FILLED_BULLETS this
-    # brings damage_mult_bullet to *3.0 total (triple, up from double): 2.0*1.5=3.0.
+    # brings damage_mult_projectile to *2.0 total (double, up from x1.5): 1.5*(4/3)=2.0.
     PerkId.URANIUM_FILLED_BULLETS_PLUS: (
-        more("damage_mult_bullet", 0.5, source="perk:uranium_filled_bullets_plus"),
+        more("damage_mult_projectile", 1.0 / 3.0, source="perk:uranium_filled_bullets_plus"),
     ),
     # creatures/damage.py: projectile damage *= 1.2. "You know where to aim" is
     # ammo-agnostic, so it rides the projectile layer (kinetic bullet + energy).
@@ -84,8 +87,15 @@ PERK_STAT_MODS: dict[PerkId, tuple[StatMod, ...]] = {
     ),
     # creatures/damage.py: fire damage *= 1.5
     PerkId.PYROMANIAC: (more("damage_mult_fire", 0.5, source="perk:pyromaniac"),),
-    # creatures/damage.py: ion damage *= 1.2 (blast radius bump stays in code)
-    PerkId.ION_GUN_MASTER: (more("damage_mult_ion", 0.2, source="perk:ion_gun_master"),),
+    # creatures/damage.py: ion damage *= 1.5 (blast radius bump stays in code).
+    # Rewrite-only: buffed from the native x1.2 to sit at parity with the rest
+    # of the mastery family (Bullet/Plasma/Rocket) below.
+    PerkId.ION_GUN_MASTER: (more("damage_mult_ion", 0.5, source="perk:ion_gun_master"),),
+    # Not native: mastery family (see perks/ids.py's PERK_MASTERY_CONCRETE_IDS) -
+    # only reachable through WEAPON_MASTERY's resolution, never offered directly.
+    PerkId.BULLET_MASTERY: (more("damage_mult_bullet", 0.5, source="perk:bullet_mastery"),),
+    PerkId.PLASMA_MASTERY: (more("damage_mult_plasma", 0.5, source="perk:plasma_mastery"),),
+    PerkId.ROCKET_MASTERY: (more("damage_mult_explosion", 0.5, source="perk:rocket_mastery"),),
     # --- incoming damage --------------------------------------
     # player_damage.py: incoming damage *= ~0.666 (max-HP cut on pick stays in code)
     PerkId.THICK_SKINNED: (
@@ -189,7 +199,148 @@ PERK_MECHANICAL: dict[PerkId, str] = {
     PerkId.HIT_LIST: "marks one Apex monster; killing it permanently grows a capped damage bonus",
     PerkId.DELICATE_WATCH: "a damage bonus that breaks itself (and becomes re-offerable) at low health",
     PerkId.HARVESTER_SCYTHE: "critical hits heal the player for a flat amount",
+    PerkId.WILDCARD: "each secondary-perk slot independently has a chance to become a real perk offer, or a triple-strength version of itself with an added downside",
+    PerkId.WEAPON_MASTERY: "meta slot: resolves at generation time to one of the four concrete masteries, weighted toward the player's currently equipped weapon",
 }
+
+
+def collect_run_mod_stat_mods(player: PlayerState) -> list[StatMod]:
+    """Every `StatMod` from run mods `player` has picked this run.
+
+    Not native: a rewrite-only, per-run-only pool distinct from
+    `crimson.meta.relics`. Mirrors the `PERK_STAT_MODS` count-repeat loop
+    below, but over `player.run_mod_counts`.
+    """
+
+    # Lazy import: crimson.run_mods.stat_mods imports crimson.progression.modifiers,
+    # so importing it at module scope here would be circular (this module is
+    # part of the crimson.progression package `__init__` re-exports).
+    from ..run_mods.stat_mods import RUN_MOD_STAT_MODS
+
+    mods: list[StatMod] = []
+    for run_mod_id, run_mod_mods in RUN_MOD_STAT_MODS.items():
+        idx = int(run_mod_id)
+        count = int(player.run_mod_counts[idx]) if 0 <= idx < len(player.run_mod_counts) else 0
+        if count <= 0:
+            continue
+        for _ in range(count):
+            mods.extend(run_mod_mods)
+    return mods
+
+
+def _perk_efficacy_for(player: PlayerState) -> float:
+    """Resolve just the run-mod "Perk Efficacy" bucket for `player`.
+
+    Only run mods feed `perk_efficacy` (no perk does), so this can be
+    resolved ahead of - and independently of - the perk StatMods below
+    without a resolution-order cycle. Used to scale the handful of
+    `PERK_STAT_MODS` entries in `_EFFICACY_SCALED_PERK_STAT_MODS`.
+    """
+
+    from ..run_mods.ids import RunModId
+    from ..run_mods.stat_mods import RUN_MOD_STAT_MODS
+
+    idx = int(RunModId.PERK_EFFICACY)
+    count = int(player.run_mod_counts[idx]) if 0 <= idx < len(player.run_mod_counts) else 0
+    penalty_count = (
+        int(player.run_mod_penalty_counts[idx]) if 0 <= idx < len(player.run_mod_penalty_counts) else 0
+    )
+    if count <= 0 and penalty_count <= 0:
+        return 1.0
+    mods: list[StatMod] = []
+    for _ in range(count):
+        mods.extend(RUN_MOD_STAT_MODS[RunModId.PERK_EFFICACY])
+    for _ in range(penalty_count):
+        mods.extend(negated(mod) for mod in RUN_MOD_STAT_MODS[RunModId.PERK_EFFICACY])
+    return float(resolve_stats(mods).perk_efficacy)
+
+
+# Not native: a handful of PERK_STAT_MODS entries whose own number is what
+# "Perk Efficacy" scales (see run_mods/ids.py's PERK_EFFICACY entry for the
+# full survey). Each is a function of the resolved efficacy factor instead of
+# a fixed tuple; everything else in PERK_STAT_MODS is left untouched.
+_EFFICACY_SCALED_PERK_STAT_MODS: dict[PerkId, Callable[[float], tuple[StatMod, ...]]] = {
+    PerkId.FASTSHOT: lambda eff: (more("shot_cooldown_mult", -0.12 * eff, source="perk:fastshot"),),
+    PerkId.FASTSHOT_PLUS: lambda eff: (more("shot_cooldown_mult", -eff / 11.0, source="perk:fastshot_plus"),),
+    # Sharpshooter's cooldown penalty shrinks with efficacy instead of growing.
+    PerkId.SHARPSHOOTER: lambda eff: (more("shot_cooldown_mult", 0.05 / eff, source="perk:sharpshooter"),),
+    PerkId.FASTLOADER: lambda eff: (more("reload_time_mult", -0.3 * eff, source="perk:fastloader"),),
+    PerkId.FASTLOADER_PLUS: lambda eff: (
+        more("reload_time_mult", -eff * 2.0 / 7.0, source="perk:fastloader_plus"),
+    ),
+    PerkId.AMMO_MANIAC: lambda eff: (increased("clip_size_mult", 0.25 * eff, source="perk:ammo_maniac"),),
+    PerkId.AMMO_MANIAC_PLUS: lambda eff: (
+        increased("clip_size_mult", 0.35 * eff, source="perk:ammo_maniac_plus"),
+    ),
+    PerkId.MY_FAVOURITE_WEAPON: lambda eff: (
+        flat("clip_size_add", 2.0 * eff, source="perk:my_favourite_weapon"),
+    ),
+    PerkId.URANIUM_FILLED_BULLETS: lambda eff: (
+        more("damage_mult_projectile", 0.5 * eff, source="perk:uranium_filled_bullets"),
+    ),
+    PerkId.URANIUM_FILLED_BULLETS_PLUS: lambda eff: (
+        more("damage_mult_projectile", (1.0 / 3.0) * eff, source="perk:uranium_filled_bullets_plus"),
+    ),
+    PerkId.DOCTOR: lambda eff: (more("damage_mult_projectile", 0.2 * eff, source="perk:doctor"),),
+    PerkId.BARREL_GREASER: lambda eff: (
+        more("damage_mult_projectile", 0.4 * eff, source="perk:barrel_greaser"),
+        flag("projectile_double_steps", source="perk:barrel_greaser"),
+    ),
+    PerkId.PYROMANIAC: lambda eff: (more("damage_mult_fire", 0.5 * eff, source="perk:pyromaniac"),),
+    PerkId.ION_GUN_MASTER: lambda eff: (more("damage_mult_ion", 0.5 * eff, source="perk:ion_gun_master"),),
+    PerkId.BULLET_MASTERY: lambda eff: (more("damage_mult_bullet", 0.5 * eff, source="perk:bullet_mastery"),),
+    PerkId.PLASMA_MASTERY: lambda eff: (more("damage_mult_plasma", 0.5 * eff, source="perk:plasma_mastery"),),
+    PerkId.ROCKET_MASTERY: lambda eff: (
+        more("damage_mult_explosion", 0.5 * eff, source="perk:rocket_mastery"),
+    ),
+    PerkId.THICK_SKINNED: lambda eff: (
+        more("damage_taken_mult", (_THICK_SKINNED_DAMAGE_SCALE - 1.0) * eff, source="perk:thick_skinned"),
+    ),
+    PerkId.THICK_SKINNED_PLUS: lambda eff: (
+        more("damage_taken_mult", (_THICK_SKINNED_DAMAGE_SCALE - 1.0) * eff, source="perk:thick_skinned_plus"),
+    ),
+    PerkId.BONUS_ECONOMIST: lambda eff: (more("bonus_duration_mult", 0.5 * eff, source="perk:bonus_economist"),),
+    PerkId.BONUS_ECONOMIST_PLUS: lambda eff: (
+        more("bonus_duration_mult", eff / 3.0, source="perk:bonus_economist_plus"),
+    ),
+}
+
+
+def collect_perk_stat_mods(player: PlayerState) -> list[StatMod]:
+    """Every `StatMod` from perks `player` currently owns - no run mods, no `extra_sources`."""
+
+    mods: list[StatMod] = []
+    efficacy: float | None = None
+    for perk_id, perk_mods in PERK_STAT_MODS.items():
+        count = perk_count_get(player, perk_id)
+        if count <= 0:
+            continue
+        scaled = _EFFICACY_SCALED_PERK_STAT_MODS.get(perk_id)
+        if scaled is not None:
+            if efficacy is None:
+                efficacy = _perk_efficacy_for(player)
+            perk_mods = scaled(efficacy)
+        for _ in range(count):
+            mods.extend(perk_mods)
+    return mods
+
+
+def collect_run_mod_penalty_stat_mods(player: PlayerState) -> list[StatMod]:
+    """Every negated `StatMod` from Wildcard-upgraded run mods `player` has
+    picked this run (see `PlayerState.run_mod_penalty_counts`)."""
+
+    from ..run_mods.stat_mods import RUN_MOD_STAT_MODS
+
+    mods: list[StatMod] = []
+    for run_mod_id, run_mod_mods in RUN_MOD_STAT_MODS.items():
+        idx = int(run_mod_id)
+        count = int(player.run_mod_penalty_counts[idx]) if 0 <= idx < len(player.run_mod_penalty_counts) else 0
+        if count <= 0:
+            continue
+        negated_mods = tuple(negated(mod) for mod in run_mod_mods)
+        for _ in range(count):
+            mods.extend(negated_mods)
+    return mods
 
 
 def collect_player_stat_mods(
@@ -197,15 +348,11 @@ def collect_player_stat_mods(
     *,
     extra_sources: Iterable[StatMod] = (),
 ) -> list[StatMod]:
-    """Every `StatMod` currently affecting `player` (perks + `extra_sources`)."""
+    """Every `StatMod` currently affecting `player` (perks + run mods + `extra_sources`)."""
 
-    mods: list[StatMod] = []
-    for perk_id, perk_mods in PERK_STAT_MODS.items():
-        count = perk_count_get(player, perk_id)
-        if count <= 0:
-            continue
-        for _ in range(count):
-            mods.extend(perk_mods)
+    mods = list(collect_perk_stat_mods(player))
+    mods.extend(collect_run_mod_stat_mods(player))
+    mods.extend(collect_run_mod_penalty_stat_mods(player))
     mods.extend(extra_sources)
     return mods
 
@@ -226,6 +373,22 @@ def resolve_team_stats(players: Sequence[PlayerState]) -> PlayerStats:
     """
 
     return resolve_stats(chain.from_iterable(collect_player_stat_mods(p) for p in players))
+
+
+def resolve_team_stats_perks_only(players: Sequence[PlayerState]) -> PlayerStats:
+    """Same as `resolve_team_stats`, but perk contributions only - run mods
+    excluded.
+
+    Used for damage instances flagged `OwnerRef.no_run_mod_affinity` (Man
+    Bomb/Hot Tempered/Angry Reloader/Fire Cough/Mr. Melee's own canned-effect
+    damage), so a real native perk-vs-perk interaction that happens to share
+    a `damage_mult_*` field (Ion Gun Master boosting Man Bomb's ion damage,
+    Pyromaniac boosting Fire Cough's fire damage - including Pyromaniac's RNG
+    draw) still applies, while the newer run-mod Elemental/Weapon Affinity
+    picks do not.
+    """
+
+    return resolve_stats(chain.from_iterable(collect_perk_stat_mods(p) for p in players))
 
 
 def refresh_player_stats(players: Sequence[PlayerState]) -> None:

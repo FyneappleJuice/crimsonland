@@ -15,7 +15,11 @@ def apply_reflex_boosted_dt(*, dt: float, players: list[PlayerState]) -> float:
         return float(dt)
     if not perk_active(players[0], PerkId.REFLEX_BOOSTED):
         return float(dt)
-    return float(x87_pc24_mul(f32(float(dt)), f32(0.9)))
+    # Not native: Perk Efficacy deepens the slowdown (a smaller multiplier),
+    # floored well short of 0 so time never fully stops.
+    efficacy = float(players[0].stats.perk_efficacy)
+    slow_mult = max(0.1, 1.0 - 0.1 * efficacy)
+    return float(x87_pc24_mul(f32(float(dt)), f32(slow_mult)))
 
 
 HOOKS = PerkHooks(

@@ -6,7 +6,8 @@ from ..runtime.hook_types import PerkHooks
 
 
 def apply_instant_winner(ctx: PerkApplyCtx) -> None:
-    ctx.owner.experience += 2500
+    # Not native: Perk Efficacy scales the flat XP award.
+    ctx.owner.experience += round(2500 * float(ctx.owner.stats.perk_efficacy))
 
 
 HOOKS = PerkHooks(

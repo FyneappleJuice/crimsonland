@@ -30,7 +30,7 @@ def test_ion_gun_master_increases_ion_damage() -> None:
     )
 
     assert killed is False
-    assert_float_close(creature.hp, 88.0)
+    assert_float_close(creature.hp, 85.0)
 
 
 def test_ion_gun_master_increases_ion_aoe_radius() -> None:

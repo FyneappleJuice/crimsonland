@@ -16,6 +16,7 @@ from ..sim.input_providers import (
     GameFrameRngAdvanceOperation,
     PerkMenuOpenCommand,
     PerkPickCommand,
+    RunModPickCommand,
     TypoBackspaceCommand,
     TypoCharCommand,
     TypoSubmitCommand,
@@ -54,6 +55,7 @@ _PRELUDE_TYPES = {
     "game_frame_rng_advance": GameFrameRngAdvanceOperation,
     "perk_menu_open": PerkMenuOpenCommand,
     "perk_pick": PerkPickCommand,
+    "run_mod_pick": RunModPickCommand,
 }
 
 _POSTLUDE_TYPES = {
@@ -555,6 +557,10 @@ def _validate_tick_operations(
         if isinstance(operation, PerkPickCommand) and not (0 <= int(operation.choice_index) < 7):
             raise ReplayCodecError(
                 f"replay tick {tick_idx} prelude {operation_index} choice_index must be in 0..6",
+            )
+        if isinstance(operation, RunModPickCommand) and not (0 <= int(operation.choice_index) < 3):
+            raise ReplayCodecError(
+                f"replay tick {tick_idx} prelude {operation_index} choice_index must be in 0..2",
             )
 
     for operation_index, operation in enumerate(tick.postlude):

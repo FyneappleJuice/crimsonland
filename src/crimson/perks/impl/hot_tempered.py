@@ -27,7 +27,7 @@ def tick_hot_tempered(ctx: PlayerPerkTickCtx) -> None:
 
     owner = (
         ctx.owner_ref_for_player(ctx.player.index) if ctx.state.friendly_fire_enabled else OwnerRef.from_local_player(0)
-    )
+    ).without_run_mod_affinity()
     for idx in range(8):
         type_id = ProjectileTemplateId.PLASMA_MINIGUN if ((idx & 1) == 0) else ProjectileTemplateId.PLASMA_RIFLE
         angle = x87_pc24_mul(float(idx), NATIVE_QUARTER_PI)
@@ -39,6 +39,7 @@ def tick_hot_tempered(ctx: PlayerPerkTickCtx) -> None:
             type_id=type_id,
             owner=owner,
             owner_player_index=ctx.player.index,
+            perk_damage_mult=float(ctx.perk_player.stats.perk_efficacy),
         )
     ctx.state.sfx_queue.append(SfxId.EXPLOSION_SMALL)
 

@@ -22,8 +22,10 @@ class CreatureDamageRuntime(msgspec.Struct):
         damage_type: int,
         impulse: Vec2,
         owner: OwnerRef,
+        *,
+        is_projectile_hit: bool = False,
     ) -> None:
-        _ = creature_index, damage, damage_type, impulse, owner
+        _ = creature_index, damage, damage_type, impulse, owner, is_projectile_hit
 
     def kill_creature_no_corpse(self, creature_index: int, owner: OwnerRef) -> None:
         _ = creature_index, owner
@@ -55,8 +57,10 @@ class DirectCreatureDamageRuntime(CreatureDamageRuntime):
         damage_type: int,
         impulse: Vec2,
         owner: OwnerRef,
+        *,
+        is_projectile_hit: bool = False,
     ) -> None:
-        _ = damage_type, impulse, owner
+        _ = damage_type, impulse, owner, is_projectile_hit
         if damage <= 0.0:
             return
         idx = int(creature_index)

@@ -169,7 +169,12 @@ class PerkMenuController:
         self._open = True
         self._selected_index = 0
 
-    def tick_timeline(self, dt_ui_ms: float) -> None:
+    def tick_timeline(self, dt_ui_ms: float, *, hold: bool = False) -> None:
+        """`hold=True` freezes the timeline in place (used to keep this panel
+        visible while a companion panel - e.g. the run-mod list - is still
+        sliding in/out, so exit order can be sequenced between the two)."""
+        if hold:
+            return
         if self._open:
             self._timeline_ms = clamp(self._timeline_ms + float(dt_ui_ms), 0.0, PERK_MENU_TRANSITION_MS)
         else:

@@ -30,6 +30,7 @@ from ..perks.selection import perk_selection_prepared_choices
 from ..persistence.save_status import GameStatusData
 from ..replay import Replay, ReplayHeader, ReplayRecorder
 from ..replay.checkpoints import DEFAULT_CHECKPOINT_SAMPLE_RATE
+from ..run_mods.selection import run_mod_selection_prepared_choices
 from ..sim.bootstrap import advance_unlock_terrain
 from ..sim.session_builders import build_survival_session
 from ..sim.sessions import DeterministicSession, DeterministicSessionTick, SurvivalSpawnState
@@ -47,6 +48,7 @@ from .base_gameplay_mode import (
 from .components.highscore_record_builder import build_highscore_record_for_game_over
 from .components.perk_menu_controller import PerkMenuController
 from .components.perk_prompt_controller import PerkPromptState
+from .components.run_mod_menu_controller import RunModMenuController
 
 WORLD_SIZE = 1024.0
 
@@ -85,6 +87,7 @@ class SurvivalMode(BaseGameplayMode):
         )
         self._perk_prompt = PerkPromptState()
         self._perk_menu = PerkMenuController(runtime=self._perk_menu_runtime())
+        self._run_mod_menu = RunModMenuController(runtime=self._run_mod_menu_runtime())
         self._hud_fade_ms = PERK_MENU_TRANSITION_MS
         self._cursor_time = 0.0
         self._replay_recorder: ReplayRecorder | None = None
@@ -125,7 +128,12 @@ class SurvivalMode(BaseGameplayMode):
             players=self.sim_world.players,
             game_mode=GameMode.SURVIVAL,
             player_count=max(1, len(self.sim_world.players)),
+            run_mod_menu=self._run_mod_menu,
         )
+
+    @property
+    def _level_up_menu_active(self) -> bool:
+        return bool(self._perk_menu.active or self._run_mod_menu.active)
 
     def _perk_menu_closed(self) -> None:
         self._perk_prompt.reset_if_pending(pending_count=int(self.state.perk_selection.pending_count))
@@ -141,6 +149,7 @@ class SurvivalMode(BaseGameplayMode):
         pending_count = int(self.state.perk_selection.pending_count)
         any_alive = self._any_player_alive()
         choices = perk_selection_prepared_choices(self.sim_world.players, self.state.perk_selection)
+        run_mod_choices = run_mod_selection_prepared_choices(self.state.run_mod_selection)
         self._perk_prompt.begin_frame()
         if self._perk_menu.open and allow_input:
             choice_index = self._perk_menu.handle_input(
@@ -150,6 +159,14 @@ class SurvivalMode(BaseGameplayMode):
             )
             if choice_index is not None:
                 self.record_perk_pick_command(int(choice_index), player_index=0)
+        if self._run_mod_menu.open and allow_input:
+            run_mod_choice_index = self._run_mod_menu.handle_input(
+                perk_ctx,
+                run_mod_choices,
+                dt_ui_ms=float(dt_ui_ms),
+            )
+            if run_mod_choice_index is not None:
+                self.record_run_mod_pick_command(int(run_mod_choice_index), player_index=0)
         if allow_input and self._perk_prompt.poll_open_request(
             ctx=perk_ctx,
             config=self.config,
@@ -157,7 +174,7 @@ class SurvivalMode(BaseGameplayMode):
             player_count=max(1, len(self.sim_world.players)),
             any_alive=any_alive,
             paused=self._paused,
-            menu_active=self._perk_menu.active,
+            menu_active=self._level_up_menu_active,
             prompt_scale=UI_TEXT_SCALE,
         ):
             self._try_open_perk_menu()
@@ -165,12 +182,24 @@ class SurvivalMode(BaseGameplayMode):
             pending_count=pending_count,
             any_alive=any_alive,
             paused=self._paused,
-            menu_active=self._perk_menu.active,
+            menu_active=self._level_up_menu_active,
             dt_ui_ms=float(dt_ui_ms),
         )
         if allow_pulse:
             self._perk_prompt.tick_pulse(float(dt_ui_ms))
-        self._perk_menu.tick_timeline(float(dt_ui_ms))
+        # Sequence the two panels: run-mod only starts sliding in once the
+        # perk panel has fully arrived, and the perk panel only starts
+        # sliding out once the run-mod panel has fully retracted into it.
+        perk_fully_open = self._perk_menu.timeline_ms >= PERK_MENU_TRANSITION_MS - 1e-3
+        run_mod_fully_closed = self._run_mod_menu.timeline_ms <= 1e-3
+        self._run_mod_menu.tick_timeline(
+            float(dt_ui_ms),
+            hold=self._run_mod_menu.open and not perk_fully_open,
+        )
+        self._perk_menu.tick_timeline(
+            float(dt_ui_ms),
+            hold=(not self._perk_menu.open) and not run_mod_fully_closed,
+        )
 
     def _wrap_ui_text(self, text: str, *, max_width: float, scale: float = UI_TEXT_SCALE) -> list[str]:
         lines: list[str] = []
@@ -196,6 +225,7 @@ class SurvivalMode(BaseGameplayMode):
 
         self._perk_prompt.reset()
         self._perk_menu.reset()
+        self._run_mod_menu.reset()
         self._cursor_time = 0.0
         self._cursor_pulse_time = 0.0
         self._reset_gameplay_frame_clock()
@@ -271,23 +301,26 @@ class SurvivalMode(BaseGameplayMode):
                 self._action = "back_to_menu"
                 self.close_requested = True
             return
-        if self._perk_menu.open and rl.is_key_pressed(rl.KeyboardKey.KEY_ESCAPE):
+        if (self._perk_menu.open or self._run_mod_menu.open) and rl.is_key_pressed(rl.KeyboardKey.KEY_ESCAPE):
             if bool(self._lan_enabled) and str(self._lan_role) == "join":
                 return
             self.audio_bridge.router.play_sfx(SfxId.UI_BUTTONCLICK)
             self._perk_menu.close()
+            self._run_mod_menu.close()
             return
 
         if (not bool(self._lan_enabled)) and rl.is_key_pressed(rl.KeyboardKey.KEY_TAB):
             self._paused = not self._paused
 
-        if debug_enabled() and (not self._perk_menu.open):
+        if debug_enabled() and not (self._perk_menu.open or self._run_mod_menu.open):
             if rl.is_key_pressed(rl.KeyboardKey.KEY_F2):
                 self.state.debug_god_mode = not bool(self.state.debug_god_mode)
                 self.audio_bridge.router.play_sfx(SfxId.UI_BUTTONCLICK)
             if rl.is_key_pressed(rl.KeyboardKey.KEY_F3):
                 self.state.perk_selection.pending_count += 1
                 self.state.perk_selection.choices_dirty = True
+                self.state.run_mod_selection.pending_count += 1
+                self.state.run_mod_selection.choices_dirty = True
                 self.audio_bridge.router.play_sfx(SfxId.UI_LEVELUP)
             if rl.is_key_pressed(rl.KeyboardKey.KEY_LEFT_BRACKET):
                 self._debug_cycle_weapon(-1)
@@ -295,7 +328,7 @@ class SurvivalMode(BaseGameplayMode):
                 self._debug_cycle_weapon(1)
             if rl.is_key_pressed(rl.KeyboardKey.KEY_X):
                 self.player.experience += 5000
-                survival_check_level_up(self.player, self.state.perk_selection)
+                survival_check_level_up(self.player, self.state.perk_selection, self.state.run_mod_selection)
 
         if rl.is_key_pressed(rl.KeyboardKey.KEY_ESCAPE):
             self._action = "open_pause_menu"
@@ -339,6 +372,7 @@ class SurvivalMode(BaseGameplayMode):
         self._game_over_ui.open()
         self._game_over_active = True
         self._perk_menu.close()
+        self._run_mod_menu.close()
         self._save_replay()
 
     def _lan_mode_name(self) -> Literal["survival"]:
@@ -366,12 +400,12 @@ class SurvivalMode(BaseGameplayMode):
             allow_input=(role == "host"),
             allow_pulse=(not self._paused) and (not self._game_over_active),
         )
-        if self._perk_menu.active:
+        if self._level_up_menu_active:
             self._hud_fade_ms = 0.0
         else:
             self._hud_fade_ms = clamp(self._hud_fade_ms + float(dt_ui_ms), 0.0, PERK_MENU_TRANSITION_MS)
 
-        if self._perk_menu.active:
+        if self._level_up_menu_active:
             self._reset_lan_capture_clock()
             if self._death_transition_ready():
                 self._enter_game_over()
@@ -379,7 +413,7 @@ class SurvivalMode(BaseGameplayMode):
         return True
 
     def _lan_allow_frame_pop(self) -> bool:
-        return not self._perk_menu.active
+        return not self._level_up_menu_active
 
     def _lan_on_tick_applied(
         self,
@@ -407,7 +441,7 @@ class SurvivalMode(BaseGameplayMode):
                 ),
             )
 
-        if self._perk_menu.active:
+        if self._level_up_menu_active:
             return "stop_before_finalize"
 
         if self._death_transition_ready():
@@ -442,12 +476,12 @@ class SurvivalMode(BaseGameplayMode):
             dt_ui_ms=float(frame.dt_ui_ms),
             allow_pulse=(not self._paused) and (not self._game_over_active),
         )
-        if self._perk_menu.active:
+        if self._level_up_menu_active:
             self._hud_fade_ms = 0.0
         else:
             self._hud_fade_ms = clamp(self._hud_fade_ms + float(frame.dt_ui_ms), 0.0, PERK_MENU_TRANSITION_MS)
 
-        perk_menu_active = self._perk_menu.active
+        perk_menu_active = self._level_up_menu_active
         sim_dt = float(frame.dt) if ((not self._paused) and (not perk_menu_active)) else 0.0
         session = self._sim_session
         if self._lan_wait_gate_active():
@@ -479,7 +513,7 @@ class SurvivalMode(BaseGameplayMode):
         )
 
     def draw(self) -> None:
-        perk_menu_active = self._perk_menu.active
+        perk_menu_active = self._level_up_menu_active
         self._draw_world(
             draw_aim_indicators=(not self._game_over_active) and (not perk_menu_active),
             entity_alpha=self._world_entity_alpha(),
@@ -559,7 +593,7 @@ class SurvivalMode(BaseGameplayMode):
                 ctx=self._perk_menu_ui_context(),
                 pending_count=int(self.state.perk_selection.pending_count),
                 any_alive=self._any_player_alive(),
-                menu_active=self._perk_menu.active,
+                menu_active=self._level_up_menu_active,
                 config=self.config,
                 ui_text_width=self._ui_text_width,
                 text_color=UI_TEXT_COLOR,
@@ -568,6 +602,10 @@ class SurvivalMode(BaseGameplayMode):
             self._perk_menu.draw(
                 self._perk_menu_ui_context(),
                 perk_selection_prepared_choices(self.sim_world.players, self.state.perk_selection),
+            )
+            self._run_mod_menu.draw(
+                self._perk_menu_ui_context(),
+                run_mod_selection_prepared_choices(self.state.run_mod_selection),
             )
         if (not self._game_over_active) and perk_menu_active:
             self._draw_game_cursor()

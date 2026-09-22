@@ -338,10 +338,10 @@ class BonusPool:
                     )
 
             if not allow_without_magnet:
-                has_bonus_magnet = False
+                magnet_owner = None
                 if players:
-                    has_bonus_magnet = any(perk_active(player, PerkId.BONUS_MAGNET) for player in players)
-                if not has_bonus_magnet:
+                    magnet_owner = next((p for p in players if perk_active(p, PerkId.BONUS_MAGNET)), None)
+                if magnet_owner is None:
                     return None
                 # Rewrite-only: Bonus Magnet++ raises these gated odds from
                 # 1-in-10 to 1-in-5. Reinterprets the same single roll rather
@@ -350,7 +350,14 @@ class BonusPool:
                     perk_active(player, PerkId.BONUS_MAGNET_PLUS) for player in players
                 )
                 magnet_roll = rng.rand_tagged(RngCallerStatic.BONUS_TRY_SPAWN_ON_KILL_BONUS_MAGNET)
-                magnet_hit = (magnet_roll % 5 == 2) if has_bonus_magnet_plus else (magnet_roll % 10 == 2)
+                efficacy = float(magnet_owner.stats.perk_efficacy)
+                if efficacy == 1.0:
+                    magnet_hit = (magnet_roll % 5 == 2) if has_bonus_magnet_plus else (magnet_roll % 10 == 2)
+                else:
+                    # Not native: Perk Efficacy raises these odds further -
+                    # reinterprets the same roll over a finer (mod 100) range.
+                    base_percent = 20.0 if has_bonus_magnet_plus else 10.0
+                    magnet_hit = (magnet_roll % 100) < min(100, round(base_percent * efficacy))
                 if not magnet_hit:
                     return None
 
@@ -444,7 +451,9 @@ class BonusPool:
             # twice, both players gain shield, and both consume RNG).
             picked_now = False
             for player in players:
-                if _within_native_radius(entry.pos, player.pos, BONUS_PICKUP_RADIUS):
+                # Not native: run mods (crimson.run_mods.RunModId.PICKUP_RADIUS).
+                pickup_radius = BONUS_PICKUP_RADIUS * float(player.stats.pickup_radius_mult)
+                if _within_native_radius(entry.pos, player.pos, pickup_radius):
                     bonus_apply(
                         state,
                         player,

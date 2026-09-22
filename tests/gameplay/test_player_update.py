@@ -576,7 +576,7 @@ def test_player_update_angry_reloader_spawns_ring_at_half() -> None:
     player_update(player, PlayerInput(aim=Vec2(101.0, 100.0)), 0.2, state)
 
     owners = {entry.owner for entry in pool.entries if entry.active}
-    assert owners == {OwnerRef.from_local_player(0)}
+    assert owners == {OwnerRef.from_local_player(0).without_run_mod_affinity()}
     type_ids = _active_type_ids(pool)
     assert type_ids.count(int(ProjectileTemplateId.PLASMA_MINIGUN)) == 15
 
@@ -593,7 +593,7 @@ def test_player_update_man_bomb_spawns_8_projectiles_when_charged() -> None:
 
     assert state.bonus_spawn_guard
     owners = {entry.owner for entry in pool.entries if entry.active}
-    assert owners == {OwnerRef.from_local_player(0)}
+    assert owners == {OwnerRef.from_local_player(0).without_run_mod_affinity()}
     type_ids = _active_type_ids(pool)
     assert len(type_ids) == 8
     assert type_ids.count(int(ProjectileTemplateId.ION_MINIGUN)) == 4
@@ -668,7 +668,7 @@ def test_player_update_fire_cough_spawns_fire_bullet_projectile() -> None:
     player_update(player, PlayerInput(aim=Vec2(101.0, 100.0)), 0.1, state)
 
     owners = {entry.owner for entry in pool.entries if entry.active}
-    assert owners == {OwnerRef.from_local_player(0)}
+    assert owners == {OwnerRef.from_local_player(0).without_run_mod_affinity()}
     type_ids = _active_type_ids(pool)
     assert type_ids == [int(ProjectileTemplateId.FIRE_BULLETS)]
     assert [record.caller for record in rng.records_since()] == [
@@ -1614,7 +1614,7 @@ def test_player_update_hot_tempered_spawns_ring() -> None:
     player_update(player, PlayerInput(aim=Vec2(101.0, 100.0)), 0.08400000631809235, state)
 
     owners = {entry.owner for entry in pool.entries if entry.active}
-    assert owners == {OwnerRef.from_local_player(0)}
+    assert owners == {OwnerRef.from_local_player(0).without_run_mod_affinity()}
     type_ids = _active_type_ids(pool)
     assert len(type_ids) == 8
     assert type_ids.count(int(ProjectileTemplateId.PLASMA_MINIGUN)) == 4
@@ -1673,7 +1673,7 @@ def test_player_update_hot_tempered_converts_to_fire_bullets_when_active() -> No
     player_update(player, PlayerInput(aim=Vec2(101.0, 100.0)), 0.1, state, players=[player])
 
     owners = {entry.owner for entry in pool.entries if entry.active}
-    assert owners == {OwnerRef.from_local_player(0)}
+    assert owners == {OwnerRef.from_local_player(0).without_run_mod_affinity()}
     type_ids = _active_type_ids(pool)
     assert len(type_ids) == 8
     assert set(type_ids) == {int(ProjectileTemplateId.FIRE_BULLETS)}

@@ -67,14 +67,18 @@ def player_take_damage(
     if perk_active(perk_player, PerkId.DEATH_CLOCK):
         return 0.0
 
+    # Not native: Perk Efficacy scales most of the perks below at their own
+    # call site - see run_mods/ids.py's PERK_EFFICACY entry for the survey.
+    efficacy = float(perk_player.stats.perk_efficacy)
+
     damage_scaled = float(raw_damage)
     if player.weapon.reload_active:
         # Rewrite-only: Tough Reloader++ cuts reload-time damage further, from
-        # half down to a quarter.
+        # half down to a quarter. Efficacy deepens whichever cut is active.
         if perk_active(perk_player, PerkId.TOUGH_RELOADER_PLUS):
-            damage_scaled = x87_pc24_mul(damage_scaled, f32(0.25))
+            damage_scaled = x87_pc24_mul(damage_scaled, f32(0.25 / efficacy))
         elif perk_active(perk_player, PerkId.TOUGH_RELOADER):
-            damage_scaled = x87_pc24_mul(damage_scaled, f32(0.5))
+            damage_scaled = x87_pc24_mul(damage_scaled, f32(0.5 / efficacy))
     spread_heat_damage = float(damage_scaled)
 
     state.survival_reward_damage_seen = True
@@ -95,14 +99,15 @@ def player_take_damage(
     if perk_active(perk_player, PerkId.DESPERATION):
         missing_frac = max(0.0, 1.0 - float(perk_player.health) / 100.0)
         damage_scaled = float(
-            f32(float(damage_scaled) * (1.0 - DESPERATION_MAX_REDUCTION * missing_frac)),
+            f32(float(damage_scaled) * (1.0 - DESPERATION_MAX_REDUCTION * efficacy * missing_frac)),
         )
 
     # Rewrite-only: Ammo Shield - trades a flat ammo cost per hit for a cut to
     # that hit's damage. The ammo cost floors at 0 regardless, so running dry
     # doesn't cancel the damage reduction.
     if perk_active(perk_player, PerkId.AMMO_SHIELD):
-        damage_scaled = float(f32(float(damage_scaled) * (1.0 - AMMO_SHIELD_DAMAGE_REDUCTION)))
+        reduction = min(1.0, AMMO_SHIELD_DAMAGE_REDUCTION * efficacy)
+        damage_scaled = float(f32(float(damage_scaled) * (1.0 - reduction)))
         perk_player.weapon.ammo = max(0.0, float(perk_player.weapon.ammo) - AMMO_SHIELD_AMMO_COST)
 
     dodged = False
@@ -113,16 +118,39 @@ def player_take_damage(
             # independent "chance to dodge" rolls is 1 - (1-1/5)*(1-1/5) =
             # 9/25 - reinterprets one roll (mod 25) rather than drawing twice,
             # so the RNG stream still advances exactly once per hit either way.
-            dodged = (state.rng.rand_tagged(RngCallerStatic.PLAYER_TAKE_DAMAGE_NINJA) % 25) < 9
+            # Not native: Perk Efficacy raises this at efficacy != 1.0 by
+            # reinterpreting the same roll over a finer (mod 100) range - the
+            # exact mod-25 native shape is kept bit-for-bit at efficacy==1.0.
+            ninja_roll = state.rng.rand_tagged(RngCallerStatic.PLAYER_TAKE_DAMAGE_NINJA)
+            if efficacy == 1.0:
+                dodged = (ninja_roll % 25) < 9
+            else:
+                dodged = (ninja_roll % 100) < min(100, round(36.0 * efficacy))
         else:
-            dodged = (state.rng.rand_tagged(RngCallerStatic.PLAYER_TAKE_DAMAGE_NINJA) % 5) == 0
+            dodger_roll = state.rng.rand_tagged(RngCallerStatic.PLAYER_TAKE_DAMAGE_NINJA)
+            if efficacy == 1.0:
+                dodged = (dodger_roll % 5) == 0
+            else:
+                dodged = (dodger_roll % 100) < min(100, round(20.0 * efficacy))
     elif perk_active(perk_player, PerkId.DODGER):
-        dodged = (state.rng.rand_tagged(RngCallerStatic.PLAYER_TAKE_DAMAGE_DODGER) % 5) == 0
+        dodger_roll = state.rng.rand_tagged(RngCallerStatic.PLAYER_TAKE_DAMAGE_DODGER)
+        if efficacy == 1.0:
+            dodged = (dodger_roll % 5) == 0
+        else:
+            dodged = (dodger_roll % 100) < min(100, round(20.0 * efficacy))
 
     health_before = float(player.health)
     if not dodged:
         if perk_active(perk_player, PerkId.HIGHLANDER):
-            if (state.rng.rand_tagged(RngCallerStatic.PLAYER_TAKE_DAMAGE_HIGHLANDER) % 10) == 0:
+            # Not native: Perk Efficacy lowers this chance instead of raising
+            # it - a more "efficacious" Highlander means dying less often to
+            # its own gamble, not more.
+            highlander_roll = state.rng.rand_tagged(RngCallerStatic.PLAYER_TAKE_DAMAGE_HIGHLANDER)
+            if efficacy == 1.0:
+                highlander_death = (highlander_roll % 10) == 0
+            else:
+                highlander_death = (highlander_roll % 100) < min(100, round(10.0 / efficacy))
+            if highlander_death:
                 player.health = 0.0
         else:
             # Rewrite-only: Soul Tether's shield absorbs before health does.

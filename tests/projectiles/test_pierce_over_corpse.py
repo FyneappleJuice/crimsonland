@@ -12,7 +12,16 @@ from tests.support.factories import make_projectile_update_options
 
 
 class _KillingRuntime(DirectCreatureDamageRuntime):
-    def apply_creature_damage(self, ci: int, dmg: float, dtype: int, impulse: Vec2, owner: OwnerRef) -> None:  # noqa: ANN001
+    def apply_creature_damage(
+        self,
+        ci: int,
+        dmg: float,
+        dtype: int,
+        impulse: Vec2,
+        owner: OwnerRef,
+        *,
+        is_projectile_hit: bool = False,  # noqa: ARG002
+    ) -> None:  # noqa: ANN001
         c = self.creatures[int(ci)]
         c.hp -= float(dmg)
         if c.hp <= 0.0:
