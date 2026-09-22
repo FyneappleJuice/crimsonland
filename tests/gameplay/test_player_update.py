@@ -610,33 +610,20 @@ def test_player_update_angry_reloader_fires_on_a_sub_half_second_reload() -> Non
     assert type_ids.count(int(ProjectileTemplateId.PLASMA_MINIGUN)) == 7
 
 
-def test_player_update_man_bomb_spawns_8_projectiles_when_charged() -> None:
+def test_player_update_man_bomb_deals_no_projectiles_and_plays_nuke_sfx() -> None:
+    # Not native: Man Bomb reworked from an 8-way ion ring into an instant
+    # nuke - see tests/perks/test_man_bomb_perk.py for its actual AoE damage
+    # coverage. This just confirms player_update's own projectile-pool/sfx
+    # integration still reflects that (no projectiles, the new sfx pair).
     pool = ProjectilePool(size=32)
-    rng = ScriptedCrand(0, fallback=ScriptedCrand.Fallback.REPEAT_LAST)
-    state = GameplayState(projectiles=pool, rng=rng)
-    state.bonus_spawn_guard = True
+    state = GameplayState(projectiles=pool)
     player = PlayerState(index=0, pos=Vec2(100.0, 100.0), man_bomb_timer=3.9)
     player.perk_counts[int(PerkId.MAN_BOMB)] = 1
 
     player_update(player, PlayerInput(aim=Vec2(101.0, 100.0)), 0.2, state)
 
-    assert state.bonus_spawn_guard
-    owners = {entry.owner for entry in pool.entries if entry.active}
-    assert owners == {OwnerRef.from_local_player(0).without_run_mod_affinity()}
-    type_ids = _active_type_ids(pool)
-    assert len(type_ids) == 8
-    assert type_ids.count(int(ProjectileTemplateId.ION_MINIGUN)) == 4
-    assert type_ids.count(int(ProjectileTemplateId.ION_RIFLE)) == 4
-    assert [record.caller for record in rng.records_since()] == [
-        RngCallerStatic.PLAYER_UPDATE_MAN_BOMB_ION_MINIGUN_ANGLE,
-        RngCallerStatic.PLAYER_UPDATE_MAN_BOMB_ION_RIFLE_ANGLE,
-        RngCallerStatic.PLAYER_UPDATE_MAN_BOMB_ION_MINIGUN_ANGLE,
-        RngCallerStatic.PLAYER_UPDATE_MAN_BOMB_ION_RIFLE_ANGLE,
-        RngCallerStatic.PLAYER_UPDATE_MAN_BOMB_ION_MINIGUN_ANGLE,
-        RngCallerStatic.PLAYER_UPDATE_MAN_BOMB_ION_RIFLE_ANGLE,
-        RngCallerStatic.PLAYER_UPDATE_MAN_BOMB_ION_MINIGUN_ANGLE,
-        RngCallerStatic.PLAYER_UPDATE_MAN_BOMB_ION_RIFLE_ANGLE,
-    ]
+    assert pool.iter_active() == []
+    assert list(state.sfx_queue_quiet) == [SfxId.EXPLOSION_LARGE, SfxId.SHOCKWAVE]
 
 
 def test_player_update_perk_timers_keep_native_stored_cadence() -> None:
@@ -656,35 +643,24 @@ def test_player_update_perk_timers_keep_native_stored_cadence() -> None:
 
     player_update(player, input_state, 1.0 / 60.0, state)
 
-    assert len(pool.iter_active()) == 8
+    # Man Bomb no longer spawns projectiles (instant nuke instead) - the pool
+    # stays empty even on the trigger frame.
+    assert pool.iter_active() == []
     assert player.man_bomb_timer == 0.016663551330566406
     assert player.living_fortress_timer == 4.016663551330566
 
 
 def test_player_update_man_bomb_can_fire_on_large_moving_frame_then_resets() -> None:
     pool = ProjectilePool(size=32)
-    rng = ScriptedCrand(0, fallback=ScriptedCrand.Fallback.REPEAT_LAST)
-    state = GameplayState(projectiles=pool, rng=rng)
+    state = GameplayState(projectiles=pool)
     player = PlayerState(index=0, pos=Vec2(100.0, 100.0), man_bomb_timer=0.0)
     player.perk_counts[int(PerkId.MAN_BOMB)] = 1
 
     player_update(player, PlayerInput(move=Vec2(1.0, 0.0), aim=Vec2(101.0, 100.0)), 4.2, state)
 
-    type_ids = _active_type_ids(pool)
-    assert len(type_ids) == 8
-    assert type_ids.count(int(ProjectileTemplateId.ION_MINIGUN)) == 4
-    assert type_ids.count(int(ProjectileTemplateId.ION_RIFLE)) == 4
+    assert pool.iter_active() == []
+    assert list(state.sfx_queue_quiet) == [SfxId.EXPLOSION_LARGE, SfxId.SHOCKWAVE]
     assert player.man_bomb_timer == 0.0
-    assert [record.caller for record in rng.records_since()] == [
-        RngCallerStatic.PLAYER_UPDATE_MAN_BOMB_ION_MINIGUN_ANGLE,
-        RngCallerStatic.PLAYER_UPDATE_MAN_BOMB_ION_RIFLE_ANGLE,
-        RngCallerStatic.PLAYER_UPDATE_MAN_BOMB_ION_MINIGUN_ANGLE,
-        RngCallerStatic.PLAYER_UPDATE_MAN_BOMB_ION_RIFLE_ANGLE,
-        RngCallerStatic.PLAYER_UPDATE_MAN_BOMB_ION_MINIGUN_ANGLE,
-        RngCallerStatic.PLAYER_UPDATE_MAN_BOMB_ION_RIFLE_ANGLE,
-        RngCallerStatic.PLAYER_UPDATE_MAN_BOMB_ION_MINIGUN_ANGLE,
-        RngCallerStatic.PLAYER_UPDATE_MAN_BOMB_ION_RIFLE_ANGLE,
-    ]
 
 
 def test_player_update_fire_cough_spawns_fire_bullet_projectile() -> None:

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+
 from grim.sfx_map import SfxId
 
 from ...math_parity import NATIVE_QUARTER_PI, x87_pc24_add, x87_pc24_mul, x87_pc24_sub
@@ -28,9 +30,19 @@ def tick_hot_tempered(ctx: PlayerPerkTickCtx) -> None:
     owner = (
         ctx.owner_ref_for_player(ctx.player.index) if ctx.state.friendly_fire_enabled else OwnerRef.from_local_player(0)
     ).without_run_mod_affinity()
+    # Not native: the ring used to always start at world-space 0 degrees
+    # regardless of where the player was aiming. Rotate the whole ring so its
+    # first spoke faces the mouse instead of a fixed world direction. Uses
+    # this frame's raw aim (ctx.aim), not player.aim_heading - that field is
+    # only refreshed later in player_update, so it would still read last
+    # frame's value here.
+    aim_base_angle = math.atan2(
+        ctx.aim.y - ctx.player_pos_before_move.y,
+        ctx.aim.x - ctx.player_pos_before_move.x,
+    )
     for idx in range(8):
         type_id = ProjectileTemplateId.PLASMA_MINIGUN if ((idx & 1) == 0) else ProjectileTemplateId.PLASMA_RIFLE
-        angle = x87_pc24_mul(float(idx), NATIVE_QUARTER_PI)
+        angle = x87_pc24_add(aim_base_angle, x87_pc24_mul(float(idx), NATIVE_QUARTER_PI))
         ctx.projectile_spawn(
             ctx.state,
             players=ctx.players,

@@ -15,6 +15,11 @@ _SOFT_SFX_VOLUME: dict[SfxId, float] = {
     ARC_SOUND: ARC_SOUND_VOLUME,
 }
 
+# Fixed volume for the "quiet" one-shot sfx channel (Man Bomb, Explosive
+# Payload) - a flat scale regardless of which SfxId it's carrying, unlike
+# _SOFT_SFX_VOLUME's per-sound table.
+_QUIET_SFX_VOLUME = 0.5
+
 
 class AudioBridge:
     def __init__(
@@ -69,3 +74,6 @@ class _AudioBridgePresentationPlanRuntime(PresentationPlanRuntime):
 
     def play_soft_sfx(self, sfx: SfxId) -> None:
         self.bridge.router.play_sfx(sfx, volume_scale=_SOFT_SFX_VOLUME.get(sfx, BLADE_SOUND_VOLUME))
+
+    def play_sfx_quiet(self, sfx: SfxId) -> None:
+        self.bridge.router.play_sfx(sfx, volume_scale=_QUIET_SFX_VOLUME)

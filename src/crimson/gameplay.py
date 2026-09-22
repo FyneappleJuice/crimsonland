@@ -37,6 +37,7 @@ from .perks.helpers import perk_active
 from .perks.runtime.player_ticks import apply_player_perk_ticks
 from .perks.state import PerkEffectIntervals, PerkSelectionState
 from .run_mods.state import RunModSelectionState
+from .creatures.damage_runtime import CreatureDamageRuntime
 from .player_damage import PlayerDeathRuntime
 from .projectiles.runtime import (
     ProjectilePool,
@@ -136,6 +137,13 @@ class GameplayState(msgspec.Struct):
     # survival_check_level_up) but for the separate, per-run-only run-mod pool.
     run_mod_selection: RunModSelectionState = msgspec.field(default_factory=RunModSelectionState)
     sfx_queue: list[SfxId] = msgspec.field(default_factory=list)
+    # Not native: a second one-shot sfx queue, played at half volume (see
+    # world/audio_bridge.py's play_sfx_quiet) - Man Bomb's nuke and Explosive
+    # Payload's detonation use this instead of `sfx_queue` since their
+    # explosion cues were landing louder than intended, without touching
+    # every other source that shares the same SfxId (Rocket Launcher's fire
+    # sound, the native Nuke bonus, Final Revenge, ...).
+    sfx_queue_quiet: list[SfxId] = msgspec.field(default_factory=list)
     game_mode: GameMode = GameMode.SURVIVAL
     demo_mode_active: bool = False
     hardcore: bool = False
@@ -674,6 +682,7 @@ def player_update(
     creatures: Sequence[CreatureState] | None = None,
     spawn_slots: Sequence[SpawnSlotInit] | None = None,
     player_death_runtime: PlayerDeathRuntime | None = None,
+    creature_damage_runtime: CreatureDamageRuntime | None = None,
     reload_active_any: bool | None = None,
 ) -> None:
     """Port of `player_update` (0x004136b0) for the rewrite runtime."""
@@ -800,6 +809,9 @@ def player_update(
         owner_ref_for_player=_owner_ref_for_player,
         owner_ref_for_player_projectiles=_owner_ref_for_player_projectiles,
         projectile_spawn=_projectile_spawn,
+        aim=input_state.aim,
+        creatures=creatures,
+        creature_damage_runtime=creature_damage_runtime,
     )
 
     # Movement.
@@ -1051,12 +1063,21 @@ def player_update(
             player.weapon.reload_timer = next_timer
             if next_timer <= half:
                 count = 7 + int(player.weapon.reload_timer_max * 4.0)
+                # Not native: the ring used to always start at a fixed
+                # world-space angle regardless of aim - rotate it to face
+                # the mouse instead. Uses this frame's raw input aim, not
+                # player.aim_heading - that field is only refreshed later in
+                # player_update, so it would still read last frame's value here.
+                aim_base_angle = math.atan2(
+                    input_state.aim.y - player.pos.y,
+                    input_state.aim.x - player.pos.x,
+                )
                 state.bonus_spawn_guard = True
                 _spawn_projectile_ring(
                     state,
                     player.pos,
                     count=count,
-                    angle_offset=0.1,
+                    angle_offset=float(aim_base_angle) + 0.1,
                     type_id=ProjectileTemplateId.PLASMA_MINIGUN,
                     owner=_owner_ref_for_player_projectiles(state, player.index).without_run_mod_affinity(),
                     owner_player_index=player.index,

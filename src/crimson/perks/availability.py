@@ -14,13 +14,12 @@ def build_perk_availability(*, status: GameStatus | None) -> list[bool]:
     Not native: the mod's roguelite direction drops native quest-gated perk
     unlocks entirely - `status` is kept in the signature for existing callers
     but no longer gates anything here. `ANTIPERK` stays excluded - it's a
-    hidden placeholder, not real content. `ANXIOUS_LOADER` is disabled by
-    design decision (weak/unfun perk) - kept in the enum/tables so existing
-    picks in old saves/replays still resolve, just never offered again. The
-    four concrete masteries (`PERK_MASTERY_CONCRETE_IDS`) are excluded the
-    same way ANXIOUS_LOADER is - they're only reachable through
-    WEAPON_MASTERY's own resolution (perks/selection.py), never offered as
-    their own pool entry.
+    hidden placeholder, not real content. `ANXIOUS_LOADER` and `FINAL_REVENGE`
+    are disabled by design decision (weak/unfun, needs a rework) - kept in the
+    enum/tables so existing picks in old saves/replays still resolve, just
+    never offered again. The four concrete masteries (`PERK_MASTERY_CONCRETE_IDS`)
+    are excluded the same way - they're only reachable through WEAPON_MASTERY's
+    own resolution (perks/selection.py), never offered as their own pool entry.
     """
     _ = status
     available = [False] * PERK_COUNT_SIZE
@@ -28,6 +27,7 @@ def build_perk_availability(*, status: GameStatus | None) -> list[bool]:
         available[int(perk_id)] = True
     available[int(PerkId.ANTIPERK)] = False
     available[int(PerkId.ANXIOUS_LOADER)] = False
+    available[int(PerkId.FINAL_REVENGE)] = False
     for concrete_id in PERK_MASTERY_CONCRETE_IDS:
         available[int(concrete_id)] = False
     return available

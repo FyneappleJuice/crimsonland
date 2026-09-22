@@ -49,6 +49,10 @@ class DeterministicPresentationPlan(msgspec.Struct):
     # Not native: quiet, non-parity ambience (currently the Blade orbit whir).
     # Kept off `sfx` so it never enters replay checkpoint sfx streams.
     soft_sfx: list[SfxId] = msgspec.field(default_factory=list)
+    # Not native: one-shot event sfx played at a fixed reduced volume (Man
+    # Bomb's nuke, Explosive Payload's detonation) - unlike `soft_sfx` these
+    # are real gameplay events, just quieter than the shared SfxId's default.
+    sfx_quiet: list[SfxId] = msgspec.field(default_factory=list)
 
 
 class PresentationPlanRuntime(msgspec.Struct):
@@ -59,6 +63,10 @@ class PresentationPlanRuntime(msgspec.Struct):
         _ = sfx
 
     def play_soft_sfx(self, sfx: SfxId) -> None:
+        # Default: treat it like any other sfx.
+        self.play_sfx(sfx)
+
+    def play_sfx_quiet(self, sfx: SfxId) -> None:
         # Default: treat it like any other sfx.
         self.play_sfx(sfx)
 
@@ -383,6 +391,7 @@ def plan_world_presentation_step(
     game_tune_started: bool,
     trigger_game_tune: bool | None = None,
     hit_sfx: Sequence[SfxId] | None = None,
+    event_sfx_quiet: list[SfxId] | None = None,
 ) -> DeterministicPresentationPlan:
     commands = DeterministicPresentationPlan()
     if perk_progression_enabled and int(state.perk_selection.pending_count) > int(prev_perk_pending):
@@ -443,6 +452,8 @@ def plan_world_presentation_step(
     if pickups:
         commands.sfx.extend(SfxId.UI_BONUS for _ in pickups)
     commands.sfx.extend(event_sfx[:4])
+    if event_sfx_quiet:
+        commands.sfx_quiet.extend(event_sfx_quiet[:4])
     return commands
 
 
@@ -460,3 +471,5 @@ def apply_presentation_plan(
         runtime.play_sfx(sfx)
     for sfx in plan.soft_sfx:
         runtime.play_soft_sfx(sfx)
+    for sfx in plan.sfx_quiet:
+        runtime.play_sfx_quiet(sfx)

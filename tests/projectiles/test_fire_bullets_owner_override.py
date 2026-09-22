@@ -114,7 +114,11 @@ def test_nuke_fire_bullets_default_is_owner_scoped_but_still_converts_for_owner(
     assert set(owner_types) == {int(ProjectileTemplateId.FIRE_BULLETS)}
 
 
-def test_hot_tempered_and_man_bomb_fire_bullets_default_are_owner_scoped() -> None:
+def test_hot_tempered_fire_bullets_default_is_owner_scoped() -> None:
+    # Not native: Man Bomb used to be covered here too, but it was reworked
+    # into an instant nuke (direct AoE damage, no projectiles at all) - it no
+    # longer goes through projectile_spawn, so Fire Bullets' override has
+    # nothing left to apply to for it.
     state = GameplayState()
     player0 = PlayerState(index=0, pos=Vec2(100.0, 100.0), fire_bullets_timer=1.0)
     player1 = PlayerState(index=1, pos=Vec2(120.0, 100.0), fire_bullets_timer=0.0, hot_tempered_timer=1.95)
@@ -131,20 +135,3 @@ def test_hot_tempered_and_man_bomb_fire_bullets_default_are_owner_scoped() -> No
     hot_types_owner = _active_type_ids(state)
     assert hot_types_owner
     assert set(hot_types_owner) == {int(ProjectileTemplateId.FIRE_BULLETS)}
-
-    state = GameplayState()
-    player0 = PlayerState(index=0, pos=Vec2(100.0, 100.0), fire_bullets_timer=1.0)
-    player1 = PlayerState(index=1, pos=Vec2(120.0, 100.0), fire_bullets_timer=0.0, man_bomb_timer=3.9)
-    player1.perk_counts[int(PerkId.MAN_BOMB)] = 1
-    player_update(state=state, player=player1, input_state=PlayerInput(aim=Vec2(121.0, 100.0)), dt=0.2, players=[player0, player1])
-    man_bomb_types_non_owner = _active_type_ids(state)
-    assert int(ProjectileTemplateId.FIRE_BULLETS) not in man_bomb_types_non_owner
-
-    state = GameplayState()
-    player0 = PlayerState(index=0, pos=Vec2(100.0, 100.0), fire_bullets_timer=0.0)
-    player1 = PlayerState(index=1, pos=Vec2(120.0, 100.0), fire_bullets_timer=1.0, man_bomb_timer=3.9)
-    player1.perk_counts[int(PerkId.MAN_BOMB)] = 1
-    player_update(state=state, player=player1, input_state=PlayerInput(aim=Vec2(121.0, 100.0)), dt=0.2, players=[player0, player1])
-    man_bomb_types_owner = _active_type_ids(state)
-    assert man_bomb_types_owner
-    assert set(man_bomb_types_owner) == {int(ProjectileTemplateId.FIRE_BULLETS)}

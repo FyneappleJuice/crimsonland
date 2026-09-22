@@ -149,17 +149,18 @@ def draw_player_status(
             rl.Color(60, 150, 255, int(210 * a)),
         )
 
-    # Not native: Harvester's Scythe - a brief green pulse flaring outward off
-    # the ring on every crit heal. The heal itself is only 0.5 HP, invisible
+    # Not native: Harvester's Scythe - a small green glow at the player's
+    # center on every crit heal. The heal itself is only 0.5 HP, invisible
     # against a 100-HP ring on its own, so this is the only feedback the
     # player gets that the perk actually did something.
     flash = float(player.harvester_scythe_flash_timer)
     if flash > 0.0:
         flash_t = clamp(flash / HARVESTER_SCYTHE_FLASH_DURATION, 0.0, 1.0)
-        glow_out = r_out + 6.0 * float(scale) * flash_t
-        rl.draw_ring(
-            center, r_in, glow_out, 0.0, 360.0, _RING_SEGMENTS,
-            rl.Color(90, 235, 130, int(200 * flash_t * a)),
+        glow_r = 10.0 * float(scale) * flash_t
+        rl.draw_circle_gradient(
+            center, glow_r,
+            rl.Color(140, 255, 170, int(200 * flash_t * a)),
+            rl.Color(90, 235, 130, 0),
         )
 
     # Not native: Overdue - a pulsing gold glow for the whole bonus-crit-
@@ -172,11 +173,11 @@ def draw_player_status(
     if overdue_window > 0.0:
         pulse_speed = 20.0 if overdue_window <= 1.5 else 10.0
         pulse = math.sin(float(rl.get_time()) * pulse_speed) * 0.5 + 0.5
-        glow_out = r_out + (5.0 + 3.0 * pulse) * float(scale)
-        glow_alpha = 0.5 + 0.5 * pulse
+        glow_out = r_out + (2.5 + 1.5 * pulse) * float(scale)
+        glow_alpha = 0.3 + 0.25 * pulse
         rl.draw_ring(
             center, r_in, glow_out, 0.0, 360.0, _RING_SEGMENTS,
-            rl.Color(255, 190, 40, int(210 * glow_alpha * a)),
+            rl.Color(255, 190, 40, int(140 * glow_alpha * a)),
         )
 
     # Current clip ammo, upper-right of the player.

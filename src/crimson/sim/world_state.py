@@ -63,6 +63,8 @@ class WorldEvents(msgspec.Struct):
     secondary_hit_count: int = 0
     trigger_game_tune: bool = False
     hit_sfx: list[SfxId] = msgspec.field(default_factory=list)
+    # Not native: half-volume one-shot sfx (see GameplayState.sfx_queue_quiet).
+    sfx_quiet: list[SfxId] = msgspec.field(default_factory=list)
 
 
 class WorldMidStepRuntime(msgspec.Struct):
@@ -87,6 +89,7 @@ class _WorldStepRuntime(ProjectileHitRuntime, CreatureDamageRuntime, PlayerDeath
     sfx: list[SfxId]
     trigger_game_tune: bool = False
     hit_sfx: list[SfxId] = msgspec.field(default_factory=list)
+    sfx_quiet: list[SfxId] = msgspec.field(default_factory=list)
 
     def apply_player_projectile_damage(self, player_index: int, damage: float) -> None:
         idx = int(player_index)
@@ -262,6 +265,7 @@ class _WorldStepRuntime(ProjectileHitRuntime, CreatureDamageRuntime, PlayerDeath
             sfx=self.sfx,
             trigger_game_tune=bool(self.trigger_game_tune),
             hit_sfx=self.hit_sfx,
+            sfx_quiet=self.sfx_quiet,
         )
 
 
@@ -428,6 +432,7 @@ class WorldState(msgspec.Struct):
                 creatures=self.creatures.entries,
                 spawn_slots=self.creatures.spawn_slots,
                 player_death_runtime=step_runtime,
+                creature_damage_runtime=step_runtime,
                 reload_active_any=bool(reload_active_any),
             )
             player_dt = player_frame_dt_after_roundtrip(
@@ -512,6 +517,9 @@ class WorldState(msgspec.Struct):
         if self.state.sfx_queue:
             step_runtime.sfx.extend(self.state.sfx_queue)
             self.state.sfx_queue.clear()
+        if self.state.sfx_queue_quiet:
+            step_runtime.sfx_quiet.extend(self.state.sfx_queue_quiet)
+            self.state.sfx_queue_quiet.clear()
         return step_runtime.build_events(
             hits=hits,
             secondary_hit_count=int(secondary_hit_count),

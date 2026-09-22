@@ -461,8 +461,10 @@ class ProjectilePool:
                     rng=rng,
                     detail_preset=int(detail_preset),
                 )
-            if sfx_queue is not None:
-                sfx_queue.append(SfxId.EXPLOSION_MEDIUM)
+            # Not native: half volume (sfx_queue_quiet) - this can retrigger on
+            # every shot while the powerup is active, which got loud fast at
+            # the default level.
+            runtime_state.sfx_queue_quiet.append(SfxId.EXPLOSION_MEDIUM)
 
         def _maybe_ion_overload_on_hit(proj: Projectile) -> None:
             """Ion Overload bonus (not native): bloom the charged bolt on hit.

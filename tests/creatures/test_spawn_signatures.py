@@ -57,11 +57,13 @@ def test_spawn_signature_phase1_perks_and_bonuses() -> None:
 
     pool.reset()
 
-    # Man Bomb.
+    # Man Bomb - reworked into an instant nuke (direct AoE damage, no
+    # projectiles spawned at all); see tests/perks/test_man_bomb_perk.py for
+    # its actual damage coverage.
     player = PlayerState(index=0, pos=Vec2(100.0, 100.0), man_bomb_timer=3.9)
     player.perk_counts[int(PerkId.MAN_BOMB)] = 1
     player_update(player, PlayerInput(aim=Vec2(101.0, 100.0)), 0.2, state)
-    assert _signature(pool) == Counter({int(ProjectileTemplateId.ION_RIFLE): 4, int(ProjectileTemplateId.ION_MINIGUN): 4})
+    assert _signature(pool) == Counter()
 
     pool.reset()
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from crimson.creatures.damage import creature_apply_damage
+from crimson.creatures.damage_runtime import DirectCreatureDamageRuntime
 from crimson.creatures.damage_types import CreatureDamageType
 from crimson.creatures.runtime import CreatureState
 from crimson.creatures.spawn import CreatureFlags
@@ -233,16 +234,38 @@ def test_diamond_flask_power_scales_with_efficacy() -> None:
 # --- proc-damage perks (Perk Efficacy is their only new boost) ------------
 
 
-def test_man_bomb_projectiles_carry_perk_efficacy_damage_mult() -> None:
-    pool = ProjectilePool(size=32)
-    state = GameplayState(projectiles=pool, rng=ScriptedCrand(0, fallback=ScriptedCrand.Fallback.REPEAT_LAST))
-    player = _player_with(perks={PerkId.MAN_BOMB: 1}, efficacy_stacks=1, man_bomb_timer=3.9)
+def test_man_bomb_nuke_damage_scales_with_perk_efficacy() -> None:
+    # Not native: Man Bomb was reworked from an 8-way ion-projectile ring
+    # into an instant nuke (direct AoE damage) - Perk Efficacy now scales
+    # that damage directly instead of a per-projectile perk_damage_mult.
+    def _damage_dealt(efficacy_stacks: int) -> float:
+        # _player_with always spawns at Vec2() - place the creature nearby instead.
+        player = _player_with(perks={PerkId.MAN_BOMB: 1}, efficacy_stacks=efficacy_stacks, man_bomb_timer=3.9)
+        creature = CreatureState(
+            active=True,
+            hp=1000.0,
+            max_hp=1000.0,
+            size=20.0,
+            pos=Vec2(50.0, 0.0),
+            flags=CreatureFlags(0),
+        )
+        damage_runtime = DirectCreatureDamageRuntime(creatures=[creature])
+        state = GameplayState()
+        player_update(
+            player,
+            PlayerInput(aim=Vec2(1.0, 0.0)),
+            0.2,
+            state,
+            players=[player],
+            creatures=[creature],
+            creature_damage_runtime=damage_runtime,
+        )
+        return 1000.0 - float(creature.hp)
 
-    player_update(player, PlayerInput(aim=Vec2(101.0, 100.0)), 0.2, state)
-
-    active = [entry for entry in pool.entries if entry.active]
-    assert len(active) == 8
-    assert all(entry.perk_damage_mult == pytest.approx(1.05) for entry in active)
+    base = _damage_dealt(0)
+    boosted = _damage_dealt(1)
+    assert base > 0.0
+    assert boosted == pytest.approx(base * 1.05)
 
 
 def test_angry_reloader_ring_carries_perk_efficacy_damage_mult() -> None:

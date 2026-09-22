@@ -79,6 +79,11 @@ _FLAME_PARTICLE_MAX_TARGETS = 8
 # AoE radius are all unchanged, so the particles just fly further/faster.
 _FLAME_PARTICLE_RANGE_MULT = 1.5
 
+# Not native: spawn_explosion_burst's ring/puff/flash layers all ported at
+# alpha 1.0 - dialed down a bit so the burst reads as more transparent
+# instead of a fully solid flash.
+_EXPLOSION_BURST_ALPHA = 0.7
+
 def _native_particle_velocity(angle: float, speed: float) -> Vec2:
     angle_f32 = f32(angle)
     return Vec2(
@@ -1215,6 +1220,8 @@ class EffectPool:
         scale = float(scale)
 
         # Shockwave ring.
+        # Not native: alpha nudged down from the ported 1.0 to _EXPLOSION_BURST_ALPHA
+        # - the owner found the full-opacity native value read too solid/heavy.
         self.spawn(
             effect_id=int(EffectId.RING),
             pos=pos,
@@ -1226,7 +1233,7 @@ class EffectPool:
             age=-0.1,
             lifetime=0.35,
             flags=0x19,
-            color=RGBA(0.6, 0.6, 0.6, 1.0),
+            color=RGBA(0.6, 0.6, 0.6, _EXPLOSION_BURST_ALPHA),
             rotation_step=0.0,
             scale_step=scale * 25.0,
             detail_preset=detail_preset,
@@ -1254,7 +1261,7 @@ class EffectPool:
                     age=float(age),
                     lifetime=float(lifetime),
                     flags=0x5D,
-                    color=RGBA(0.1, 0.1, 0.1, 1.0),
+                    color=RGBA(0.1, 0.1, 0.1, _EXPLOSION_BURST_ALPHA),
                     rotation_step=1.4,
                     scale_step=scale * 5.0,
                     detail_preset=detail_preset,
@@ -1272,7 +1279,7 @@ class EffectPool:
             age=0.0,
             lifetime=0.3,
             flags=0x19,
-            color=RGBA(1.0, 1.0, 1.0, 1.0),
+            color=RGBA(1.0, 1.0, 1.0, _EXPLOSION_BURST_ALPHA),
             rotation_step=0.0,
             scale_step=scale * 45.0,
             detail_preset=detail_preset,

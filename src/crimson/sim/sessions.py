@@ -604,6 +604,7 @@ class DeterministicSession(msgspec.Struct):
             hits=events.hits,
             pickups=events.pickups,
             event_sfx=events.sfx,
+            event_sfx_quiet=events.sfx_quiet,
             prev_audio=prev_audio,
             prev_perk_pending=prev_perk_pending,
             game_mode=self.game_mode,

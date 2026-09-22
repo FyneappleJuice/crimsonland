@@ -265,12 +265,13 @@ def test_perk_bursts_play_explosion_small_sfx(mocker) -> None:
     player = world.sim_world.players[0]
     aim = PlayerInput(aim=Vec2(player.pos.x + 1.0, player.pos.y))
 
+    # Man Bomb was reworked into a nuke - EXPLOSION_LARGE + SHOCKWAVE, not
+    # the small-burst sfx the rest of this test's perks play.
     play_sfx.reset_mock()
     player.perk_counts[int(PerkId.MAN_BOMB)] = 1
     player.man_bomb_timer = 3.9
     world.step_survival_frame(0.2, inputs=[aim], perk_progression_enabled=False)
-    play_sfx.assert_called_once()
-    assert play_sfx.call_args.args[1] == SfxId.EXPLOSION_SMALL
+    assert [call.args[1] for call in play_sfx.call_args_list] == [SfxId.EXPLOSION_LARGE, SfxId.SHOCKWAVE]
 
     play_sfx.reset_mock()
     player.perk_counts[int(PerkId.MAN_BOMB)] = 0

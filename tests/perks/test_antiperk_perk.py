@@ -19,7 +19,7 @@ def test_antiperk_is_excluded_by_availability_not_offer_predicate() -> None:
 def test_every_perk_is_unlocked_regardless_of_quest_progress() -> None:
     # Not native: the mod drops quest-gated perk unlocks entirely.
     available = build_perk_availability(status=None)
-    disabled = {PerkId.ANTIPERK, PerkId.ANXIOUS_LOADER} | PERK_MASTERY_CONCRETE_IDS
+    disabled = {PerkId.ANTIPERK, PerkId.ANXIOUS_LOADER, PerkId.FINAL_REVENGE} | PERK_MASTERY_CONCRETE_IDS
     for perk_id in PERK_BY_ID:
         if perk_id in disabled:
             assert not available[int(perk_id)]
