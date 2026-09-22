@@ -22,7 +22,6 @@ from ..math_parity import (
 )
 from ..perks import PerkId
 from ..perks.helpers import perk_active
-from ..perks.impl.harvester_scythe import harvester_scythe_on_crit
 from ..perks.impl.pendulum import pendulum_damage_mult, pendulum_fire_rate_mult
 from ..progression import refresh_player_stats
 from ..player_damage import PlayerDeathRuntime
@@ -62,9 +61,11 @@ WEAPON_COUNT_SIZE = max(int(entry.weapon_id) for entry in WEAPON_TABLE) + 1
 
 # Rewrite-only: Death Wish / Overdue tuning (health is a 0-100 value).
 DEATH_WISH_HEALTH_THRESHOLD = 15.0
-OVERDUE_STREAK_THRESHOLD = 5
+OVERDUE_STREAK_THRESHOLD = 10
 OVERDUE_WINDOW_DURATION = 5.0  # seconds the bonus stays up once the streak triggers it
-OVERDUE_BONUS_CRIT_MULT = 1.0  # added to CRIT_MULTIPLIER on every crit during the window
+# The damage bonus itself (OVERDUE_BONUS_DAMAGE, flat +damage% to every hit -
+# not just crits) lives in creatures/damage.py, next to Adrenaline Rush's
+# equivalent constant - this module only owns the streak/window mechanics.
 
 # Rewrite-only: Free Rounds - a private per-shot roll (build variance, not run
 # state, same reasoning as crit.py's own private RNG) for skipping this shot's
@@ -439,15 +440,18 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
     death_wish_force_crit = perk_active(perk_player, PerkId.DEATH_WISH) and float(
         player.health,
     ) <= DEATH_WISH_HEALTH_THRESHOLD * crit_perk_efficacy
-    overdue_bonus_crit_mult = 0.0
     if perk_active(perk_player, PerkId.OVERDUE):
-        if int(player.overdue_streak) >= OVERDUE_STREAK_THRESHOLD:
-            # Streak just broke the threshold: open (or refresh) the window
-            # instead of boosting only this one roll.
+        # Not native: can't retrigger/refresh while already open - the streak
+        # itself is frozen for the window's duration (projectile_pool.py's
+        # on-hit resolution skips updating it while overdue_window_timer > 0),
+        # so this can never actually see streak >= threshold mid-window; the
+        # explicit timer check just makes that guarantee obvious here too.
+        # The actual damage bonus is applied in creatures/damage.py, keyed
+        # off this same overdue_window_timer - nothing more to do here once
+        # the window is open.
+        if float(player.overdue_window_timer) <= 0.0 and int(player.overdue_streak) >= OVERDUE_STREAK_THRESHOLD:
             player.overdue_streak = 0
             player.overdue_window_timer = OVERDUE_WINDOW_DURATION * crit_perk_efficacy
-        if float(player.overdue_window_timer) > 0.0:
-            overdue_bonus_crit_mult = OVERDUE_BONUS_CRIT_MULT * crit_perk_efficacy
 
     # Rewrite-only: Pendulum's damage-phase bonus, baked into crit_mult
     # alongside the crit roll below so it applies regardless of crit outcome.
@@ -517,17 +521,24 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
                 pellet_crit_mult, pellet_did_crit = roll_primary_crit(
                     weapon_id,
                     force_crit=death_wish_force_crit,
-                    bonus_crit_mult=overdue_bonus_crit_mult,
                     lucky_power=diamond_flask_power,
                     increased_chance=float(perk_player.stats.crit_chance),
+                    # Not native: was missing here (every other roll_crit_mult
+                    # call site already passes it) - the primary weapon's own
+                    # crit was silently ignoring the secondary "Crit
+                    # Multiplier" run-mod bucket and always using the flat
+                    # CRIT_MULTIPLIER default instead of the player's actual
+                    # stats.crit_mult.
+                    crit_mult=float(perk_player.stats.crit_mult),
                 )
                 state.projectiles.entries[int(proj_id)].crit_mult = pellet_crit_mult * pendulum_dmg_mult
                 state.projectiles.entries[int(proj_id)].did_crit = pellet_did_crit
-                if pellet_did_crit:
-                    player.overdue_streak = 0
-                    harvester_scythe_on_crit(player)
-                else:
-                    player.overdue_streak = int(player.overdue_streak) + 1
+                # Not native: Overdue's streak and Harvester's Scythe's heal
+                # used to update right here, at spawn time - but that counted
+                # every shot fired, including ones that hit nothing. Both now
+                # resolve at the actual hit (projectiles/runtime/projectile_pool.py,
+                # alongside Cold Snap's own on-hit crit check) so a whiffed
+                # crit neither breaks nor extends either perk.
                 if weapon_id == WeaponId.TENET_GUN:
                     state.projectiles.entries[int(proj_id)].tenet_reverse = True
                 if explosive_payload_active and pellet_index == explosive_pellet_index:

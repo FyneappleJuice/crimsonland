@@ -15,6 +15,7 @@ from ..impl.fatal_lottery import HOOKS as FATAL_LOTTERY_HOOKS
 from ..impl.final_revenge import HOOKS as FINAL_REVENGE_HOOKS
 from ..impl.fire_cough import HOOKS as FIRE_COUGH_HOOKS
 from ..impl.grim_deal import HOOKS as GRIM_DEAL_HOOKS
+from ..impl.harvester_scythe import HOOKS as HARVESTER_SCYTHE_HOOKS
 from ..impl.hit_list import HOOKS as HIT_LIST_HOOKS
 from ..impl.hollow_form import HOOKS as HOLLOW_FORM_HOOKS
 from ..impl.hot_tempered import HOOKS as HOT_TEMPERED_HOOKS
@@ -75,6 +76,7 @@ PERK_HOOKS_IN_ORDER: tuple[PerkHooks, ...] = (
     SOUL_TETHER_HOOKS,
     HIT_LIST_HOOKS,
     DELICATE_WATCH_HOOKS,
+    HARVESTER_SCYTHE_HOOKS,
 )
 
 

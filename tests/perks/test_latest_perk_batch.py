@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from crimson.creatures.damage import creature_apply_damage
 from crimson.creatures.damage_types import CreatureDamageType
 from crimson.creatures.rarity import MonsterRarity
@@ -11,6 +13,7 @@ from crimson.perks.impl.harvester_scythe import HARVESTER_SCYTHE_HEAL_PER_CRIT, 
 from crimson.perks.impl.hit_list import HIT_LIST_BONUS_PER_KILL, HIT_LIST_MAX_BONUS, update_hit_list_mark
 from crimson.perks.ids import PerkId
 from crimson.perks.runtime.effects_context import PerksUpdateEffectsCtx
+from crimson.projectiles.runtime import PrimaryStepCtx
 from crimson.sim.input import PlayerInput
 from crimson.sim.state_types import PlayerState
 from crimson.weapon_runtime import WeaponFireCtx, fire_weapon
@@ -19,6 +22,7 @@ from crimson.weapon_runtime.fire import DEATH_WISH_HEALTH_THRESHOLD
 from crimson.weapons import WeaponId
 from grim.geom import Vec2
 from grim.rand import Crand
+from tests.support.factories import make_creature_state, make_projectile_update_options
 from tests.support.helpers import assert_float_close
 
 # --- The Hit List ----------------------------------------------------------
@@ -207,11 +211,13 @@ def test_harvester_scythe_clamps_at_full_health() -> None:
 
 
 def test_harvester_scythe_heals_through_a_real_forced_crit_shot() -> None:
-    # Integration check that the heal is actually wired into fire_weapon's
-    # crit resolution, not just callable in isolation: force every shot to
-    # crit via Death Wish's low-health threshold.
+    # Integration check that the heal is actually wired into the crit
+    # resolution path - not just callable in isolation - and specifically
+    # that it fires on an actual HIT (projectile_pool.py), not merely on a
+    # shot being fired: force every shot to crit via Death Wish's low-health
+    # threshold, then simulate the bolt actually connecting with a creature.
     state = GameplayState()
-    player = PlayerState(index=0, pos=Vec2(), health=DEATH_WISH_HEALTH_THRESHOLD)
+    player = PlayerState(index=0, pos=Vec2(0.0, 0.0), health=DEATH_WISH_HEALTH_THRESHOLD)
     player.perk_counts[int(PerkId.DEATH_WISH)] = 1
     player.perk_counts[int(PerkId.HARVESTER_SCYTHE)] = 1
     weapon_assign_player(player, WeaponId.PISTOL, state=state)
@@ -220,11 +226,74 @@ def test_harvester_scythe_heals_through_a_real_forced_crit_shot() -> None:
     fire_weapon(
         WeaponFireCtx(
             player=player,
-            input_state=PlayerInput(fire_down=True, aim=Vec2(1.0, 0.0)),
+            input_state=PlayerInput(fire_down=True, aim=Vec2(20.0, 0.0)),
             dt=0.0,
             state=state,
             players=[player],
         ),
     )
 
+    # A whiffed crit (nothing in the bolt's path) must NOT heal.
+    for _ in range(5):
+        state.projectiles.step(
+            PrimaryStepCtx(dt=0.1, creatures=[], options=make_projectile_update_options(runtime_state=state, players=[player])),
+        )
+    assert player.health == health_before
+
+    weapon_assign_player(player, WeaponId.PISTOL, state=state)  # fresh ammo/cooldown for a second shot
+    fire_weapon(
+        WeaponFireCtx(
+            player=player,
+            input_state=PlayerInput(fire_down=True, aim=Vec2(20.0, 0.0)),
+            dt=0.0,
+            state=state,
+            players=[player],
+        ),
+    )
+    creature = make_creature_state(pos=Vec2(20.0, 0.0), size=200.0)
+    creature.hp = 1000.0
+    creature.max_hp = 1000.0
+    for _ in range(10):
+        state.projectiles.step(
+            PrimaryStepCtx(dt=0.1, creatures=[creature], options=make_projectile_update_options(runtime_state=state, players=[player])),
+        )
+        if player.health > health_before:
+            break
+
     assert player.health > health_before
+
+
+def test_harvester_scythe_crit_opens_the_flash_window() -> None:
+    from crimson.perks.impl.harvester_scythe import HARVESTER_SCYTHE_FLASH_DURATION
+
+    player = PlayerState(index=0, pos=Vec2(), health=50.0)
+    player.perk_counts[int(PerkId.HARVESTER_SCYTHE)] = 1
+    assert player.harvester_scythe_flash_timer == 0.0
+
+    harvester_scythe_on_crit(player)
+
+    assert player.harvester_scythe_flash_timer == HARVESTER_SCYTHE_FLASH_DURATION
+
+
+def test_harvester_scythe_flash_counts_down_via_effects_step() -> None:
+    from crimson.perks.impl.harvester_scythe import (
+        HARVESTER_SCYTHE_FLASH_DURATION,
+        update_harvester_scythe_flash,
+    )
+
+    state = GameplayState()
+    player = PlayerState(index=0, pos=Vec2(), health=50.0)
+    player.perk_counts[int(PerkId.HARVESTER_SCYTHE)] = 1
+    harvester_scythe_on_crit(player)
+
+    ctx = PerksUpdateEffectsCtx(state=state, players=[player], dt=0.016, creatures=None, fx_queue=None)
+    update_harvester_scythe_flash(ctx)
+
+    # f32 (not double) rounding throughout x87_pc24_sub - loose tolerance.
+    assert player.harvester_scythe_flash_timer == pytest.approx(HARVESTER_SCYTHE_FLASH_DURATION - 0.016, abs=1e-5)
+
+    # Long enough dt floors it at 0, never negative.
+    ctx = PerksUpdateEffectsCtx(state=state, players=[player], dt=10.0, creatures=None, fx_queue=None)
+    update_harvester_scythe_flash(ctx)
+
+    assert player.harvester_scythe_flash_timer == 0.0

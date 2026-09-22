@@ -25,6 +25,7 @@ from ...bonuses.ids import BonusId
 from ...perks.helpers import perk_active
 from ...perks.ids import PerkId
 from ...perks.impl.delicate_watch import DELICATE_WATCH_BREAK_THRESHOLD
+from ...perks.impl.harvester_scythe import HARVESTER_SCYTHE_FLASH_DURATION
 from ...sim.state_types import PlayerState
 from ...weapon_runtime.fire import DEATH_WISH_HEALTH_THRESHOLD
 from .bonus_icons import (
@@ -146,6 +147,36 @@ def draw_player_status(
         rl.draw_ring(
             center, r_in, r_out, shield_start, shield_end, _RING_SEGMENTS,
             rl.Color(60, 150, 255, int(210 * a)),
+        )
+
+    # Not native: Harvester's Scythe - a brief green pulse flaring outward off
+    # the ring on every crit heal. The heal itself is only 0.5 HP, invisible
+    # against a 100-HP ring on its own, so this is the only feedback the
+    # player gets that the perk actually did something.
+    flash = float(player.harvester_scythe_flash_timer)
+    if flash > 0.0:
+        flash_t = clamp(flash / HARVESTER_SCYTHE_FLASH_DURATION, 0.0, 1.0)
+        glow_out = r_out + 6.0 * float(scale) * flash_t
+        rl.draw_ring(
+            center, r_in, glow_out, 0.0, 360.0, _RING_SEGMENTS,
+            rl.Color(90, 235, 130, int(200 * flash_t * a)),
+        )
+
+    # Not native: Overdue - a pulsing gold glow for the whole bonus-crit-
+    # damage window (player.overdue_window_timer > 0), not just a proc flash.
+    # Its uptime genuinely varies by weapon (near-100% on fast weapons, ~81%
+    # on Cannon-class), so unlike a one-off proc this needs to read as an
+    # ongoing state the player can watch. Flickers faster under 1.5s left as
+    # an expiry warning.
+    overdue_window = float(player.overdue_window_timer)
+    if overdue_window > 0.0:
+        pulse_speed = 20.0 if overdue_window <= 1.5 else 10.0
+        pulse = math.sin(float(rl.get_time()) * pulse_speed) * 0.5 + 0.5
+        glow_out = r_out + (5.0 + 3.0 * pulse) * float(scale)
+        glow_alpha = 0.5 + 0.5 * pulse
+        rl.draw_ring(
+            center, r_in, glow_out, 0.0, 360.0, _RING_SEGMENTS,
+            rl.Color(255, 190, 40, int(210 * glow_alpha * a)),
         )
 
     # Current clip ammo, upper-right of the player.

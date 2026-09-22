@@ -80,14 +80,13 @@ def roll_primary_crit(
     weapon_id: WeaponId,
     *,
     force_crit: bool = False,
-    bonus_crit_mult: float = 0.0,
     lucky_power: float = 0.0,
     increased_chance: float = 0.0,
     crit_mult: float = CRIT_MULTIPLIER,
 ) -> tuple[float, bool]:
     """Like `roll_crit_mult`, but also reports whether this particular roll
     crit (needed by perks that react to a real crit landing, e.g. Cold Snap's
-    freeze) and lets a caller force/boost the roll (Death Wish, Overdue).
+    freeze) and lets a caller force the roll (Death Wish).
 
     `lucky_power` (Diamond Flask, `DIAMOND_FLASK_BASE_POWER` scaled by Perk
     Efficacy) raises the crit chance to `1 - (1-chance)^lucky_power` - the
@@ -96,6 +95,10 @@ def roll_primary_crit(
     number. 0.0 = off (plain single roll). No compensation math needed here -
     see the module docstring; the unbuffed baseline is already neutral before
     any of these bonuses apply.
+
+    Overdue's window bonus is *not* threaded through here any more - it grants
+    flat +damage% to every hit (creatures/damage.py's OVERDUE_BONUS_DAMAGE),
+    not a crit-multiplier boost, so it no longer needs a crit-roll-time hook.
 
     Scoped to the player's own direct trigger-pull (fire.py's primary pellet
     loop) only - not threaded through every crit call site, since none of the
@@ -107,12 +110,12 @@ def roll_primary_crit(
         effective_chance = 1.0 - (1.0 - chance) ** lucky_power
         is_crit = force_crit or _CRIT_RNG.random() < effective_chance
         if is_crit:
-            return crit_mult + bonus_crit_mult, True
+            return crit_mult, True
         return 1.0, False
 
     is_crit = force_crit or (chance > 0.0 and _CRIT_RNG.random() < chance)
     if is_crit:
-        return crit_mult + bonus_crit_mult, True
+        return crit_mult, True
     return 1.0, False
 
 

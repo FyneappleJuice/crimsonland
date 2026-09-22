@@ -38,6 +38,14 @@ KINETIC_DISCIPLINE_MAX_BONUS = 0.30
 # Adrenaline Rush's timed window (opened in player_damage.py whenever the
 # player actually loses health) grants this flat bonus while it's open.
 ADRENALINE_RUSH_BONUS = 0.25
+# Overdue's timed window (opened in weapon_runtime/fire.py once a non-crit
+# streak hits OVERDUE_STREAK_THRESHOLD - see that module for the streak/window
+# mechanics) grants this flat bonus to *every* hit while it's open, not just
+# crits - was a crit-multiplier-only bonus (crit_mult *= 1.5), which capped
+# out mathematically tiny at these weapons' 5-15% base crit chances however
+# much you stacked crit chance/multiplier. A flat all-damage bonus isn't
+# bottlenecked by crit chance at all.
+OVERDUE_BONUS_DAMAGE = 0.20
 # Deep Freeze (Cold Snap): bonus damage a shooter deals to any target that is
 # currently frozen, regardless of what froze it - their own crit-freeze
 # (creature.crit_freeze_timer) or the native Evil Eyes perk's aim-lock. This
@@ -529,6 +537,11 @@ def creature_apply_damage(
                 and float(shooter.adrenaline_rush_window_timer) > 0.0
             ):
                 ctx.damage = f32(float(ctx.damage) * (1.0 + ADRENALINE_RUSH_BONUS * efficacy))
+            if (
+                perk_active(shooter, PerkId.OVERDUE)
+                and float(shooter.overdue_window_timer) > 0.0
+            ):
+                ctx.damage = f32(float(ctx.damage) * (1.0 + OVERDUE_BONUS_DAMAGE * efficacy))
             if perk_active(shooter, PerkId.BANE_OF_LEGENDS):
                 bane_mult = 1.0 - BANE_OF_LEGENDS_PENALTY / efficacy
                 if float(shooter.bane_of_legends_timer) > 0.0:

@@ -26,12 +26,17 @@ _TEST_MODE_BONUS_SPAWN_INTERVAL = 5.0
 # change what --test-mode auto-spawns.
 _TEST_MODE_BONUS_CYCLE: tuple[BonusId, ...] = ()
 # Weapons dropped once near spawn on a fresh test run. Empty = none.
-_TEST_MODE_WEAPON_DROPS: tuple[tuple[float, WeaponId], ...] = ()
+_TEST_MODE_WEAPON_DROPS: tuple[tuple[float, WeaponId], ...] = (
+    (0.0, WeaponId.PULSE_GUN),
+)
 # Perks granted once, for free, at the start of a fresh test run. Empty = none.
 # Only safe for perks with no apply_handler (pure stat/effects-step perks) -
 # this sets perk_counts directly, skipping whatever an apply_handler would
 # normally do on a real pick (e.g. Infernal Contract's health drop).
-_TEST_MODE_STARTING_PERKS: tuple[PerkId, ...] = ()
+_TEST_MODE_STARTING_PERKS: tuple[PerkId, ...] = (
+    PerkId.ANGRY_RELOADER,
+    PerkId.OVERDUE,
+)
 
 
 def update_test_mode_fork_spawner(

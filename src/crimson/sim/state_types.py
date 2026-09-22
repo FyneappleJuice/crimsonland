@@ -160,10 +160,16 @@ class PlayerState(msgspec.Struct):
     living_fortress_timer: float = 0.0
     fire_cough_timer: float = 0.0
 
-    # Rewrite-only: Overdue's consecutive-non-crit counter (weapon_runtime/crit.py)
-    # and the bonus-crit-damage window it opens once the streak hits threshold.
+    # Rewrite-only: Overdue's consecutive-non-crit counter (weapon_runtime/fire.py)
+    # and the bonus-damage window it opens once the streak hits threshold.
     overdue_streak: int = 0
     overdue_window_timer: float = 0.0
+    # Internal cooldown on the streak counter itself (projectiles/runtime/
+    # projectile_pool.py's OVERDUE_TICK_COOLDOWN) - without this, a weapon
+    # firing many rolls/sec (Minigun/Shotgun) completes the streak almost
+    # instantly regardless of threshold, trivializing the perk for fast
+    # weapons while slow weapons (Cannon) still struggle.
+    overdue_tick_cooldown_timer: float = 0.0
 
     # Rewrite-only: Kinetic Discipline - continuous ramp (0-1) that builds while
     # moving in a sustained, roughly-straight line and decays otherwise.
@@ -184,6 +190,12 @@ class PlayerState(msgspec.Struct):
     # Rewrite-only: Bane of Legends - counts down from 5.0 after a kill; the
     # +30% bonus is active while this is > 0 (creatures/runtime.py sets it).
     bane_of_legends_timer: float = 0.0
+
+    # Rewrite-only: Harvester's Scythe - counts down from
+    # HARVESTER_SCYTHE_FLASH_DURATION on every crit heal; purely a visual cue
+    # (render/world/player_status.py flashes the health ring green while > 0),
+    # no gameplay effect.
+    harvester_scythe_flash_timer: float = 0.0
 
     # Rewrite-only: Soul Tether - overheal-turned-shield. Absorbed before HP
     # in player_damage.py; degenerates 5s after last gaining any shield.

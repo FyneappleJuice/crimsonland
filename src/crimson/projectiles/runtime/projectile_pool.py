@@ -26,6 +26,7 @@ from ...math_parity import (
 from ...owner_ref import OwnerRef
 from ...perks import PerkId
 from ...perks.helpers import perk_active
+from ...perks.impl.harvester_scythe import harvester_scythe_on_crit
 from ...progression import resolve_team_stats
 from ...rng_caller_static import RngCallerStatic
 from ...weapons import WeaponId, weapon_entry_for_projectile_type_id
@@ -103,6 +104,15 @@ _FORK_SHOT_SHOTGUN_DAMAGE_MULT = 0.5
 
 # Rewrite-only: Cold Snap - how long a crit freezes its target (seconds).
 COLD_SNAP_FREEZE_DURATION = 1.5
+# Rewrite-only: Overdue's non-crit streak can advance at most once per this
+# many seconds (see the on-hit resolution below), independent of how many
+# rolls/sec the weapon fires - without it, a high-roll-rate weapon (Minigun,
+# a 12-pellet Shotgun blast) completes a 10-hit streak in under a second
+# regardless of OVERDUE_STREAK_THRESHOLD, while a slow weapon (Cannon) is
+# still stuck waiting tens of seconds. This puts a shared ceiling on how fast
+# ANY weapon can build the streak; weapons already slower than the ceiling
+# (Cannon) are unaffected.
+OVERDUE_TICK_COOLDOWN = 0.5
 # `Projectile.reserved` (native "unused" field, offset 0x28) doubles as fork
 # state: 0 = normal, 1 = has forked / is a plain fork child, 2 = fork child
 # that carries the shotgun damage penalty.
@@ -726,17 +736,60 @@ class ProjectilePool:
                     if proj.perk_damage_mult != 1.0:
                         # Perk Efficacy, stamped on a perk-proc bolt when it was fired.
                         damage_amount = float(f32(float(damage_amount) * float(proj.perk_damage_mult)))
+                    shooter_index = proj.owner.player_index()
+                    shooter = (
+                        players[shooter_index]
+                        if shooter_index is not None and 0 <= shooter_index < len(players)
+                        else None
+                    )
                     if proj.did_crit:
                         # Rewrite-only: Cold Snap - a real crit (not just the
                         # compensation-only multiplier) freezes the target.
-                        shooter_index = proj.owner.player_index()
-                        if shooter_index is not None and 0 <= shooter_index < len(players):
-                            shooter = players[shooter_index]
-                            if perk_active(shooter, PerkId.COLD_SNAP):
-                                creature.crit_freeze_timer = COLD_SNAP_FREEZE_DURATION
+                        if shooter is not None and perk_active(shooter, PerkId.COLD_SNAP):
+                            creature.crit_freeze_timer = COLD_SNAP_FREEZE_DURATION
 
                     did_pierce = False
                     if damage_amount > 0.0 and creature.hp > 0.0:
+                        # Not native: Overdue's non-crit streak and Harvester's
+                        # Scythe's heal only count an actual hit on a live
+                        # creature - fire.py rolls (and stamps) the crit at
+                        # spawn time, independent of whether the shot ever
+                        # connects, so this is the first point a real hit is
+                        # confirmed. A piercing shot re-enters this block once
+                        # per creature it goes on to hit, so each connect
+                        # counts separately, same as a fresh shot would.
+                        if shooter is not None:
+                            if proj.did_crit:
+                                # Harvester's Scythe is unrelated to Overdue's
+                                # window and always heals on a real crit hit.
+                                harvester_scythe_on_crit(shooter)
+                                # A crit still breaks the streak instantly and
+                                # unconditionally (while the window isn't
+                                # already open, per the freeze rule below) -
+                                # only the *ticking up* side gets throttled,
+                                # not the reset.
+                                if shooter.overdue_window_timer <= 0.0:
+                                    shooter.overdue_streak = 0
+                            else:
+                                # Overdue's streak only advances at most once
+                                # per OVERDUE_TICK_COOLDOWN, and not at all
+                                # while its window is open (frozen until the
+                                # bonus actually ends). Without the tick
+                                # cooldown, a high roll-rate weapon (Minigun/
+                                # Shotgun) completes the whole streak in a
+                                # fraction of a second no matter how high
+                                # OVERDUE_STREAK_THRESHOLD is set, trivializing
+                                # the perk there while it stays weak on slow
+                                # weapons - the cap brings every weapon's
+                                # effective streak-building rate down to the
+                                # same ceiling; a weapon already slower than
+                                # that (Cannon) is untouched by it.
+                                if (
+                                    shooter.overdue_window_timer <= 0.0
+                                    and shooter.overdue_tick_cooldown_timer <= 0.0
+                                ):
+                                    shooter.overdue_streak = int(shooter.overdue_streak) + 1
+                                    shooter.overdue_tick_cooldown_timer = OVERDUE_TICK_COOLDOWN
                         remaining = proj.damage_pool - 1.0
                         proj.damage_pool = remaining
                         # Native `projectile_update` writes both impulse components from the

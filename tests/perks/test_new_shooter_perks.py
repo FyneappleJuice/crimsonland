@@ -8,6 +8,7 @@ from crimson.creatures.damage import (
     ADRENALINE_RUSH_BONUS,
     COUP_DE_GRACE_HP_FRACTION,
     KINETIC_DISCIPLINE_MAX_BONUS,
+    OVERDUE_BONUS_DAMAGE,
     STEADY_HANDS_BONUS,
     STEADY_HANDS_HP_FRACTION,
     creature_apply_damage,
@@ -17,6 +18,7 @@ from crimson.creatures.runtime import CREATURE_LIFECYCLE_ALIVE, CreaturePool, Cr
 from crimson.gameplay import GameplayState
 from crimson.owner_ref import OwnerRef
 from crimson.perks.ids import PerkId
+from crimson.perks.runtime.effects import perks_update_effects
 from crimson.player_damage import (
     ADRENALINE_RUSH_WINDOW_DURATION,
     AMMO_SHIELD_AMMO_COST,
@@ -24,13 +26,19 @@ from crimson.player_damage import (
     DESPERATION_MAX_REDUCTION,
     player_take_damage,
 )
+from crimson.progression import refresh_player_stats
 from crimson.projectiles.runtime import PrimaryStepCtx
-from crimson.projectiles.runtime.projectile_pool import COLD_SNAP_FREEZE_DURATION
+from crimson.projectiles.runtime.projectile_pool import COLD_SNAP_FREEZE_DURATION, OVERDUE_TICK_COOLDOWN
+from crimson.run_mods.ids import RunModId
 from crimson.sim.input import PlayerInput
 from crimson.sim.state_types import PlayerState
 from crimson.weapon_runtime import WeaponFireCtx, fire_weapon
 from crimson.weapon_runtime.assign import weapon_assign_player
-from crimson.weapon_runtime.fire import DEATH_WISH_HEALTH_THRESHOLD, OVERDUE_STREAK_THRESHOLD
+from crimson.weapon_runtime.fire import (
+    DEATH_WISH_HEALTH_THRESHOLD,
+    OVERDUE_STREAK_THRESHOLD,
+    OVERDUE_WINDOW_DURATION,
+)
 from crimson.weapons import WEAPON_BY_ID, WeaponId, weapon_entry_for_projectile_type_id
 from grim.geom import Vec2
 from grim.rand import Crand
@@ -145,14 +153,13 @@ def test_death_wish_inactive_above_health_threshold() -> None:
 # --- Overdue ---------------------------------------------------------
 
 
-def _forced_crit_mult(state: GameplayState, player: PlayerState) -> float:
+def _fire_forced_crit(state: GameplayState, player: PlayerState) -> None:
+    """Fires one shot without resolving a hit - just to run fire.py's
+    trigger/window-open check and stamp a projectile's crit flag."""
     _fresh_shot(player)
     fire_weapon(
         WeaponFireCtx(player=player, input_state=PlayerInput(aim=Vec2(10.0, 0.0), fire_down=True), dt=0.016, state=state),
     )
-    entry = next(e for e in state.projectiles.entries if e.active)
-    entry.active = False
-    return float(entry.crit_mult)
 
 
 def test_overdue_opens_a_window_on_the_triggering_shot() -> None:
@@ -163,54 +170,217 @@ def test_overdue_opens_a_window_on_the_triggering_shot() -> None:
     player.overdue_streak = OVERDUE_STREAK_THRESHOLD
     player.weapon.weapon_id = WeaponId.PISTOL
 
-    boosted_mult = _forced_crit_mult(state, player)
+    _fire_forced_crit(state, player)
+
     assert player.overdue_streak == 0
     assert player.overdue_window_timer == pytest.approx(5.0)
 
-    # Plain forced crit (no streak bonus) would just be CRIT_MULTIPLIER (2.0);
-    # the boosted one should be strictly larger.
-    plain_state = GameplayState()
-    plain_player = PlayerState(index=0, pos=Vec2(), health=DEATH_WISH_HEALTH_THRESHOLD)
-    plain_player.perk_counts[int(PerkId.DEATH_WISH)] = 1
-    plain_player.weapon.weapon_id = WeaponId.PISTOL
-    plain_mult = _forced_crit_mult(plain_state, plain_player)
-    assert boosted_mult > plain_mult
+
+def test_overdue_window_boosts_all_damage_not_just_crits() -> None:
+    # Not native: the window used to multiply crit_mult (so it only ever
+    # touched the 5-15% of hits that actually crit); it's now a flat +damage%
+    # applied to every hit regardless of crit outcome - verified directly
+    # against creatures/damage.py, the same way Adrenaline Rush's equivalent
+    # bonus is tested.
+    player = PlayerState(index=0, pos=Vec2())
+    player.perk_counts[int(PerkId.OVERDUE)] = 1
+    player.overdue_window_timer = OVERDUE_WINDOW_DURATION
+
+    creature = CreatureState(active=True, hp=100.0, max_hp=100.0)
+    creature_apply_damage(
+        creature, damage_amount=10.0, damage_type=int(CreatureDamageType.BULLET),
+        impulse=Vec2(), owner=OwnerRef.from_player(0), dt=0.016, players=[player], rng=Crand(1),
+    )
+    assert_float_close(100.0 - creature.hp, 10.0 * (1.0 + OVERDUE_BONUS_DAMAGE))
 
 
-def test_overdue_window_boosts_every_crit_until_it_expires() -> None:
-    from crimson.perks.runtime.effects import perks_update_effects
+def test_overdue_does_nothing_once_the_window_expires() -> None:
+    player = PlayerState(index=0, pos=Vec2())
+    player.perk_counts[int(PerkId.OVERDUE)] = 1
+    player.overdue_window_timer = 0.0
+
+    creature = CreatureState(active=True, hp=100.0, max_hp=100.0)
+    creature_apply_damage(
+        creature, damage_amount=10.0, damage_type=int(CreatureDamageType.BULLET),
+        impulse=Vec2(), owner=OwnerRef.from_player(0), dt=0.016, players=[player], rng=Crand(1),
+    )
+    assert_float_close(100.0 - creature.hp, 10.0)
+
+
+def test_overdue_perk_efficacy_scales_the_damage_bonus() -> None:
+    player = PlayerState(index=0, pos=Vec2())
+    player.perk_counts[int(PerkId.OVERDUE)] = 1
+    player.overdue_window_timer = OVERDUE_WINDOW_DURATION
+    player.run_mod_counts[int(RunModId.PERK_EFFICACY)] = 5  # some nonzero efficacy above 1.0
+    refresh_player_stats([player])  # resolve stats.perk_efficacy
+    efficacy = float(player.stats.perk_efficacy)
+    assert efficacy > 1.0  # sanity: this test is only meaningful if efficacy actually moved
+
+    creature = CreatureState(active=True, hp=100.0, max_hp=100.0)
+    creature_apply_damage(
+        creature, damage_amount=10.0, damage_type=int(CreatureDamageType.BULLET),
+        impulse=Vec2(), owner=OwnerRef.from_player(0), dt=0.016, players=[player], rng=Crand(1),
+    )
+    assert_float_close(100.0 - creature.hp, 10.0 * (1.0 + OVERDUE_BONUS_DAMAGE * efficacy))
+
+
+def test_overdue_bonus_is_independent_of_crit_mult_stacking() -> None:
+    # A leftover from the old crit-multiplier design would still be affected
+    # by secondary "Crit Multiplier" picks; the new flat +damage% bonus is
+    # not, so stacking it should change nothing about Overdue's contribution.
+    player = PlayerState(index=0, pos=Vec2())
+    player.perk_counts[int(PerkId.OVERDUE)] = 1
+    player.overdue_window_timer = OVERDUE_WINDOW_DURATION
+    player.run_mod_counts[int(RunModId.CRIT_MULTIPLIER)] = 20  # crit_mult: 2.0 + 20*0.1 = 4.0
+    refresh_player_stats([player])
+    assert float(player.stats.crit_mult) == pytest.approx(4.0)  # sanity: it did move
+
+    creature = CreatureState(active=True, hp=100.0, max_hp=100.0)
+    creature_apply_damage(
+        creature, damage_amount=10.0, damage_type=int(CreatureDamageType.BULLET),
+        impulse=Vec2(), owner=OwnerRef.from_player(0), dt=0.016, players=[player], rng=Crand(1),
+    )
+    assert_float_close(100.0 - creature.hp, 10.0 * (1.0 + OVERDUE_BONUS_DAMAGE))
+
+
+def test_overdue_streak_increments_on_non_crits_and_resets_on_a_natural_crit(monkeypatch) -> None:
+    # Not native: the streak now only moves on an actual HIT
+    # (projectiles/runtime/projectile_pool.py), not on every shot fired -
+    # so this needs a weapon that both deals real damage and rolls crit
+    # through the normal per-pellet path (ruling out Shrinkifier 5K, which
+    # never deals damage, and Flamethrower/Arc, which don't roll crit this
+    # way at all). Pistol has a nonzero base crit chance, so the RNG is
+    # patched to guarantee every roll here comes back a miss. Each iteration
+    # also clears OVERDUE_TICK_COOLDOWN via perks_update_effects, so the tick
+    # cooldown (tested in isolation below) doesn't block these increments.
+    import crimson.weapon_runtime.crit as crit_module
+
+    monkeypatch.setattr(crit_module._CRIT_RNG, "random", lambda: 1.0)
 
     state = GameplayState()
-    player = PlayerState(index=0, pos=Vec2(), health=DEATH_WISH_HEALTH_THRESHOLD)
-    player.perk_counts[int(PerkId.DEATH_WISH)] = 1
+    player = PlayerState(index=0, pos=Vec2(0.0, 0.0), health=100.0)
     player.perk_counts[int(PerkId.OVERDUE)] = 1
-    player.overdue_streak = OVERDUE_STREAK_THRESHOLD
     player.weapon.weapon_id = WeaponId.PISTOL
 
-    first_mult = _forced_crit_mult(state, player)
-    # Still well within the 5s window - a second crit should be boosted too,
-    # not just the one that opened it.
-    second_mult = _forced_crit_mult(state, player)
-    assert_float_close(second_mult, first_mult)
-
-    perks_update_effects(state, [player], 5.1)
-    assert player.overdue_window_timer == 0.0
-    expired_mult = _forced_crit_mult(state, player)
-    assert expired_mult < first_mult
-
-
-def test_overdue_streak_increments_on_non_crits_and_resets_on_a_natural_crit() -> None:
-    state = GameplayState()
-    player = PlayerState(index=0, pos=Vec2(), health=100.0)
-    player.perk_counts[int(PerkId.OVERDUE)] = 1
-    player.weapon.weapon_id = WeaponId.SHRINKIFIER_5K  # UTILITY archetype, 0% crit chance
+    creature = make_creature_state(pos=Vec2(20.0, 0.0), size=200.0)
+    creature.hp = 1_000_000.0
+    creature.max_hp = 1_000_000.0
 
     for expected in range(1, 6):
+        perks_update_effects(state, [player], OVERDUE_TICK_COOLDOWN + 0.01)
         _fresh_shot(player)
         fire_weapon(
-            WeaponFireCtx(player=player, input_state=PlayerInput(aim=Vec2(10.0, 0.0), fire_down=True), dt=0.016, state=state),
+            WeaponFireCtx(player=player, input_state=PlayerInput(aim=Vec2(20.0, 0.0), fire_down=True), dt=0.016, state=state),
         )
+        for _ in range(10):
+            state.projectiles.step(
+                PrimaryStepCtx(dt=0.1, creatures=[creature], options=make_projectile_update_options(runtime_state=state, players=[player])),
+            )
+            if player.overdue_streak == expected:
+                break
         assert player.overdue_streak == expected
+
+
+def test_overdue_tick_cooldown_throttles_the_streak_regardless_of_roll_rate(monkeypatch) -> None:
+    # The whole point of the tick cooldown: a weapon landing many hits per
+    # second (Minigun/Shotgun) must not complete the streak any faster than
+    # OVERDUE_TICK_COOLDOWN allows, even with no window open at all. Pulse
+    # Gun's own numbers (0.1s cooldown) would otherwise complete a 10-hit
+    # streak in ~1s; capped, it takes at least 10*OVERDUE_TICK_COOLDOWN.
+    import crimson.weapon_runtime.crit as crit_module
+
+    monkeypatch.setattr(crit_module._CRIT_RNG, "random", lambda: 1.0)  # every roll misses
+
+    state = GameplayState()
+    player = PlayerState(index=0, pos=Vec2(0.0, 0.0), health=100.0)
+    player.perk_counts[int(PerkId.OVERDUE)] = 1
+    player.weapon.weapon_id = WeaponId.PULSE_GUN
+
+    creature = make_creature_state(pos=Vec2(20.0, 0.0), size=200.0)
+    creature.hp = 1_000_000.0
+    creature.max_hp = 1_000_000.0
+
+    # Fire several shots back-to-back with no time passing between them
+    # (no perks_update_effects call, so the tick cooldown never decays).
+    for _ in range(5):
+        _fresh_shot(player)
+        fire_weapon(
+            WeaponFireCtx(player=player, input_state=PlayerInput(aim=Vec2(20.0, 0.0), fire_down=True), dt=0.016, state=state),
+        )
+        for _ in range(10):
+            state.projectiles.step(
+                PrimaryStepCtx(dt=0.1, creatures=[creature], options=make_projectile_update_options(runtime_state=state, players=[player])),
+            )
+
+    # Despite 5 separate hits, the cooldown only ever let the very first one
+    # through.
+    assert player.overdue_streak == 1
+    assert player.overdue_tick_cooldown_timer > 0.0
+
+    # Once the cooldown clears, the next hit ticks it again.
+    perks_update_effects(state, [player], OVERDUE_TICK_COOLDOWN + 0.01)
+    _fresh_shot(player)
+    fire_weapon(
+        WeaponFireCtx(player=player, input_state=PlayerInput(aim=Vec2(20.0, 0.0), fire_down=True), dt=0.016, state=state),
+    )
+    for _ in range(10):
+        state.projectiles.step(
+            PrimaryStepCtx(dt=0.1, creatures=[creature], options=make_projectile_update_options(runtime_state=state, players=[player])),
+        )
+    assert player.overdue_streak == 2
+
+
+def test_overdue_window_cannot_be_retriggered_while_already_open() -> None:
+    # Not native: used to refresh (reset to the full duration) if the streak
+    # re-hit threshold mid-window; now the fire.py gate itself requires
+    # window_timer <= 0.0 before it'll even look at the streak, so an
+    # already-open window is left alone regardless of the streak value.
+    state = GameplayState()
+    player = PlayerState(index=0, pos=Vec2(), health=DEATH_WISH_HEALTH_THRESHOLD)
+    player.perk_counts[int(PerkId.DEATH_WISH)] = 1  # forces crits deterministically
+    player.perk_counts[int(PerkId.OVERDUE)] = 1
+    player.weapon.weapon_id = WeaponId.PISTOL
+    player.overdue_window_timer = 3.0  # already open, partway through
+    player.overdue_streak = OVERDUE_STREAK_THRESHOLD  # would (re)trigger under the old gate
+
+    _fire_forced_crit(state, player)
+
+    assert player.overdue_window_timer == pytest.approx(3.0)
+
+
+def test_overdue_streak_frozen_while_window_is_active(monkeypatch) -> None:
+    # Real hits (not just firing - see test above this block) must not move
+    # the streak at all while the window is open, so "starts counting again"
+    # only happens once the window has actually expired.
+    import crimson.weapon_runtime.crit as crit_module
+
+    monkeypatch.setattr(crit_module._CRIT_RNG, "random", lambda: 1.0)  # every roll misses
+
+    state = GameplayState()
+    player = PlayerState(index=0, pos=Vec2(0.0, 0.0), health=100.0)
+    player.perk_counts[int(PerkId.OVERDUE)] = 1
+    player.weapon.weapon_id = WeaponId.PISTOL
+    player.overdue_window_timer = 3.0  # window already open
+
+    creature = make_creature_state(pos=Vec2(20.0, 0.0), size=200.0)
+    creature.hp = 1_000_000.0
+    creature.max_hp = 1_000_000.0
+
+    for _ in range(3):
+        _fresh_shot(player)
+        fire_weapon(
+            WeaponFireCtx(player=player, input_state=PlayerInput(aim=Vec2(20.0, 0.0), fire_down=True), dt=0.016, state=state),
+        )
+        for _ in range(10):
+            state.projectiles.step(
+                PrimaryStepCtx(dt=0.1, creatures=[creature], options=make_projectile_update_options(runtime_state=state, players=[player])),
+            )
+
+    assert player.overdue_streak == 0
+    # Nothing here ticks the window timer down (that's update_overdue_window's
+    # job, not fire_weapon's/projectile stepping's) - confirms it's genuinely
+    # untouched, not coincidentally back at 0 from expiring mid-loop.
+    assert player.overdue_window_timer == pytest.approx(3.0)
 
 
 # --- Momentum ---------------------------------------------------------

@@ -581,6 +581,35 @@ def test_player_update_angry_reloader_spawns_ring_at_half() -> None:
     assert type_ids.count(int(ProjectileTemplateId.PLASMA_MINIGUN)) == 15
 
 
+def test_player_update_angry_reloader_fires_on_a_sub_half_second_reload() -> None:
+    """Angry Reloader used to require reload_timer_max > 0.5s, so it never
+    fired on fast-reloading weapons like Pulse Gun (reload_time=0.1). That
+    floor is gone - only the "past the halfway point" check remains."""
+
+    pool = ProjectilePool(size=64)
+    state = GameplayState(projectiles=pool)
+    player = PlayerState(
+        index=0,
+        pos=Vec2(100.0, 100.0),
+        weapon=WeaponSlot(
+            weapon_id=WeaponId.PULSE_GUN,
+            clip_size=16,
+            ammo=0,
+            reload_active=True,
+            reload_timer=0.1,
+            reload_timer_max=0.1,
+        ),
+    )
+    player.perk_counts[int(PerkId.ANGRY_RELOADER)] = 1
+
+    player_update(player, PlayerInput(aim=Vec2(101.0, 100.0)), 0.06, state)
+
+    owners = {entry.owner for entry in pool.entries if entry.active}
+    assert owners == {OwnerRef.from_local_player(0).without_run_mod_affinity()}
+    type_ids = _active_type_ids(pool)
+    assert type_ids.count(int(ProjectileTemplateId.PLASMA_MINIGUN)) == 7
+
+
 def test_player_update_man_bomb_spawns_8_projectiles_when_charged() -> None:
     pool = ProjectilePool(size=32)
     rng = ScriptedCrand(0, fallback=ScriptedCrand.Fallback.REPEAT_LAST)
