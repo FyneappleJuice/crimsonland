@@ -32,3 +32,27 @@ def test_stationary_reloader_triples_reload_speed() -> None:
 
     assert_float_close(base_player.weapon.reload_timer, f32(0.9))
     assert_float_close(perk_player.weapon.reload_timer, f32(0.7))
+
+
+def test_stationary_reloader_also_speeds_up_swarmer_dump_shot_cooldown() -> None:
+    # Regression: Mini-Rocket Swarmers' shot_cooldown *is* the between-volleys
+    # wait (same role reload_timer plays everywhere else), but Stationary
+    # Reloader used to only ever scale reload_timer's own decay. A Free
+    # Rounds proc skips starting a reload entirely that cycle, so it fell
+    # back to the slow, un-boosted native shot_cooldown while a normal
+    # (non-proc) cycle enjoyed the boosted reload - proccing what's supposed
+    # to be a pure bonus perk made the next shot arrive *later*. Both must
+    # decay at the same boosted rate now.
+    from crimson.weapon_runtime import weapon_assign_player
+
+    state = GameplayState()
+    player = PlayerState(index=0, pos=Vec2())
+    player.perk_counts[int(PerkId.STATIONARY_RELOADER)] = 1
+    weapon_assign_player(player, WeaponId.MINI_ROCKET_SWARMERS, state=state)
+    player.weapon.shot_cooldown = 1.0
+    # No ammo cost was ever charged this cycle (as a Free Rounds proc would
+    # leave it) - reload_timer stays untouched at 0, only shot_cooldown ticks.
+
+    player_update(player, PlayerInput(), dt=0.1, state=state)
+
+    assert_float_close(player.weapon.shot_cooldown, f32(0.7))

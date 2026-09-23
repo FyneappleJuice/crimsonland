@@ -55,6 +55,7 @@ from .weapon_runtime import (
 from .weapon_runtime import (
     WeaponFireCtx as _WeaponFireCtx,
 )
+from .weapon_runtime.fire_recipes import FIRE_RECIPE_BY_WEAPON, SwarmerDumpMode
 from .weapon_runtime.power_up import wpu_boosts_fire_rate
 from .weapon_runtime import (
     fire_weapon as _fire_weapon,
@@ -670,6 +671,175 @@ def _player_update_aim_by_scheme(
         player.aim_heading = _aim_heading_from_aim_point_native(player.pos, player.aim)
 
 
+def advance_weapon_shot_cooldown(
+    player: PlayerState,
+    state: GameplayState,
+    dt: float,
+    *,
+    reload_stationary: bool = False,
+) -> None:
+    """WPU-aware shot_cooldown decay.
+
+    Extracted out of player_update so Hollow Form's clone tick (perks/impl/
+    hollow_form.py) can share the exact same logic instead of a hand-rolled
+    reimplementation that silently drops whatever perk/bonus interaction
+    isn't remembered to be copied over.
+    """
+
+    wpu_rate = state.bonuses.weapon_power_up > 0.0 and wpu_boosts_fire_rate(int(player.weapon.weapon_id))
+    # Normalized: WPU is tuned to ~+30% sustained DPS across weapons. The
+    # fire-rate half is x1.3 (with reload x0.8 in assign.py); classes whose WPU
+    # is a damage/area buff instead sit in power_up.WPU_NO_RATE_WEAPON_IDS.
+    cooldown_decay_mult = 1.3 if wpu_rate else 1.0
+    # Not native: for whole-clip "dump" weapons (Mini-Rocket Swarmers),
+    # shot_cooldown *is* the between-volleys wait - the same role reload_timer
+    # plays for every other weapon (see assign.py's player_start_reload for
+    # the matching fire-rate-mult coupling). Without this, a Free Rounds proc
+    # that skips a cycle's reload entirely also skips Stationary Reloader's
+    # boost that cycle, since that boost only ever scaled reload_timer's own
+    # decay - so proccing what's supposed to be a pure bonus perk made the
+    # *next* shot arrive later than a normal (non-proc) cycle would have,
+    # which reads as "holding the trigger down randomly doesn't refire."
+    if reload_stationary and perk_active(player, PerkId.STATIONARY_RELOADER):
+        recipe = FIRE_RECIPE_BY_WEAPON.get(WeaponId(player.weapon.weapon_id))
+        if recipe is not None and isinstance(recipe.mode, SwarmerDumpMode):
+            cooldown_decay_mult *= 1.0 + 2.0 * float(player.stats.perk_efficacy)
+    cooldown_decay = float(f32(float(dt) * cooldown_decay_mult))
+    next_shot_cooldown = float(f32(float(player.weapon.shot_cooldown) - float(cooldown_decay)))
+    player.weapon.shot_cooldown = max(0.0, float(next_shot_cooldown))
+
+
+def advance_weapon_reload(
+    player: PlayerState,
+    perk_player: PlayerState,
+    input_state: PlayerInput,
+    dt: float,
+    state: GameplayState,
+    players: list[PlayerState] | None,
+    *,
+    reload_stationary: bool,
+) -> None:
+    """Reload-timer decay: Stationary Reloader, Anxious Loader, Angry
+    Reloader's mid-reload burst, and the preload-underflow ammo top-up.
+
+    Extracted out of player_update for the same reason as
+    advance_weapon_shot_cooldown above - shared verbatim with Hollow Form's
+    clone tick instead of reimplemented. `reload_stationary` is the caller's
+    "didn't move this tick" flag (Stationary Reloader's gate); the clone
+    passes True unconditionally since it never moves for its whole window.
+    """
+
+    reload_scale = 1.0
+    if reload_stationary and perk_active(perk_player, PerkId.STATIONARY_RELOADER):
+        # Not native: Perk Efficacy scales the bonus above the 1x baseline.
+        reload_scale = 1.0 + 2.0 * float(perk_player.stats.perk_efficacy)
+
+    if (
+        perk_active(perk_player, PerkId.ANXIOUS_LOADER)
+        and input_state.fire_pressed
+        and player.weapon.reload_timer > 0.0
+    ):
+        anxious_next = x87_pc24_sub(
+            float(player.weapon.reload_timer),
+            f32(0.05),
+        )
+        player.weapon.reload_timer = float(anxious_next)
+        if float(anxious_next) <= 0.0:
+            # Native restarts the tail of the reload at `frame_dt * 0.8` when
+            # Anxious Loader overcuts the timer.
+            player.weapon.reload_timer = x87_pc24_mul(float(dt), f32(0.8))
+
+    reload_timer_now = float(f32(float(player.weapon.reload_timer)))
+    dt_f32 = float(f32(float(dt)))
+    reload_step = x87_pc24_mul(f32(float(reload_scale)), dt_f32)
+    # Native preloaded ammo one frame before reload timer underflows using the
+    # unscaled `frame_dt` (before Stationary Reloader scale is applied), which
+    # could miss reload completion when Stationary Reloader is active, leaving
+    # the clip empty and causing a one-shot reload loop. Fixed: use the scaled
+    # step instead.
+    reload_preload_underflow = x87_pc24_sub(reload_timer_now, reload_step)
+    if reload_timer_now > 0.0 and reload_preload_underflow < 0.0:
+        player.weapon.ammo = float(player.weapon.clip_size)
+        # Not native: for almost every weapon, shot_cooldown (set from the shot
+        # that emptied the clip) has long since decayed to 0 by the time a
+        # multi-second reload finishes, so this is a no-op. Dump-clip weapons
+        # like Mini-Rocket Swarmers are the exception - their shot_cooldown is
+        # the whole cycle length, sized to roughly match reload_time, so the
+        # two normally finish together. Stationary Reloader (or any other
+        # reload-speed perk) can shrink reload_timer well below that shared
+        # cooldown, leaving the weapon "reloaded" but still gated on a stale
+        # cooldown from before the reload even started - holding fire would
+        # silently do nothing until it drains. Reload completing should always
+        # mean "ready to fire," so clear it here too.
+        player.weapon.shot_cooldown = 0.0
+
+    if player.weapon.reload_timer > 0.0:
+        if (
+            perk_active(perk_player, PerkId.ANGRY_RELOADER)
+            and x87_pc24_mul(player.weapon.reload_timer_max, f32(0.5)) < player.weapon.reload_timer
+        ):
+            half = x87_pc24_mul(player.weapon.reload_timer_max, f32(0.5))
+            next_timer = x87_pc24_sub(float(player.weapon.reload_timer), reload_step)
+            player.weapon.reload_timer = next_timer
+            if next_timer <= half:
+                count = 7 + int(player.weapon.reload_timer_max * 4.0)
+                # Not native: the ring used to always start at a fixed
+                # world-space angle regardless of aim - rotate it to face
+                # the mouse instead. Uses this frame's raw input aim, not
+                # player.aim_heading - that field is only refreshed later in
+                # player_update, so it would still read last frame's value here.
+                aim_base_angle = math.atan2(
+                    input_state.aim.y - player.pos.y,
+                    input_state.aim.x - player.pos.x,
+                )
+                state.bonus_spawn_guard = True
+                _spawn_projectile_ring(
+                    state,
+                    player.pos,
+                    count=count,
+                    angle_offset=float(aim_base_angle) + 0.1,
+                    type_id=ProjectileTemplateId.PLASMA_MINIGUN,
+                    owner=_owner_ref_for_player_projectiles(state, player.index).without_run_mod_affinity(),
+                    owner_player_index=player.index,
+                    players=players,
+                    perk_damage_mult=float(perk_player.stats.perk_efficacy),
+                )
+                state.bonus_spawn_guard = False
+                state.sfx_queue.append(SfxId.EXPLOSION_SMALL)
+        else:
+            player.weapon.reload_timer = x87_pc24_sub(
+                float(player.weapon.reload_timer),
+                reload_step,
+            )
+
+    if player.weapon.reload_timer < 0.0:
+        player.weapon.reload_timer = 0.0
+
+
+def clear_reload_active_if_gate_open(player: PlayerState) -> bool:
+    """Pendulum's phase flip + the reload_active clear on a completed reload.
+
+    Extracted out of player_update for the same reason as the two functions
+    above - shared verbatim with Hollow Form's clone tick. Returns the
+    pre-reload fire-gate state (shot_cooldown <= 0 and reload_timer == 0) -
+    player_update also needs this value afterward, to preserve same-tick fire
+    eligibility across an Alternate Weapon swap.
+    """
+
+    fire_gate_open_pre_reload = player.weapon.shot_cooldown <= 0.0 and player.weapon.reload_timer == 0.0
+    # Native clears `reload_active` whenever the cooldown/timer gates are open,
+    # even if ammo is empty and perk firing paths can still proceed.
+    if fire_gate_open_pre_reload:
+        # Rewrite-only: Pendulum flips its damage/fire-rate phase exactly on
+        # this reload-complete transition - covers both a natural empty-clip
+        # reload and a forced manual one, since both set reload_active via the
+        # same player_start_reload().
+        if player.weapon.reload_active and perk_active(player, PerkId.PENDULUM):
+            player.pendulum_phase = not player.pendulum_phase
+        player.weapon.reload_active = False
+    return fire_gate_open_pre_reload
+
+
 def player_update(
     player: PlayerState,
     input_state: PlayerInput,
@@ -761,17 +931,6 @@ def player_update(
             x87_pc24_mul(dt, f32(2.0)),
         ),
     )
-    wpu_rate = (
-        state.bonuses.weapon_power_up > 0.0
-        and wpu_boosts_fire_rate(int(player.weapon.weapon_id))
-    )
-    # Normalized: WPU is tuned to ~+30% sustained DPS across weapons. The
-    # fire-rate half is x1.3 (with reload x0.8 in assign.py); classes whose WPU
-    # is a damage/area buff instead sit in power_up.WPU_NO_RATE_WEAPON_IDS.
-    cooldown_decay = float(f32(float(dt) * (1.3 if wpu_rate else 1.0)))
-    next_shot_cooldown = float(f32(float(player.weapon.shot_cooldown) - float(cooldown_decay)))
-    player.weapon.shot_cooldown = max(0.0, float(next_shot_cooldown))
-
     speed_bonus_active = player.speed_bonus_timer > 0.0
     if player.aux_timer > 0.0:
         aux_decay = 1.4 if player.aux_timer >= 1.0 else 0.5
@@ -1020,92 +1179,17 @@ def player_update(
         # Native clears these post-perk-tick timers after movement when position changed.
         player.man_bomb_timer = 0.0
         player.living_fortress_timer = 0.0
-    reload_scale = 1.0
-    if reload_stationary and perk_active(perk_player, PerkId.STATIONARY_RELOADER):
-        # Not native: Perk Efficacy scales the bonus above the 1x baseline.
-        reload_scale = 1.0 + 2.0 * float(perk_player.stats.perk_efficacy)
 
-    # Reload + reload perks.
-    if (
-        perk_active(perk_player, PerkId.ANXIOUS_LOADER)
-        and input_state.fire_pressed
-        and player.weapon.reload_timer > 0.0
-    ):
-        anxious_next = x87_pc24_sub(
-            float(player.weapon.reload_timer),
-            f32(0.05),
-        )
-        player.weapon.reload_timer = float(anxious_next)
-        if float(anxious_next) <= 0.0:
-            # Native restarts the tail of the reload at `frame_dt * 0.8` when
-            # Anxious Loader overcuts the timer.
-            player.weapon.reload_timer = x87_pc24_mul(float(dt), f32(0.8))
-
-    reload_timer_now = float(f32(float(player.weapon.reload_timer)))
-    dt_f32 = float(f32(float(dt)))
-    reload_step = x87_pc24_mul(f32(float(reload_scale)), dt_f32)
-    # Native preloaded ammo one frame before reload timer underflows using the
-    # unscaled `frame_dt` (before Stationary Reloader scale is applied), which
-    # could miss reload completion when Stationary Reloader is active, leaving
-    # the clip empty and causing a one-shot reload loop. Fixed: use the scaled
-    # step instead.
-    reload_preload_underflow = x87_pc24_sub(reload_timer_now, reload_step)
-    if reload_timer_now > 0.0 and reload_preload_underflow < 0.0:
-        player.weapon.ammo = float(player.weapon.clip_size)
-        # Not native: for almost every weapon, shot_cooldown (set from the shot
-        # that emptied the clip) has long since decayed to 0 by the time a
-        # multi-second reload finishes, so this is a no-op. Dump-clip weapons
-        # like Mini-Rocket Swarmers are the exception - their shot_cooldown is
-        # the whole cycle length, sized to roughly match reload_time, so the
-        # two normally finish together. Stationary Reloader (or any other
-        # reload-speed perk) can shrink reload_timer well below that shared
-        # cooldown, leaving the weapon "reloaded" but still gated on a stale
-        # cooldown from before the reload even started - holding fire would
-        # silently do nothing until it drains. Reload completing should always
-        # mean "ready to fire," so clear it here too.
-        player.weapon.shot_cooldown = 0.0
-
-    if player.weapon.reload_timer > 0.0:
-        if (
-            perk_active(perk_player, PerkId.ANGRY_RELOADER)
-            and x87_pc24_mul(player.weapon.reload_timer_max, f32(0.5)) < player.weapon.reload_timer
-        ):
-            half = x87_pc24_mul(player.weapon.reload_timer_max, f32(0.5))
-            next_timer = x87_pc24_sub(float(player.weapon.reload_timer), reload_step)
-            player.weapon.reload_timer = next_timer
-            if next_timer <= half:
-                count = 7 + int(player.weapon.reload_timer_max * 4.0)
-                # Not native: the ring used to always start at a fixed
-                # world-space angle regardless of aim - rotate it to face
-                # the mouse instead. Uses this frame's raw input aim, not
-                # player.aim_heading - that field is only refreshed later in
-                # player_update, so it would still read last frame's value here.
-                aim_base_angle = math.atan2(
-                    input_state.aim.y - player.pos.y,
-                    input_state.aim.x - player.pos.x,
-                )
-                state.bonus_spawn_guard = True
-                _spawn_projectile_ring(
-                    state,
-                    player.pos,
-                    count=count,
-                    angle_offset=float(aim_base_angle) + 0.1,
-                    type_id=ProjectileTemplateId.PLASMA_MINIGUN,
-                    owner=_owner_ref_for_player_projectiles(state, player.index).without_run_mod_affinity(),
-                    owner_player_index=player.index,
-                    players=players,
-                    perk_damage_mult=float(perk_player.stats.perk_efficacy),
-                )
-                state.bonus_spawn_guard = False
-                state.sfx_queue.append(SfxId.EXPLOSION_SMALL)
-        else:
-            player.weapon.reload_timer = x87_pc24_sub(
-                float(player.weapon.reload_timer),
-                reload_step,
-            )
-
-    if player.weapon.reload_timer < 0.0:
-        player.weapon.reload_timer = 0.0
+    advance_weapon_shot_cooldown(player, state, dt, reload_stationary=reload_stationary)
+    advance_weapon_reload(
+        player,
+        perk_player,
+        input_state,
+        dt,
+        state,
+        players,
+        reload_stationary=reload_stationary,
+    )
 
     has_alt_weapon_perk = perk_active(perk_player, PerkId.ALTERNATE_WEAPON)
     single_player_mode = (len(players) == 1) if players is not None else True
@@ -1142,18 +1226,7 @@ def player_update(
             x87_pc24_sub(player.spread_heat, x87_pc24_mul(dt, f32(0.4))),
         )
 
-    fire_gate_open_pre_reload = player.weapon.shot_cooldown <= 0.0 and player.weapon.reload_timer == 0.0
-
-    # Native clears `reload_active` whenever the cooldown/timer gates are open,
-    # even if ammo is empty and perk firing paths can still proceed.
-    if fire_gate_open_pre_reload:
-        # Rewrite-only: Pendulum flips its damage/fire-rate phase exactly on
-        # this reload-complete transition - covers both a natural empty-clip
-        # reload and a forced manual one, since both set reload_active via the
-        # same player_start_reload().
-        if player.weapon.reload_active and perk_active(player, PerkId.PENDULUM):
-            player.pendulum_phase = not player.pendulum_phase
-        player.weapon.reload_active = False
+    fire_gate_open_pre_reload = clear_reload_active_if_gate_open(player)
 
     swapped_alt_weapon = False
     reload_key_active = bool(input_state.reload_down or input_state.reload_pressed)

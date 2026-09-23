@@ -580,7 +580,15 @@ class SurvivalMode(BaseGameplayMode):
                 UI_HINT_COLOR,
                 scale=0.9,
             )
-            y_extra = y + line * 4.0
+            self._draw_ui_text(
+                f"reload={self.player.weapon.reload_timer:.3f}/{self.player.weapon.reload_timer_max:.3f} "
+                f"active={self.player.weapon.reload_active}  "
+                f"shot_cd={self.player.weapon.shot_cooldown:.3f}",
+                Vec2(x, y + line * 4.0),
+                UI_HINT_COLOR,
+                scale=0.9,
+            )
+            y_extra = y + line * 5.0
             if self._paused:
                 self._draw_ui_text("paused (TAB)", Vec2(x, y_extra), UI_HINT_COLOR)
                 y_extra += line

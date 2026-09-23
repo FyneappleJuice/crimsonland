@@ -89,21 +89,8 @@ def _spawn_hollow_form_clone(player: PlayerState) -> None:
     player.hollow_form_active_timer = HOLLOW_FORM_ACTIVE_DURATION * float(player.stats.perk_efficacy)
 
 
-def _advance_clone_weapon_timers(clone: PlayerState, dt: float) -> None:
-    # fire_weapon() only checks shot_cooldown/reload_timer, it never
-    # decrements them - that normally happens once per frame in
-    # gameplay.py's player_update, which this clone never runs through.
-    # Trimmed to the pieces that matter for a short-lived synthetic shooter
-    # (no Stationary Reloader/Anxious Loader/WPU reload-rate nuance).
-    if clone.weapon.reload_timer > 0.0:
-        clone.weapon.reload_timer = max(0.0, float(clone.weapon.reload_timer) - dt)
-        if clone.weapon.reload_timer <= 0.0:
-            clone.weapon.reload_active = False
-            clone.weapon.ammo = float(clone.weapon.clip_size)
-    clone.weapon.shot_cooldown = max(0.0, float(clone.weapon.shot_cooldown) - dt)
-
-
 def _tick_hollow_form_clone(ctx: PerksUpdateEffectsCtx, player: PlayerState) -> None:
+    from ...gameplay import advance_weapon_reload, advance_weapon_shot_cooldown, clear_reload_active_if_gate_open
     from ...weapon_runtime import (
         WeaponFireCtx,
         fire_weapon,
@@ -122,6 +109,13 @@ def _tick_hollow_form_clone(ctx: PerksUpdateEffectsCtx, player: PlayerState) -> 
     clone.pos = player.hollow_form_pos
     clone.aim = target_pos
     clone.aim_heading = _aim_heading_toward(clone.pos, target_pos)
+    dt = float(ctx.dt)
+    clone_players = list(ctx.players)
+    # Held-LMB input, same shape a real player's frame would build - shared
+    # with both the weapon-timer functions below and fire_weapon() itself, so
+    # Angry Reloader's aim-facing ring and any future input-driven perk read
+    # a single consistent snapshot instead of two different ones.
+    input_state = PlayerInput(aim=target_pos, fire_down=True)
 
     # Not native: run the clone through the same periodic-perk-tick pipeline
     # a real player's frame does (Hot Tempered, Fire Cough, Man Bomb, Living
@@ -130,20 +124,35 @@ def _tick_hollow_form_clone(ctx: PerksUpdateEffectsCtx, player: PlayerState) -> 
     apply_player_perk_ticks(
         player=clone,
         player_pos_before_move=clone.pos,
-        dt=float(ctx.dt),
+        dt=dt,
         state=ctx.state,
-        players=list(ctx.players),
+        players=clone_players,
         owner_ref_for_player=owner_ref_for_player,
         owner_ref_for_player_projectiles=owner_ref_for_player_projectiles,
         projectile_spawn=projectile_spawn,
     )
 
-    _advance_clone_weapon_timers(clone, float(ctx.dt))
+    # Not native: the clone's weapon-timer advance reuses player_update's own
+    # functions verbatim (gameplay.py) instead of a hand-rolled
+    # reimplementation - a full snapshot should get every reload/cooldown
+    # perk a real player would (Stationary Reloader, Angry Reloader, WPU's
+    # fire-rate boost, ...), not a hand-picked subset that quietly falls out
+    # of sync every time a new one is added. The clone's pos never changes
+    # for its whole window (see above), so it is unconditionally "stationary"
+    # for Stationary Reloader's purposes. Anxious Loader is the one perk with
+    # no equivalent here: it's gated on input_state.fire_pressed, an edge for
+    # a mashed key, and this clone only ever holds fire_down - so it
+    # naturally never fires for the clone, which is the correct outcome, not
+    # a gap to paper over.
+    advance_weapon_shot_cooldown(clone, ctx.state, dt, reload_stationary=True)
+    advance_weapon_reload(clone, clone, input_state, dt, ctx.state, clone_players, reload_stationary=True)
+    clear_reload_active_if_gate_open(clone)
+
     fire_weapon(
         WeaponFireCtx(
             player=clone,
-            input_state=PlayerInput(aim=target_pos, fire_down=True),
-            dt=float(ctx.dt),
+            input_state=input_state,
+            dt=dt,
             state=ctx.state,
             creatures=ctx.creatures,
             players=ctx.players,

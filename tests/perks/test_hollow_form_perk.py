@@ -133,6 +133,72 @@ def test_hollow_form_clone_can_proc_its_own_hot_tempered() -> None:
     assert len(active) >= 8
 
 
+def test_hollow_form_clone_gets_stationary_reloader_since_it_never_moves() -> None:
+    # Regression: the clone's own weapon-timer decrement used to always skip
+    # Stationary Reloader ("no Stationary Reloader nuance"), so a clone stuck
+    # in one spot for its whole 2s window never got the bonus a real
+    # stationary player would - most visible on a dump-clip weapon like
+    # Mini-Rocket Swarmers, where reload is the main bottleneck between shots.
+    def rockets_fired(*, stationary_reloader: bool) -> int:
+        state = GameplayState()
+        player = PlayerState(index=0, pos=Vec2(), health=100.0)
+        player.perk_counts[int(PerkId.HOLLOW_FORM)] = 1
+        if stationary_reloader:
+            player.perk_counts[int(PerkId.STATIONARY_RELOADER)] = 1
+        weapon_assign_player(player, WeaponId.MINI_ROCKET_SWARMERS, state=state)
+        creature = _make_target(Vec2(200.0, 0.0))
+
+        fired = 0
+        for i in range(600):
+            before = sum(1 for e in state.secondary_projectiles.entries if e.active)
+            perks_update_effects(state, [player], 0.016, creatures=[creature])
+            after = sum(1 for e in state.secondary_projectiles.entries if e.active)
+            fired += max(0, after - before)
+        return fired
+
+    without = rockets_fired(stationary_reloader=False)
+    with_perk = rockets_fired(stationary_reloader=True)
+    assert with_perk > without
+
+
+def test_hollow_form_clone_gets_angry_reloader_ring_burst_mid_reload() -> None:
+    # Regression: the clone's weapon-timer advance now reuses player_update's
+    # own gameplay.advance_weapon_reload verbatim (instead of a hand-rolled
+    # reimplementation), so perks hooked into that pipeline that nobody
+    # thought to special-case for the clone - Angry Reloader's mid-reload
+    # projectile-ring burst - now fire for it too.
+    from crimson.projectiles.types import ProjectileTemplateId
+
+    state = GameplayState()
+    player = PlayerState(index=0, pos=Vec2(), health=100.0)
+    player.perk_counts[int(PerkId.HOLLOW_FORM)] = 1
+    player.perk_counts[int(PerkId.ANGRY_RELOADER)] = 1
+    weapon_assign_player(player, WeaponId.PISTOL, state=state)
+    creature = _make_target(Vec2(200.0, 0.0))
+
+    perks_update_effects(state, [player], 0.016, creatures=[creature])
+    clone = player.hollow_form_snapshot
+    assert clone is not None
+
+    # Force the clone straight into a mid-reload state rather than waiting
+    # out a full clip - Angry Reloader triggers once reload_timer crosses
+    # below half of reload_timer_max.
+    clone.weapon.ammo = 0.0
+    clone.weapon.reload_active = True
+    clone.weapon.reload_timer_max = 1.0
+    clone.weapon.reload_timer = 0.6
+
+    for _ in range(20):
+        perks_update_effects(state, [player], 0.016, creatures=[creature])
+        if clone.weapon.reload_timer <= 0.5:
+            break
+
+    ring_bolts = [
+        e for e in state.projectiles.entries if e.active and e.type_id == ProjectileTemplateId.PLASMA_MINIGUN
+    ]
+    assert len(ring_bolts) >= 7  # Angry Reloader's ring is "7 + reload_timer_max * 4" bolts
+
+
 def test_hollow_form_resets_when_perk_is_not_active() -> None:
     state = GameplayState()
     player = PlayerState(

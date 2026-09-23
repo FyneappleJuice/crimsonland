@@ -836,6 +836,18 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
         free_round = perk_active(perk_player, PerkId.FREE_ROUNDS) and _FREE_ROUNDS_RNG.random() < free_round_chance
         if not free_round:
             player.weapon.ammo = float(player.weapon.ammo) - float(ammo_cost)
+        elif isinstance(recipe.mode, SwarmerDumpMode):
+            # Not native: Free Rounds has nothing to give a whole-clip "dump"
+            # weapon (Mini-Rocket Swarmers) the way it does per-shot weapons -
+            # the entire clip already fires every trigger pull regardless, and
+            # shot_cooldown/reload_timer decay in lockstep for this weapon
+            # (gameplay.py's advance_weapon_shot_cooldown), so skipping the
+            # reload doesn't even save any time anymore. Skipping the reload
+            # also means Angry Reloader's mid-reload ring never gets a reload
+            # to fire during. Give the freed-up clip a real payoff instead:
+            # +1 round in the next dump. Stacks if it procs again before the
+            # next real reload - a rare hot streak, not a bug.
+            player.weapon.ammo = float(player.weapon.ammo) + 1.0
     reload_start_gate_open = bool(player.weapon.reload_timer <= 0.0)
     if force_pre_swap_fire_gate:
         # Alt-weapon same-tick fire uses the pre-swap gate (reload_timer==0) for
