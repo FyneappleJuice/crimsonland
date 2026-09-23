@@ -141,6 +141,11 @@ class PerkId(IntEnum):
     # _damage_variance_mult. A hit can roll negative, which heals the target.
     LOOSE_CANNON = 95
 
+    # Rewrite-only: a private hit counter (not shots fired - confirmed hits
+    # landed) that fires a free homing rocket every Nth hit - see
+    # projectiles/runtime/projectile_pool.py's SEEKER_ROUNDS_HIT_THRESHOLD.
+    SEEKER_ROUNDS = 96
+
 
 # The four concrete masteries WEAPON_MASTERY resolves into - never offered as
 # their own pool entry (see perks/availability.py's build_perk_availability).
@@ -834,6 +839,13 @@ _PERK_TABLE = [
         perk_id=PerkId.LOOSE_CANNON,
         name="Shot in the Dark",
         description="Every shot's a shot in the dark now, and most of them land harder than you had any right to expect. Every so often you miss so badly the enemy comes out ahead. Not on purpose. Probably.",
+        flags=PERK_DEFAULT_FLAGS,
+        prereq=(),
+    ),
+    PerkMeta(
+        perk_id=PerkId.SEEKER_ROUNDS,
+        name="Fire and Forget",
+        description="You've never been one to double-check your work. Land enough hits and one of your rounds decides to finish the job itself, sprouting a targeting nose and wandering off after something else to shoot. Fire and forget. Mostly forget.",
         flags=PERK_DEFAULT_FLAGS,
         prereq=(),
     ),

@@ -113,6 +113,10 @@ COLD_SNAP_FREEZE_DURATION = 1.5
 # ANY weapon can build the streak; weapons already slower than the ceiling
 # (Cannon) are unaffected.
 OVERDUE_TICK_COOLDOWN = 0.5
+# Rewrite-only: Seeker Rounds - fires a free homing rocket every this many
+# confirmed hits (not shots fired - a piercing shot connecting with 3
+# creatures counts as 3 toward this, same as 3 separate shots would).
+SEEKER_ROUNDS_HIT_THRESHOLD = 3
 # `Projectile.reserved` (native "unused" field, offset 0x28) doubles as fork
 # state: 0 = normal, 1 = has forked / is a plain fork child, 2 = fork child
 # that carries the shotgun damage penalty.
@@ -303,6 +307,11 @@ class ProjectilePool:
         entry.owner = owner
         entry.hits_players = bool(hits_players)
         entry.tenet_reverse = False
+        # Not native: Seeker Rounds - must be reset on every reuse (not just
+        # left at whatever the previous occupant of this slot had), or a
+        # perk-proc bolt reusing this slot could inherit a stale, still-valid
+        # -looking shot_seq and get miscounted as a primary-fire hit.
+        entry.shot_seq = -1
 
         collision_profile = projectile_collision_profile(type_id)
         entry.hit_radius = float(collision_profile.hit_radius)
@@ -761,6 +770,33 @@ class ProjectilePool:
                         # per creature it goes on to hit, so each connect
                         # counts separately, same as a fresh shot would.
                         if shooter is not None:
+                            if (
+                                perk_active(shooter, PerkId.SEEKER_ROUNDS)
+                                and proj.shot_seq >= 0
+                                and proj.shot_seq != shooter.seeker_rounds_last_shot_seq
+                            ):
+                                # Not native: dedupe by shot_seq so a shotgun's
+                                # pellets or one piercing round's multiple hits
+                                # all count as a single shot, not one per hit.
+                                shooter.seeker_rounds_last_shot_seq = proj.shot_seq
+                                shooter.seeker_rounds_hit_counter = int(shooter.seeker_rounds_hit_counter) + 1
+                                if shooter.seeker_rounds_hit_counter >= SEEKER_ROUNDS_HIT_THRESHOLD:
+                                    shooter.seeker_rounds_hit_counter = 0
+                                    from ..types import SecondaryProjectileTypeId
+                                    from .secondary_pool import SecondarySpawnSpec
+
+                                    rocket_idx = runtime_state.secondary_projectiles.spawn_from_spec(
+                                        SecondarySpawnSpec(
+                                            pos=shooter.pos,
+                                            angle=0.0,
+                                            type_id=SecondaryProjectileTypeId.HOMING_ROCKET,
+                                            owner=proj.owner,
+                                            creatures=creatures,
+                                        ),
+                                    )
+                                    runtime_state.secondary_projectiles.entries[rocket_idx].crit_mult = float(
+                                        shooter.stats.perk_efficacy,
+                                    )
                             if proj.did_crit:
                                 # Harvester's Scythe is unrelated to Overdue's
                                 # window and always heals on a real crit hit.

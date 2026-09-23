@@ -45,6 +45,7 @@ RUN_MOD_STAT_MODS: dict[RunModId, tuple[StatMod, ...]] = {
     RunModId.ENERGY_DAMAGE: (increased("damage_mult_energy", 0.03, source="run_mod:energy_damage"),),
     RunModId.ION_DAMAGE: (increased("damage_mult_ion", 0.03, source="run_mod:ion_damage"),),
     RunModId.FIRE_DAMAGE: (increased("damage_mult_fire", 0.03, source="run_mod:fire_damage"),),
+    RunModId.EXPLOSION_DAMAGE: (increased("damage_mult_explosion", 0.03, source="run_mod:explosion_damage"),),
     # --- weapon-archetype bucket (WEAPON_TYPE_BOOST's sub-roll targets) --
     RunModId.PISTOL_DAMAGE: (increased("damage_mult_archetype_pistol", 0.05, source="run_mod:pistol_damage"),),
     RunModId.RIFLE_DAMAGE: (increased("damage_mult_archetype_rifle", 0.05, source="run_mod:rifle_damage"),),

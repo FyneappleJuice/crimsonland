@@ -533,6 +533,9 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
                 )
                 state.projectiles.entries[int(proj_id)].crit_mult = pellet_crit_mult * pendulum_dmg_mult
                 state.projectiles.entries[int(proj_id)].did_crit = pellet_did_crit
+                # Not native: Seeker Rounds - every pellet from this trigger-pull
+                # shares the pre-increment shot_seq (see Projectile.shot_seq).
+                state.projectiles.entries[int(proj_id)].shot_seq = int(player.shot_seq)
                 # Not native: Overdue's streak and Harvester's Scythe's heal
                 # used to update right here, at spawn time - but that counted
                 # every shot fired, including ones that hit nothing. Both now

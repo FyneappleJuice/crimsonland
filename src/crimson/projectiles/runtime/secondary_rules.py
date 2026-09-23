@@ -26,12 +26,22 @@ class RocketRule(msgspec.Struct, frozen=True, tag=True):
 
 class HomingRocketRule(msgspec.Struct, frozen=True, tag=True):
     base_speed: float = 190.0
-    target_accel: float = 800.0
+    # Not native: doubled from the ported 800.0. The steering law re-aims at
+    # the target's current position every frame and only partially corrects
+    # overshoot (it subtracts back the last frame's own steering delta rather
+    # than cleanly rescaling to max_velocity), so once a rocket builds enough
+    # momentum past its target, the old turn rate couldn't correct fast
+    # enough and it would spiral around the target until its fuse
+    # (ttl_decay_scale) ran out and it fizzled without ever connecting.
+    target_accel: float = 1600.0
     max_velocity: float = 350.0
     ttl_decay_scale: float = 0.5
     detonation_scale: float = 0.35
     damage_speed_mul: float = 20.0
-    damage_base: float = 80.0
+    # Not native: buffed from the ported 80.0 - Seeker Rockets/Mini-Rocket
+    # Swarmers/Fire and Forget all share this rule and were landing softer
+    # than intended even before accounting for how often shots were fizzling.
+    damage_base: float = 120.0
     extra_decals: int = 10
     extra_radius: float = 64.0
     freeze_shard_target_pos: bool = False

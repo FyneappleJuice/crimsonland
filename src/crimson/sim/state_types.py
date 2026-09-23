@@ -171,6 +171,15 @@ class PlayerState(msgspec.Struct):
     # weapons while slow weapons (Cannon) still struggle.
     overdue_tick_cooldown_timer: float = 0.0
 
+    # Rewrite-only: Seeker Rounds - counts confirmed *shots* landed (not
+    # individual hit instances - a shotgun's pellets or one piercing round's
+    # multiple hits all count once, deduped via seeker_rounds_last_shot_seq
+    # against Projectile.shot_seq), persisting across reloads; fires a free
+    # homing rocket and resets once it reaches SEEKER_ROUNDS_HIT_THRESHOLD
+    # (projectiles/runtime/projectile_pool.py).
+    seeker_rounds_hit_counter: int = 0
+    seeker_rounds_last_shot_seq: int = -1
+
     # Rewrite-only: Kinetic Discipline - continuous ramp (0-1) that builds while
     # moving in a sustained, roughly-straight line and decays otherwise.
     kinetic_charge: float = 0.0

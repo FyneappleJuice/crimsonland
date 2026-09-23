@@ -23,13 +23,14 @@ RUN_MOD_CHOICE_COUNT = 3
 _VISIBLE_POOL: tuple[RunModId, ...] = tuple(rid for rid in RunModId if rid not in RUN_MOD_HIDDEN_FROM_POOL)
 
 # DAMAGE_TYPE_BOOST's sub-roll targets, and which weapon damage type each one
-# matches (for the 2x current-weapon weight).
+# matches (for the 3x current-weapon weight).
 _DAMAGE_TYPE_SUB_ROLL: dict[CreatureDamageType, RunModId] = {
     CreatureDamageType.BULLET: RunModId.BULLET_DAMAGE,
     CreatureDamageType.PLASMA: RunModId.PLASMA_DAMAGE,
     CreatureDamageType.ENERGY: RunModId.ENERGY_DAMAGE,
     CreatureDamageType.ION: RunModId.ION_DAMAGE,
     CreatureDamageType.FIRE: RunModId.FIRE_DAMAGE,
+    CreatureDamageType.EXPLOSION: RunModId.EXPLOSION_DAMAGE,
 }
 
 # WEAPON_TYPE_BOOST's sub-roll targets, same idea, keyed by archetype.

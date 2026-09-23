@@ -46,17 +46,18 @@ class RunModId(IntEnum):
     ENERGY_DAMAGE = 16
     ION_DAMAGE = 17
     FIRE_DAMAGE = 18
+    EXPLOSION_DAMAGE = 19
     # --- hidden: only reachable via WEAPON_TYPE_BOOST's sub-roll ---------
-    PISTOL_DAMAGE = 19
-    RIFLE_DAMAGE = 20
-    SMG_DAMAGE = 21
-    SHOTGUN_DAMAGE = 22
-    MINIGUN_DAMAGE = 23
-    CANNON_DAMAGE = 24
-    FLAMETHROWER_DAMAGE = 25
-    ARC_DAMAGE = 26
-    MELEE_DAMAGE = 27
-    PERK_EFFICACY = 28
+    PISTOL_DAMAGE = 20
+    RIFLE_DAMAGE = 21
+    SMG_DAMAGE = 22
+    SHOTGUN_DAMAGE = 23
+    MINIGUN_DAMAGE = 24
+    CANNON_DAMAGE = 25
+    FLAMETHROWER_DAMAGE = 26
+    ARC_DAMAGE = 27
+    MELEE_DAMAGE = 28
+    PERK_EFFICACY = 29
 
 
 # Never drawn directly into a choice list - only reachable through a meta
@@ -68,6 +69,7 @@ RUN_MOD_HIDDEN_FROM_POOL: frozenset[RunModId] = frozenset(
         RunModId.ENERGY_DAMAGE,
         RunModId.ION_DAMAGE,
         RunModId.FIRE_DAMAGE,
+        RunModId.EXPLOSION_DAMAGE,
         RunModId.PISTOL_DAMAGE,
         RunModId.RIFLE_DAMAGE,
         RunModId.SMG_DAMAGE,
@@ -107,7 +109,7 @@ _RUN_MOD_TABLE: list[RunModMeta] = [
     RunModMeta(
         RunModId.DAMAGE_TYPE_BOOST,
         "Elemental Affinity",
-        "+3% damage of one damage type (bullet/plasma/energy/ion/fire) - "
+        "+3% damage of one damage type (bullet/plasma/energy/ion/fire/explosion) - "
         "weighted toward whatever you're currently using.",
     ),
     RunModMeta(
@@ -121,6 +123,7 @@ _RUN_MOD_TABLE: list[RunModMeta] = [
     RunModMeta(RunModId.ENERGY_DAMAGE, "Energy Damage", "+3% energy damage."),
     RunModMeta(RunModId.ION_DAMAGE, "Ion Damage", "+3% ion damage."),
     RunModMeta(RunModId.FIRE_DAMAGE, "Fire Damage", "+3% fire damage."),
+    RunModMeta(RunModId.EXPLOSION_DAMAGE, "Explosion Damage", "+3% explosion damage."),
     RunModMeta(RunModId.PISTOL_DAMAGE, "Pistol Damage", "+5% pistol damage."),
     RunModMeta(RunModId.RIFLE_DAMAGE, "Rifle Damage", "+5% rifle damage."),
     RunModMeta(RunModId.SMG_DAMAGE, "SMG Damage", "+5% SMG damage."),

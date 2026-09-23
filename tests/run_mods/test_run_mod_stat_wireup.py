@@ -202,6 +202,14 @@ def test_all_damage_run_mod_applies_to_melee_and_explosion_which_have_no_other_h
         assert _hit(modded, damage_type) > _hit(base, damage_type)
 
 
+# --- new axis: explosion damage -------------------------------------------
+
+
+def test_explosion_damage_run_mod_moves_its_stat() -> None:
+    player = _player_with_run_mods(RunModId.EXPLOSION_DAMAGE)
+    assert player.stats.damage_mult_explosion == pytest.approx(1.03)
+
+
 # --- new axis: weapon-archetype damage -----------------------------------
 
 

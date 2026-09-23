@@ -202,6 +202,7 @@ PERK_MECHANICAL: dict[PerkId, str] = {
     PerkId.WILDCARD: "each secondary-perk slot independently has a chance to become a real perk offer, or a triple-strength version of itself with an added downside",
     PerkId.WEAPON_MASTERY: "meta slot: resolves at generation time to one of the four concrete masteries, weighted toward the player's currently equipped weapon",
     PerkId.LOOSE_CANNON: "every non-DoT hit rolls a [-1x, 4x] multiplier instead of dealing its flat value",
+    PerkId.SEEKER_ROUNDS: "a private hit counter fires a free homing rocket every Nth confirmed hit",
 }
 
 

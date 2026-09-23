@@ -167,6 +167,15 @@ class Projectile(msgspec.Struct):
     # flag only marks it so the pool's step() stops it once it arrives back
     # at its owner, instead of flying on through them.
     tenet_reverse: bool = False
+    # Rewrite-only: the firing player's PlayerState.shot_seq at the moment of
+    # this trigger-pull, stamped only by the primary pellet loop (weapon_runtime/
+    # fire.py's PrimaryPelletsMode - same scoping as did_crit above). Every
+    # pellet from one shotgun-style blast shares the same value, and a single
+    # piercing bolt keeps it across every creature it goes on to hit, so
+    # Seeker Rounds can dedupe "one hit confirmed" down to "one shot fired"
+    # regardless of pellet count or pierce count. -1 = not a primary-fire
+    # bolt (perk-proc bursts, secondary weapons, ...) - never counted.
+    shot_seq: int = -1
 
 
 class SecondaryProjectile(msgspec.Struct):
