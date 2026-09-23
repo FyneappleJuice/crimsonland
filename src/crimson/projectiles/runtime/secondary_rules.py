@@ -36,6 +36,14 @@ class HomingRocketRule(msgspec.Struct, frozen=True, tag=True):
     target_accel: float = 1600.0
     max_velocity: float = 350.0
     ttl_decay_scale: float = 0.5
+    # Not native: raising target_accel alone (see above) only changes the
+    # orbit's period, not whether it converges - pure "accelerate toward the
+    # target's current position" is an undamped oscillator, so a rocket that
+    # overshoots keeps circling indefinitely regardless of turn strength.
+    # This bleeds off velocity every tick (`vel *= 1 - velocity_damping*dt`),
+    # turning that oscillation into a damped one that actually settles onto
+    # the target instead of orbiting it until the fuse runs out.
+    velocity_damping: float = 2.0
     detonation_scale: float = 0.35
     damage_speed_mul: float = 20.0
     # Not native: buffed from the ported 80.0 - Seeker Rockets/Mini-Rocket
@@ -52,9 +60,15 @@ class RocketMinigunRule(msgspec.Struct, frozen=True, tag=True):
     accel_factor_scale: float = 4.0
     speed_cap: float = 600.0
     ttl_decay_scale: float = 1.0
-    detonation_scale: float = 0.25
+    # Not native: buffed +50% (0.25 -> 0.375) alongside damage_base below -
+    # this is the AoE detonation-tick damage (the direct hit and the follow-up
+    # explosion are two separate terms; damage_base only covers the former).
+    detonation_scale: float = 0.375
     damage_speed_mul: float = 20.0
-    damage_base: float = 40.0
+    # Not native: buffed +50% (40.0 -> 60.0) - Rocket Minigun was landing far
+    # softer per-rocket than every other rocket-family weapon (see the DPS
+    # comparison this was tuned against).
+    damage_base: float = 60.0
     extra_decals: int = 3
     extra_radius: float = 44.0
     freeze_shard_target_pos: bool = True

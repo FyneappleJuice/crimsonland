@@ -45,7 +45,10 @@ def test_rocket_minigun_fires_full_clip_secondary_projectiles() -> None:
     # Native heading: f32(atan2(pos - aim) - half_pi); one ulp below f32 pi/2
     # for a horizontal shot.
     shot_angle = float(f32(math.atan2(0.0, -1.0) - float(NATIVE_HALF_PI)))
-    spread = math.pi * (2.0 / 3.0)
+    # Not native: widened 120 -> 150 degrees (weapon_runtime/fire.py) so the
+    # volley visibly fans out before HomingRocketRule.velocity_damping pulls
+    # it back onto the target.
+    spread = math.pi * (5.0 / 6.0)
     step = spread / float(player.weapon.clip_size - 1)
     expected0 = f32(float(shot_angle) - spread * 0.5)
     expected1 = f32(float(shot_angle) - spread * 0.5 + step)

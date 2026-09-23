@@ -4,7 +4,7 @@ import pytest
 
 from crimson.gameplay import GameplayState
 from crimson.owner_ref import OwnerRef
-from crimson.projectiles.runtime import PrimaryStepCtx, ProjectilePool
+from crimson.projectiles.runtime import PrimaryStepCtx, ProjectilePool, SecondaryStepCtx
 from crimson.projectiles.runtime.projectile_pool import (
     _EXPLOSIVE_PAYLOAD_DETONATION_SCALE,
     _EXPLOSIVE_PAYLOAD_PISTOL_DAMAGE_SCALE,
@@ -58,6 +58,134 @@ def test_shotgun_pellets_are_untouched_when_inactive() -> None:
     live = [p for p in state.projectiles.entries if p.active]
     assert len(live) == 12
     assert not any(p.is_rocket for p in live)
+
+
+# --- rocket-type weapons: Explosive Payload now spawns a second, separate ---
+# detonation on hit, same as the bullet version above (`_maybe_explosive_
+# payload_on_hit` there) instead of the earlier flat crit_mult multiplier -
+# "doesn't matter if we get 2 explosions" is exactly the point.
+
+
+def _fire_rocket_and_step_to_first_hit(
+    weapon_id: WeaponId,
+    *,
+    explosive_payload_timer: float,
+    target_pos: Vec2 = Vec2(60.0, 0.0),
+    max_steps: int = 300,
+):
+    state = GameplayState()
+    player = PlayerState(index=0, pos=Vec2(0.0, 0.0))
+    weapon_assign_player(player, weapon_id, state=state)
+    player.explosive_payload_timer = float(explosive_payload_timer)
+    player.aim_heading = 1.5707963267948966  # heading convention: 0=up, +90deg=+x
+    creature = _creature(pos=target_pos, hp=1.0e9)
+    fire_weapon(
+        WeaponFireCtx(
+            player=player,
+            input_state=PlayerInput(fire_down=True, aim=target_pos),
+            dt=0.016,
+            state=state,
+            creatures=(creature,),
+        ),
+    )
+    for _ in range(max_steps):
+        was_detonation = any(
+            e.active and e.type_id == SecondaryProjectileTypeId.DETONATION
+            for e in state.secondary_projectiles.entries
+        )
+        state.secondary_projectiles.step(
+            SecondaryStepCtx(dt=1.0 / 60.0, creatures=(creature,), runtime_state=state, players=[player]),
+        )
+        is_detonation_now = any(
+            e.active and e.type_id == SecondaryProjectileTypeId.DETONATION
+            for e in state.secondary_projectiles.entries
+        )
+        if is_detonation_now and not was_detonation:
+            break  # the rocket just hit and converted this tick - stop right here
+    return state
+
+
+def test_rocket_launcher_gets_a_second_detonation_when_explosive_payload_is_active() -> None:
+    from crimson.projectiles.runtime.secondary_pool import _ROCKET_EXPLOSIVE_PAYLOAD_BLAST_SCALE
+
+    active_state = _fire_rocket_and_step_to_first_hit(WeaponId.ROCKET_LAUNCHER, explosive_payload_timer=5.0)
+    detonations = [
+        e for e in active_state.secondary_projectiles.entries
+        if e.active and e.type_id == SecondaryProjectileTypeId.DETONATION
+    ]
+    # The rocket's own natural detonation, plus a second bonus one from Explosive
+    # Payload - both independently ticking, not one bigger/multiplied blast.
+    assert len(detonations) == 2
+    scales = sorted(float(d.detonation_scale) for d in detonations)
+    assert scales[0] == pytest.approx(_ROCKET_EXPLOSIVE_PAYLOAD_BLAST_SCALE)
+    assert scales[1] == pytest.approx(1.0)  # RocketRule's own natural detonation_scale
+
+
+def test_rocket_launcher_gets_only_one_detonation_without_explosive_payload() -> None:
+    inactive_state = _fire_rocket_and_step_to_first_hit(WeaponId.ROCKET_LAUNCHER, explosive_payload_timer=0.0)
+    detonations = [
+        e for e in inactive_state.secondary_projectiles.entries
+        if e.active and e.type_id == SecondaryProjectileTypeId.DETONATION
+    ]
+    assert len(detonations) == 1
+
+
+def test_mini_rocket_swarmers_flags_exactly_one_rocket_per_volley() -> None:
+    # Not native: MRS is treated as a shotgun for this bonus - one volley is
+    # "one shot", so only one of its rockets (random) is allowed to proc the
+    # bonus detonation, not all five.
+    state = GameplayState()
+    player = PlayerState(index=0, pos=Vec2(0.0, 0.0))
+    weapon_assign_player(player, WeaponId.MINI_ROCKET_SWARMERS, state=state)
+    player.explosive_payload_timer = 5.0
+    fire_weapon(
+        WeaponFireCtx(player=player, input_state=PlayerInput(fire_down=True, aim=Vec2(200.0, 0.0)), dt=0.016, state=state),
+    )
+    rockets = [
+        e for e in state.secondary_projectiles.entries
+        if e.active and e.type_id == SecondaryProjectileTypeId.HOMING_ROCKET
+    ]
+    assert len(rockets) == player.weapon.clip_size
+    eligible = [e for e in rockets if e.explosive_payload_eligible]
+    assert len(eligible) == 1
+
+
+def test_mini_rocket_swarmers_volley_only_procs_one_bonus_detonation_total() -> None:
+    active_state = GameplayState()
+    player = PlayerState(index=0, pos=Vec2(0.0, 0.0))
+    weapon_assign_player(player, WeaponId.MINI_ROCKET_SWARMERS, state=active_state)
+    player.explosive_payload_timer = 5.0
+    player.aim_heading = 1.5707963267948966
+    target_pos = Vec2(60.0, 0.0)
+    creature = _creature(pos=target_pos, hp=1.0e9)
+
+    bonus_detonation_spawns = 0
+    original_spawn = active_state.secondary_projectiles.spawn_from_spec
+
+    def _counting_spawn(spec):
+        nonlocal bonus_detonation_spawns
+        if spec.type_id == SecondaryProjectileTypeId.DETONATION:
+            bonus_detonation_spawns += 1  # only the bonus goes through spawn_from_spec -
+        return original_spawn(spec)       # a rocket's own natural detonation is an in-place conversion
+
+    active_state.secondary_projectiles.spawn_from_spec = _counting_spawn
+    fire_weapon(
+        WeaponFireCtx(
+            player=player,
+            input_state=PlayerInput(fire_down=True, aim=target_pos),
+            dt=0.016,
+            state=active_state,
+            creatures=(creature,),
+        ),
+    )
+    for _ in range(300):
+        active_state.secondary_projectiles.step(
+            SecondaryStepCtx(dt=1.0 / 60.0, creatures=(creature,), runtime_state=active_state, players=[player]),
+        )
+        if not any(e.active and e.type_id == SecondaryProjectileTypeId.HOMING_ROCKET for e in active_state.secondary_projectiles.entries):
+            break  # every rocket in the volley has hit or expired
+
+    assert bonus_detonation_spawns == 1
 
 
 def _step_and_hit(

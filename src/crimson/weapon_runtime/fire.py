@@ -73,6 +73,27 @@ OVERDUE_WINDOW_DURATION = 5.0  # seconds the bonus stays up once the streak trig
 FREE_ROUNDS_CHANCE = 0.15
 _FREE_ROUNDS_RNG = _random.Random(0xF6EED5)
 
+# Not native: Explosive Payload and Fork Shot for rocket-type weapons (Rocket
+# Launcher, Seeker Rockets, Mini-Rocket Swarmers, Rocket Minigun) are handled
+# entirely on hit now, in secondary_pool.py's _maybe_rocket_fork_on_hit /
+# _maybe_rocket_explosive_payload_on_hit - same as every bullet weapon. They
+# used to be spawn-time-only hacks here (the secondary pool's own hit
+# resolution didn't have player-state access to key off yet).
+
+# Not native: Mini-Rocket Swarmers fires the same shared HomingRocketRule
+# projectile as Seeker Rockets (both use SecondaryProjectileTypeId.HOMING_ROCKET),
+# so its damage can't be buffed by editing that rule directly without also
+# buffing Seeker Rockets. Folded into crit_mult instead - a flat +20% applied
+# only to rockets spawned from this weapon's own fire branch (see the DPS
+# comparison this was tuned against; brought down from an initial +50% by feel).
+_MINI_ROCKET_SWARMERS_DAMAGE_MULT = 1.2
+# Not native: Mini-Rocket Swarmers is treated like a shotgun for Explosive
+# Payload - one whole volley is "one shot", so only a single, randomly chosen
+# rocket out of it procs the bonus detonation, not all five. Private RNG, same
+# reasoning as _FREE_ROUNDS_RNG above (presentation/build variance, not run
+# state - must not perturb replay-trace determinism).
+_MINI_ROCKET_SWARMERS_EXPLOSIVE_PAYLOAD_RNG = _random.Random(0x5A29A1D)
+
 # Not native: Plasma Overload bonus (bonuses/plasma_overload.py) - twin bolts
 # fired side-by-side on the same heading, `_PLASMA_OVERLOAD_LATERAL_SPACING`
 # px apart, instead of a fan.
@@ -146,6 +167,31 @@ class WeaponFireResult(msgspec.Struct, frozen=True):
     fired: bool
     shot_count: int = 0
     ammo_cost: float = 0.0
+
+
+def _rocket_crit_mult_with_powerups(
+    *,
+    weapon_id: WeaponId,
+    perk_player: PlayerState,
+    base_damage_mult: float = 1.0,
+) -> float:
+    """Not native: returns the crit_mult the caller should stamp on its own
+    rocket, folding in `base_damage_mult` (see _MINI_ROCKET_SWARMERS_DAMAGE_MULT).
+
+    Explosive Payload and Fork Shot for rocket weapons are handled entirely at
+    hit time now (secondary_pool.py's _maybe_rocket_fork_on_hit /
+    _maybe_rocket_explosive_payload_on_hit), same as every bullet weapon - not
+    here at spawn time."""
+
+    crit_mult = float(
+        roll_crit_mult(
+            weapon_id,
+            increased_chance=float(perk_player.stats.crit_chance),
+            crit_mult=float(perk_player.stats.crit_mult),
+        ),
+    )
+    crit_mult *= float(base_damage_mult)
+    return crit_mult
 
 
 def _spawn_native_fire_muzzle_sprites(
@@ -463,6 +509,11 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
         DIAMOND_FLASK_BASE_POWER * crit_perk_efficacy if perk_active(perk_player, PerkId.DIAMOND_FLASK) else 0.0
     )
 
+    # Explosive Payload bonus (not native): every bullet becomes a rocket.
+    # Computed once here (not per-branch) so it's in scope regardless of which
+    # fire mode this weapon uses below.
+    explosive_payload_active = float(player.explosive_payload_timer) > 0.0
+
     match recipe.mode:
         case PrimaryPelletsMode(type_id=type_id, count=count, jitter=jitter_rule, speed_scale=speed_rule):
             if type_id is None:
@@ -478,10 +529,8 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
             pellet_speed_caller = _PELLET_SPEED_SCALE_CALLER_BY_WEAPON.get(WeaponId(weapon_id))
             if not isinstance(speed_rule, NoSpeedScale) and pellet_speed_caller is None:
                 raise ValueError(f"missing pellet speed caller for weapon {int(weapon_id)}")
-            # Explosive Payload bonus (not native): every bullet becomes a rocket.
             # Multi-pellet (shotgun-style) weapons only flag their single
             # centre-most pellet - the rest of the spread stays normal.
-            explosive_payload_active = float(player.explosive_payload_timer) > 0.0
             explosive_pellet_index = pellets // 2
             for pellet_index in range(pellets):
                 match jitter_rule:
@@ -573,7 +622,20 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
                     creatures=spawn_creatures,
                 ),
             )
-            state.secondary_projectiles.entries[int(secondary_proj_id)].crit_mult = roll_crit_mult(weapon_id, increased_chance=float(perk_player.stats.crit_chance), crit_mult=float(perk_player.stats.crit_mult))
+            secondary_entry = state.secondary_projectiles.entries[int(secondary_proj_id)]
+            secondary_entry.crit_mult = _rocket_crit_mult_with_powerups(
+                weapon_id=weapon_id,
+                perk_player=perk_player,
+            )
+            # Not native: Explosive Payload / Fork Shot eligibility is stamped
+            # here, from this fire_weapon() call's own player (a Domino Effect/
+            # Momentum bonus shot fires through a clone with these timers
+            # zeroed - see SecondaryProjectile.explosive_payload_eligible),
+            # not re-read live at hit time.
+            secondary_entry.explosive_payload_eligible = explosive_payload_active
+            secondary_entry.fork_shot_eligible = float(player.projectile_fork_timer) > 0.0
+            # Not native: Seeker Rounds dedup token - see SecondaryProjectile.shot_seq.
+            secondary_entry.shot_seq = int(player.shot_seq)
         case ParticleStreamMode(style=style, slow=slow):
             counts_accuracy_shots = False
             # WPU for a stream weapon is +30% per-particle damage (fire rate is a
@@ -661,10 +723,30 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
             # (reachable via Regression Bullets / Ammunition Within).
             clip_ammo = float(player.weapon.ammo)
             rocket_count = math.ceil(clip_ammo) if clip_ammo > 0.0 else 0
-            spread = math.pi * (2.0 / 3.0)
+            # Not native: widened 120 -> 150 degrees. HomingRocketRule.velocity_damping
+            # (secondary_pool.py) now corrects a rocket onto its target much faster
+            # than before, so the volley was converging in before it ever got to
+            # fan out - a wider muzzle spread gives it more room to visibly spread
+            # before the steering pulls it back in.
+            spread = math.pi * (5.0 / 6.0)
             step = 0.0 if rocket_count <= 1 else spread / float(rocket_count - 1)
             angle = shot_angle - spread * 0.5
-            for _ in range(rocket_count):
+            # Not native: shotgun-style Explosive Payload - one rocket out of
+            # the whole volley, chosen at random, is allowed to proc the bonus
+            # detonation on hit (see explosive_payload_eligible / the RNG
+            # comment above).
+            explosive_rocket_index = (
+                _MINI_ROCKET_SWARMERS_EXPLOSIVE_PAYLOAD_RNG.randrange(rocket_count)
+                if explosive_payload_active and rocket_count > 0
+                else -1
+            )
+            # Not native: unlike Explosive Payload above, Fork Shot isn't
+            # given shotgun treatment here - every rocket in the volley still
+            # forks on its own hit (matches the earlier "triples the whole
+            # volley" design). Same spawn-time-snapshot reasoning as
+            # explosive_payload_eligible - see that field's comment.
+            fork_shot_active = float(player.projectile_fork_timer) > 0.0
+            for pellet_index in range(rocket_count):
                 swarmer_proj_id = state.secondary_projectiles.spawn_from_spec(
                     SecondarySpawnSpec(
                         pos=muzzle,
@@ -675,7 +757,17 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
                         creatures=creatures,
                     ),
                 )
-                state.secondary_projectiles.entries[int(swarmer_proj_id)].crit_mult = roll_crit_mult(weapon_id, increased_chance=float(perk_player.stats.crit_chance), crit_mult=float(perk_player.stats.crit_mult))
+                swarmer_entry = state.secondary_projectiles.entries[int(swarmer_proj_id)]
+                swarmer_entry.crit_mult = _rocket_crit_mult_with_powerups(
+                    weapon_id=weapon_id,
+                    perk_player=perk_player,
+                    base_damage_mult=_MINI_ROCKET_SWARMERS_DAMAGE_MULT,
+                )
+                swarmer_entry.explosive_payload_eligible = bool(
+                    explosive_payload_active and pellet_index == explosive_rocket_index,
+                )
+                swarmer_entry.fork_shot_eligible = fork_shot_active
+                swarmer_entry.shot_seq = int(player.shot_seq)
                 angle = angle + step
             # Native subtracts the full clip value, zeroing the ammo even when
             # the clip was fractional or negative.

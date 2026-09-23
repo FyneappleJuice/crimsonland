@@ -400,6 +400,7 @@ class WorldState(msgspec.Struct):
                 detail_preset=int(detail_preset),
                 creature_damage_runtime=step_runtime,
                 play_rocket_hit_audio=step_runtime.play_secondary_rocket_hit_audio,
+                players=self.players,
             ),
         )
         # Native updates the sprite pool before the particle loop, so sprites

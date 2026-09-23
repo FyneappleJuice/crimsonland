@@ -1052,6 +1052,18 @@ def player_update(
     reload_preload_underflow = x87_pc24_sub(reload_timer_now, reload_step)
     if reload_timer_now > 0.0 and reload_preload_underflow < 0.0:
         player.weapon.ammo = float(player.weapon.clip_size)
+        # Not native: for almost every weapon, shot_cooldown (set from the shot
+        # that emptied the clip) has long since decayed to 0 by the time a
+        # multi-second reload finishes, so this is a no-op. Dump-clip weapons
+        # like Mini-Rocket Swarmers are the exception - their shot_cooldown is
+        # the whole cycle length, sized to roughly match reload_time, so the
+        # two normally finish together. Stationary Reloader (or any other
+        # reload-speed perk) can shrink reload_timer well below that shared
+        # cooldown, leaving the weapon "reloaded" but still gated on a stale
+        # cooldown from before the reload even started - holding fire would
+        # silently do nothing until it drains. Reload completing should always
+        # mean "ready to fire," so clear it here too.
+        player.weapon.shot_cooldown = 0.0
 
     if player.weapon.reload_timer > 0.0:
         if (

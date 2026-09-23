@@ -194,6 +194,39 @@ class SecondaryProjectile(msgspec.Struct):
     # crit.py) - carries through from the direct-hit burst into the
     # detonation AoE tick, since both phases come from the same rocket.
     crit_mult: float = 1.0
+    # Rewrite-only: Fork Shot bonus - True once this rocket has forked on hit
+    # (as a parent) or is itself a fork child; either way it must not fork
+    # again on its own hit. Mirrors Projectile.reserved's gating role for
+    # bullets, but doesn't need to also encode a damage multiplier the way
+    # that field does - a fork child's damage penalty is folded straight into
+    # its own crit_mult at spawn instead (see secondary_pool.py).
+    fork_reserved: bool = False
+    # Rewrite-only: Explosive Payload eligibility - stamped at spawn from
+    # whether the bonus was active *then* (weapon_runtime/fire.py), not
+    # re-read from the player at hit time. That distinction matters for a
+    # snapshotted "freebie" shot (Domino Effect/Momentum's bonus shot, fired
+    # from a clone with every powerup timer deliberately zeroed) - checking
+    # the real player's live timer at hit time would let it inherit whatever
+    # Explosive Payload the real player happens to have running, defeating
+    # the whole point of the snapshot. Mini-Rocket Swarmers is treated as a
+    # shotgun-style weapon for this bonus (SwarmerDumpMode): only one
+    # randomly chosen rocket per volley is flagged True, the rest False, so a
+    # 5-rocket dump doesn't proc 5 bonus explosions. Defaults False so any
+    # spawn path that doesn't explicitly set it (Fork Shot's own children,
+    # Seeker Rounds' bonus rocket, ...) doesn't chain into another bonus.
+    explosive_payload_eligible: bool = False
+    # Rewrite-only: Fork Shot eligibility - same spawn-time-snapshot reasoning
+    # as explosive_payload_eligible above, and the same reason it defaults
+    # False.
+    fork_shot_eligible: bool = False
+    # Rewrite-only: the firing player's PlayerState.shot_seq at the moment of
+    # this trigger-pull, mirroring Projectile.shot_seq's same role for bullets -
+    # every rocket from one trigger pull (Mini-Rocket Swarmers' whole volley)
+    # shares the same value, so Seeker Rounds/Fire and Forget (PerkId.
+    # SEEKER_ROUNDS) can dedupe "one hit confirmed" down to "one shot fired"
+    # regardless of how many rockets that shot spawned. -1 = not tracked
+    # (never counted).
+    shot_seq: int = -1
 
 
 __all__ = [

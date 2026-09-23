@@ -11,6 +11,7 @@ from ..progression import refresh_player_stats
 from ..sim.state_types import GameplayState, PlayerState, WeaponSlot
 from ..weapon_usage import weapon_usage_slot_for_weapon_id
 from ..weapons import WEAPON_BY_ID, Weapon, WeaponId
+from .fire_recipes import FIRE_RECIPE_BY_WEAPON, SwarmerDumpMode
 from .power_up import wpu_boosts_fire_rate
 
 
@@ -176,6 +177,19 @@ def player_start_reload(
     reload_mult = float(perk_player.stats.reload_time_mult)
     if reload_mult != 1.0:
         player.weapon.reload_timer = x87_pc24_mul(reload_time, f32(reload_mult))
+    # Not native: whole-clip "dump" weapons (currently only Mini-Rocket
+    # Swarmers) fire their entire clip in a single trigger pull, so
+    # shot_cooldown isn't a per-shot rate here - it's the same "time until the
+    # next volley" wait that reload_timer already is. Without this, a
+    # fire-rate buff (Fastshot, run mods' Fire Rate, ...) shrinks
+    # shot_cooldown but does nothing, since reload_timer alone still gates
+    # the next dump - fold the same multiplier in here so either stat
+    # actually shortens the cycle.
+    recipe = FIRE_RECIPE_BY_WEAPON.get(WeaponId(player.weapon.weapon_id))
+    if recipe is not None and isinstance(recipe.mode, SwarmerDumpMode):
+        cooldown_mult = float(perk_player.stats.shot_cooldown_mult)
+        if cooldown_mult != 1.0:
+            player.weapon.reload_timer = x87_pc24_mul(player.weapon.reload_timer, f32(cooldown_mult))
     if state.bonuses.weapon_power_up > 0.0 and wpu_boosts_fire_rate(int(player.weapon.weapon_id)):
         # Normalized WPU (~+30% DPS): reload x0.8 alongside the x1.3 fire rate.
         player.weapon.reload_timer = x87_pc24_mul(player.weapon.reload_timer, f32(0.8))

@@ -457,8 +457,17 @@ def test_player_update_tops_up_when_stationary_reload_finishes_same_tick() -> No
     )
 
     assert_float_close(player.weapon.reload_timer, 0.0)
-    assert_float_close(player.weapon.ammo, 6.0)
-    assert player.weapon.reload_active is True
+    # Not native: the leftover 0.5s shot_cooldown (set before this fast,
+    # Stationary-Reloader-boosted reload even started) used to keep gating
+    # fire for a moment after the clip was already topped up - held-trigger
+    # fire would silently do nothing until it drained. Reload completing now
+    # also clears shot_cooldown, so the held trigger fires immediately on the
+    # same tick the clip refills, consuming one round (6.0 -> 5.0).
+    assert_float_close(player.weapon.ammo, 5.0)
+    # reload_active also used to incorrectly linger True here for the same
+    # reason (fire_gate_open_pre_reload read the stale shot_cooldown) - the
+    # reload is genuinely done this tick, so it should already be cleared.
+    assert player.weapon.reload_active is False
 
 
 def test_player_update_move_to_cursor_reload_key_does_not_start_reload() -> None:

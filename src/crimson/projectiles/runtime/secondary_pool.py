@@ -27,6 +27,8 @@ from ...math_parity import (
     x87_pc24_sub,
 )
 from ...owner_ref import OwnerRef
+from ...perks.helpers import perk_active
+from ...perks.ids import PerkId
 from ...rng_caller_static import RngCallerStatic
 from ..types import (
     SECONDARY_PROJECTILE_POOL_SIZE,
@@ -34,6 +36,7 @@ from ..types import (
     SecondaryProjectileTypeId,
 )
 from .collision import _apply_damage_to_creature, _within_native_find_radius, creature_find_nearest_alive
+from .projectile_pool import _explosive_payload_blast_scale, SEEKER_ROUNDS_HIT_THRESHOLD
 from .secondary_rules import (
     DetonationRule,
     HomingRocketRule,
@@ -46,6 +49,30 @@ from .spatial_hash import CreatureSpatialHash
 if TYPE_CHECKING:
     from ...creatures.runtime import CreatureState
     from ...gameplay import GameplayState
+    from ...sim.state_types import PlayerState
+
+
+# Not native: Fork Shot / Explosive Payload for rocket-family weapons, now on
+# hit instead of at spawn (see the removed on-spawn version's history in
+# fire.py) - same +-60 degree split as the bullet version, spawned from the
+# impact point instead of the muzzle so a homing child gets a fresh shot at
+# retargeting rather than just repeating the parent's original flight.
+_ROCKET_FORK_SHOT_ANGLE_RAD = 1.0471976
+# Rocket weapons already carry a heavier per-hit punch (direct hit + AoE) than
+# a bullet pellet, so a fork child defaults to half damage - same 50% cut the
+# Shotgun's own bullet fork children take, and for the same reason (already a
+# lot of damage on target; a full-power third copy is too much).
+_ROCKET_FORK_CHILD_DAMAGE_MULT_DEFAULT = 0.5
+# Rocket Launcher fires one rocket at a time (no pellet/volley multiplier to
+# begin with), so its fork children only take half of the default penalty.
+_ROCKET_FORK_CHILD_DAMAGE_MULT_ROCKET_LAUNCHER = 0.75
+# All four rocket weapons share the same native, pre-crit-compensation
+# damage_scale override (1.0) in projectile_pool.py's
+# _EXPLOSIVE_PAYLOAD_NATIVE_DAMAGE_SCALE, so the blast this bonus adds on a
+# rocket hit is the same fixed size for all of them - reuses the exact
+# formula/anchor bullets use, just with that shared 1.0 baked in instead of
+# looking up a per-weapon damage_scale that rocket damage doesn't otherwise use.
+_ROCKET_EXPLOSIVE_PAYLOAD_BLAST_SCALE = _explosive_payload_blast_scale(1.0)
 
 
 _SECONDARY_PRE_HIT_DECAL_CALLERS = (
@@ -85,6 +112,11 @@ class SecondaryStepCtx(msgspec.Struct, frozen=True):
     # bullet hits (sfx_play_exclusive + one playlist rand) outside demo/rush;
     # when unset, the plain explosion sound is queued directly.
     play_rocket_hit_audio: Callable[[], None] | None = None
+    # Not native: needed to read the firing player's Fork Shot / Explosive
+    # Payload timers on a direct hit (see _maybe_fork_shot_on_hit /
+    # _maybe_explosive_payload_on_hit below) - both bonuses live on
+    # PlayerState, not the projectile itself.
+    players: Sequence[PlayerState] = ()
 
 
 class SecondaryProjectilePool:
@@ -127,6 +159,13 @@ class SecondaryProjectilePool:
         entry.detonation_t = 0.0
         entry.detonation_scale = 1.0
         entry.crit_mult = 1.0
+        # Reset every rewrite-only per-shot flag - a reused pool slot must not
+        # carry over a previous occupant's Fork Shot / Explosive Payload /
+        # Seeker Rounds state.
+        entry.fork_reserved = False
+        entry.explosive_payload_eligible = False
+        entry.fork_shot_eligible = False
+        entry.shot_seq = -1
 
         rule = secondary_rule_for_type_id(type_id)
         match rule:
@@ -185,6 +224,7 @@ class SecondaryProjectilePool:
         creature_damage_runtime = ctx.creature_damage_runtime
         if creature_damage_runtime is None:
             creature_damage_runtime = DirectCreatureDamageRuntime(creatures=creatures)
+        players = ctx.players
 
         if dt <= 0.0:
             return 0
@@ -219,6 +259,117 @@ class SecondaryProjectilePool:
             effects = runtime_state.effects
             sprite_effects = runtime_state.sprite_effects
             sfx_queue = runtime_state.sfx_queue
+
+        def _maybe_rocket_fork_on_hit(entry: SecondaryProjectile, hit_idx: int) -> None:
+            """Fork Shot bonus (not native): split a rocket's own hit into two
+            more, fired from the impact point - mirrors the bullet version
+            (projectile_pool.py::_maybe_fork_shot_on_hit) instead of the
+            earlier spawn-time version that forked every rocket at the muzzle.
+
+            Re-owns children to the struck creature, same as the bullet
+            version and for the same reason: they spawn on top of it, and the
+            owner_creature_idx discard above stops that being an instant
+            self-hit.
+
+            Gated on fork_shot_eligible (stamped at spawn), not a live read of
+            the owning player's projectile_fork_timer - see that field's
+            comment (types.py) for why a snapshotted freebie shot needs this.
+            """
+
+            if entry.fork_reserved or not entry.fork_shot_eligible:
+                return  # already a fork product (or already forked) - fork once
+            entry.fork_reserved = True
+            child_mult = (
+                _ROCKET_FORK_CHILD_DAMAGE_MULT_ROCKET_LAUNCHER
+                if entry.type_id == SecondaryProjectileTypeId.ROCKET
+                else _ROCKET_FORK_CHILD_DAMAGE_MULT_DEFAULT
+            )
+            child_owner = OwnerRef.from_creature(int(hit_idx))
+            for offset in (-_ROCKET_FORK_SHOT_ANGLE_RAD, _ROCKET_FORK_SHOT_ANGLE_RAD):
+                child_index = self.spawn_from_spec(
+                    SecondarySpawnSpec(
+                        pos=entry.pos,
+                        angle=float(entry.angle) + offset,
+                        type_id=entry.type_id,
+                        owner=child_owner,
+                        creatures=creatures,
+                    ),
+                )
+                child = self._entries[child_index]
+                child.fork_reserved = True
+                # Not native: a fresh multiplier, not a re-roll/inherit of the
+                # parent's own crit_mult - matches the bullet fork children's
+                # "plain/uncritted" convention (weapon_runtime/fire.py).
+                child.crit_mult = float(child_mult)
+
+        def _maybe_rocket_explosive_payload_on_hit(entry: SecondaryProjectile) -> None:
+            """Explosive Payload bonus (not native): an extra, separate
+            detonation on a rocket's own hit - mirrors the bullet version
+            (projectile_pool.py::_maybe_explosive_payload_on_hit, "doesn't
+            matter if we get 2 explosions") instead of the earlier flat
+            damage-multiplier version.
+
+            Gated on explosive_payload_eligible (stamped at spawn), not a live
+            read of the owning player's explosive_payload_timer - see that
+            field's comment (types.py) for why a snapshotted freebie shot
+            needs this, and Mini-Rocket Swarmers' one-rocket-per-volley rule.
+            """
+
+            if not entry.explosive_payload_eligible:
+                return
+            self.spawn_from_spec(
+                SecondarySpawnSpec(
+                    pos=entry.pos,
+                    angle=0.0,
+                    type_id=SecondaryProjectileTypeId.DETONATION,
+                    owner=entry.owner,
+                    time_to_live=_ROCKET_EXPLOSIVE_PAYLOAD_BLAST_SCALE,
+                ),
+            )
+            if effects is not None:
+                effects.spawn_explosion_burst(pos=entry.pos, scale=0.5, rng=rng, detail_preset=int(detail_preset))
+            if runtime_state is not None:
+                # Not native: half volume, same as the bullet version - this can
+                # retrigger on every rocket hit while the powerup is active.
+                runtime_state.sfx_queue_quiet.append(SfxId.EXPLOSION_MEDIUM)
+
+        def _maybe_rocket_seeker_rounds_on_hit(entry: SecondaryProjectile) -> None:
+            """Fire and Forget bonus (PerkId.SEEKER_ROUNDS, not native to rocket
+            weapons): mirrors the bullet version (projectile_pool.py's inline
+            hit-resolution block) - a private hit counter fires a free homing
+            rocket every SEEKER_ROUNDS_HIT_THRESHOLD confirmed hits, deduped by
+            shot_seq so Mini-Rocket Swarmers' whole volley counts as one shot.
+
+            Unlike Fork Shot / Explosive Payload above, this checks the real
+            owning player live, not a spawn-time snapshot - Seeker Rounds is a
+            perk, not a timer-based powerup, and perks (unlike active powerup
+            timers) are meant to carry over onto a Domino Effect/Momentum
+            freebie shot (see creatures/runtime.py's _fire_momentum_shot).
+            """
+
+            owner_player_index = entry.owner.player_index_in_bounds(len(players))
+            if owner_player_index is None:
+                return
+            shooter = players[owner_player_index]
+            if not perk_active(shooter, PerkId.SEEKER_ROUNDS):
+                return
+            if entry.shot_seq < 0 or entry.shot_seq == shooter.seeker_rounds_last_shot_seq:
+                return
+            shooter.seeker_rounds_last_shot_seq = int(entry.shot_seq)
+            shooter.seeker_rounds_hit_counter = int(shooter.seeker_rounds_hit_counter) + 1
+            if shooter.seeker_rounds_hit_counter < SEEKER_ROUNDS_HIT_THRESHOLD:
+                return
+            shooter.seeker_rounds_hit_counter = 0
+            bonus_index = self.spawn_from_spec(
+                SecondarySpawnSpec(
+                    pos=shooter.pos,
+                    angle=0.0,
+                    type_id=SecondaryProjectileTypeId.HOMING_ROCKET,
+                    owner=entry.owner,
+                    creatures=creatures,
+                ),
+            )
+            self._entries[bonus_index].crit_mult = float(shooter.stats.perk_efficacy)
 
         def _creature_is_collidable(creature: CreatureState) -> bool:
             if not creature.active:
@@ -327,6 +478,7 @@ class SecondaryProjectilePool:
                     target_accel=target_accel,
                     max_velocity=max_velocity,
                     ttl_decay_scale=ttl_decay_scale,
+                    velocity_damping=velocity_damping,
                 ):
                     # Type 2: homing projectile.
                     target_id = entry.target_id
@@ -396,6 +548,17 @@ class SecondaryProjectilePool:
                                 ),
                             )
 
+                        # Not native: see HomingRocketRule.velocity_damping - bleeds
+                        # off the raw accelerate-toward-target velocity so an
+                        # overshooting rocket settles onto the target instead of
+                        # orbiting it forever.
+                        if float(velocity_damping) > 0.0:
+                            damping_factor = max(0.0, 1.0 - float(velocity_damping) * dt)
+                            entry.vel = Vec2(
+                                float(entry.vel.x) * damping_factor,
+                                float(entry.vel.y) * damping_factor,
+                            )
+
                     entry.speed = float(f32(float(entry.speed) - float(dt) * float(ttl_decay_scale)))
 
             # Rocket smoke trail (`trail_timer` in crimsonland.exe).
@@ -433,6 +596,15 @@ class SecondaryProjectilePool:
                 ):
                     hit_idx = idx
                     break
+
+            # Not native: needed once rockets could be owned by a creature
+            # (Fork Shot's children below, re-owned to the struck creature so
+            # they don't instantly "hit" it again on top of themselves) -
+            # mirrors the bullet pool's own owner_collision discard.
+            owner_creature_idx = entry.owner.creature_index_in_bounds(len(creatures))
+            if hit_idx is not None and owner_creature_idx is not None and int(hit_idx) == owner_creature_idx:
+                hit_idx = None
+
             if hit_idx is not None:
                 hit_count += 1
                 if runtime_state is not None:
@@ -563,6 +735,9 @@ class SecondaryProjectilePool:
                     is_projectile_hit=True,
                 )
                 creature_spatial.sync_index(int(hit_idx))
+                _maybe_rocket_fork_on_hit(entry, int(hit_idx))
+                _maybe_rocket_explosive_payload_on_hit(entry)
+                _maybe_rocket_seeker_rounds_on_hit(entry)
 
                 entry.type_id = SecondaryProjectileTypeId.DETONATION
                 entry.vel = Vec2(0.0, f32(det_scale))

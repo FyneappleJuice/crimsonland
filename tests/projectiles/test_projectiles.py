@@ -532,11 +532,11 @@ def test_homing_rocket_steering_rounds_each_x87_operation() -> None:
 
     assert hit_count == 1
     impulse = damage_runtime.calls[0][3]
-    # Not native: HomingRocketRule.target_accel was buffed (800.0 -> 1600.0)
-    # to fix rockets orbiting a target until their fuse ran out instead of
-    # connecting - recomputed by running, same as any x87-exact test whose
-    # inputs changed with a deliberate tuning change.
-    assert impulse == Vec2(4464.2373046875, 4106.255859375)
+    # Not native: HomingRocketRule now also bleeds off velocity each tick
+    # (velocity_damping) to stop rockets orbiting a target until their fuse
+    # ran out instead of connecting - recomputed by running, same as any
+    # x87-exact test whose inputs changed with a deliberate tuning change.
+    assert impulse == Vec2(3955.31396484375, 3638.142578125)
 
 
 def test_homing_rocket_trail_decay_rounds_each_x87_operation() -> None:
@@ -561,10 +561,10 @@ def test_homing_rocket_trail_decay_rounds_each_x87_operation() -> None:
         ),
     )
 
-    # Not native: HomingRocketRule.target_accel was buffed (800.0 -> 1600.0),
-    # which changes the resulting velocity magnitude feeding the trail decay -
-    # recomputed by running.
-    assert projectile.trail_timer == 0.050496116280555725
+    # Not native: HomingRocketRule now also bleeds off velocity each tick
+    # (velocity_damping), which changes the resulting velocity magnitude
+    # feeding the trail decay - recomputed by running.
+    assert projectile.trail_timer == 0.05167459696531296
 
 
 def test_secondary_projectile_impulse_callbacks_snapshot(snapshot: SnapshotAssertion) -> None:

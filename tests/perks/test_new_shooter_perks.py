@@ -450,6 +450,7 @@ def test_momentum_fires_exactly_one_rocket_from_a_swarmer_dump_weapon() -> None:
     # those rockets land in the secondary pool the old code never touched.
     from crimson.creatures.runtime import MOMENTUM_DAMAGE_MULT
     from crimson.weapon_runtime.crit import CRIT_MULTIPLIER
+    from crimson.weapon_runtime.fire import _MINI_ROCKET_SWARMERS_DAMAGE_MULT
 
     state, player, pool = _kill_setup(weapon_id=WeaponId.MINI_ROCKET_SWARMERS, momentum=True)
     assert player.weapon.clip_size > 1  # sanity: a full clip would be more than one rocket
@@ -462,9 +463,54 @@ def test_momentum_fires_exactly_one_rocket_from_a_swarmer_dump_weapon() -> None:
     # the penalty is either 1.0 or CRIT_MULTIPLIER depending on that private
     # roll - assert the penalty is applied to whichever one it was, rather
     # than assuming a non-crit (which makes this flaky under full-suite RNG
-    # state instead of a fresh interpreter).
+    # state instead of a fresh interpreter). Also folds in this weapon's own
+    # +50% base damage mult (_MINI_ROCKET_SWARMERS_DAMAGE_MULT), which the
+    # SwarmerDumpMode fire path applies to every rocket it spawns, including
+    # this on-kill bonus one.
+    ratio = float(secondary[0].crit_mult) / MOMENTUM_DAMAGE_MULT / _MINI_ROCKET_SWARMERS_DAMAGE_MULT
+    assert ratio == pytest.approx(1.0) or ratio == pytest.approx(CRIT_MULTIPLIER)
+
+
+@pytest.mark.parametrize(
+    "weapon_id",
+    [WeaponId.ROCKET_LAUNCHER, WeaponId.SEEKER_ROCKETS, WeaponId.ROCKET_MINIGUN],
+)
+def test_momentum_rocket_shot_carries_the_full_damage_penalty(weapon_id: WeaponId) -> None:
+    # Rocket weapons only ever got Domino Effect's shot through the secondary
+    # pool's own hit resolution, which - unlike bullets - reuses the same
+    # entry.crit_mult for both the direct hit and the AoE detonation tick
+    # (secondary_pool.py's DetonationRule branch), so a single penalty here
+    # covers "all aspects of the shot" for these weapons, not just the impact.
+    from crimson.creatures.runtime import MOMENTUM_DAMAGE_MULT
+    from crimson.weapon_runtime.crit import CRIT_MULTIPLIER
+
+    state, player, pool = _kill_setup(weapon_id=weapon_id, momentum=True)
+    pool.handle_death(0, state=state, players=[player], rng=state.rng, world_width=1024.0, world_height=1024.0, fx_queue=None)
+
+    secondary = [entry for entry in state.secondary_projectiles.entries if entry.active]
+    assert len(secondary) == 1
     ratio = float(secondary[0].crit_mult) / MOMENTUM_DAMAGE_MULT
     assert ratio == pytest.approx(1.0) or ratio == pytest.approx(CRIT_MULTIPLIER)
+
+
+def test_momentum_rocket_shot_does_not_snapshot_the_real_players_active_powerups() -> None:
+    # Regression: the Domino Effect/Momentum clone deliberately zeroes
+    # projectile_fork_timer/explosive_payload_timer before firing (see
+    # _fire_momentum_shot), but the rocket-weapon versions of Fork Shot /
+    # Explosive Payload used to re-check those timers live on the *real*
+    # player at hit time instead of a spawn-time snapshot on the entry - so a
+    # rocket-weapon bonus shot would inherit whichever of those the real
+    # player happened to have running, defeating the whole point of zeroing
+    # them on the clone.
+    state, player, pool = _kill_setup(weapon_id=WeaponId.ROCKET_MINIGUN, momentum=True)
+    player.projectile_fork_timer = 5.0
+    player.explosive_payload_timer = 5.0
+    pool.handle_death(0, state=state, players=[player], rng=state.rng, world_width=1024.0, world_height=1024.0, fx_queue=None)
+
+    secondary = [entry for entry in state.secondary_projectiles.entries if entry.active]
+    assert len(secondary) == 1
+    assert secondary[0].explosive_payload_eligible is False
+    assert secondary[0].fork_shot_eligible is False
 
 
 def test_momentum_shot_fires_from_the_player_not_the_kill_site() -> None:
