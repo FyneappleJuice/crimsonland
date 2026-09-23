@@ -174,24 +174,23 @@ def _rocket_crit_mult_with_powerups(
     weapon_id: WeaponId,
     perk_player: PlayerState,
     base_damage_mult: float = 1.0,
-) -> float:
-    """Not native: returns the crit_mult the caller should stamp on its own
-    rocket, folding in `base_damage_mult` (see _MINI_ROCKET_SWARMERS_DAMAGE_MULT).
+) -> tuple[float, bool]:
+    """Not native: returns the (crit_mult, did_crit) the caller should stamp on
+    its own rocket, folding `base_damage_mult` into crit_mult (see
+    _MINI_ROCKET_SWARMERS_DAMAGE_MULT). did_crit feeds the crit-reactive perks
+    on the rocket's direct hit (secondary_pool.py's _rocket_on_direct_hit).
 
     Explosive Payload and Fork Shot for rocket weapons are handled entirely at
     hit time now (secondary_pool.py's _maybe_rocket_fork_on_hit /
     _maybe_rocket_explosive_payload_on_hit), same as every bullet weapon - not
     here at spawn time."""
 
-    crit_mult = float(
-        roll_crit_mult(
-            weapon_id,
-            increased_chance=float(perk_player.stats.crit_chance),
-            crit_mult=float(perk_player.stats.crit_mult),
-        ),
+    crit_mult, did_crit = roll_primary_crit(
+        weapon_id,
+        increased_chance=float(perk_player.stats.crit_chance),
+        crit_mult=float(perk_player.stats.crit_mult),
     )
-    crit_mult *= float(base_damage_mult)
-    return crit_mult
+    return float(crit_mult) * float(base_damage_mult), did_crit
 
 
 def _spawn_native_fire_muzzle_sprites(
@@ -623,7 +622,7 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
                 ),
             )
             secondary_entry = state.secondary_projectiles.entries[int(secondary_proj_id)]
-            secondary_entry.crit_mult = _rocket_crit_mult_with_powerups(
+            secondary_entry.crit_mult, secondary_entry.did_crit = _rocket_crit_mult_with_powerups(
                 weapon_id=weapon_id,
                 perk_player=perk_player,
             )
@@ -758,7 +757,7 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
                     ),
                 )
                 swarmer_entry = state.secondary_projectiles.entries[int(swarmer_proj_id)]
-                swarmer_entry.crit_mult = _rocket_crit_mult_with_powerups(
+                swarmer_entry.crit_mult, swarmer_entry.did_crit = _rocket_crit_mult_with_powerups(
                     weapon_id=weapon_id,
                     perk_player=perk_player,
                     base_damage_mult=_MINI_ROCKET_SWARMERS_DAMAGE_MULT,

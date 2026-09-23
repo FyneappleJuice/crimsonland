@@ -29,6 +29,7 @@ from ...math_parity import (
 from ...owner_ref import OwnerRef
 from ...perks.helpers import perk_active
 from ...perks.ids import PerkId
+from ...perks.impl.harvester_scythe import harvester_scythe_on_crit
 from ...rng_caller_static import RngCallerStatic
 from ..types import (
     SECONDARY_PROJECTILE_POOL_SIZE,
@@ -36,7 +37,12 @@ from ..types import (
     SecondaryProjectileTypeId,
 )
 from .collision import _apply_damage_to_creature, _within_native_find_radius, creature_find_nearest_alive
-from .projectile_pool import _explosive_payload_blast_scale, SEEKER_ROUNDS_HIT_THRESHOLD
+from .projectile_pool import (
+    COLD_SNAP_FREEZE_DURATION,
+    OVERDUE_TICK_COOLDOWN,
+    SEEKER_ROUNDS_HIT_THRESHOLD,
+    _explosive_payload_blast_scale,
+)
 from .secondary_rules import (
     DetonationRule,
     HomingRocketRule,
@@ -159,6 +165,7 @@ class SecondaryProjectilePool:
         entry.detonation_t = 0.0
         entry.detonation_scale = 1.0
         entry.crit_mult = 1.0
+        entry.did_crit = False
         # Reset every rewrite-only per-shot flag - a reused pool slot must not
         # carry over a previous occupant's Fork Shot / Explosive Payload /
         # Seeker Rounds state.
@@ -370,6 +377,28 @@ class SecondaryProjectilePool:
                 ),
             )
             self._entries[bonus_index].crit_mult = float(shooter.stats.perk_efficacy)
+
+        def _rocket_on_direct_hit(entry: SecondaryProjectile, hit_idx: int) -> None:
+            """Crit-reactive perks on a rocket's direct hit - mirrors the bullet
+            version (projectile_pool.py's inline hit-resolution block). Only the
+            creature struck directly is affected, never the detonation AoE."""
+
+            owner_player_index = entry.owner.player_index_in_bounds(len(players))
+            if owner_player_index is None:
+                return
+            shooter = players[owner_player_index]
+            creature = creatures[int(hit_idx)]
+            if entry.did_crit and perk_active(shooter, PerkId.COLD_SNAP):
+                creature.crit_freeze_timer = COLD_SNAP_FREEZE_DURATION
+            if creature.hp <= 0.0:
+                return
+            if entry.did_crit:
+                harvester_scythe_on_crit(shooter)
+                if shooter.overdue_window_timer <= 0.0:
+                    shooter.overdue_streak = 0
+            elif shooter.overdue_window_timer <= 0.0 and shooter.overdue_tick_cooldown_timer <= 0.0:
+                shooter.overdue_streak = int(shooter.overdue_streak) + 1
+                shooter.overdue_tick_cooldown_timer = OVERDUE_TICK_COOLDOWN
 
         def _creature_is_collidable(creature: CreatureState) -> bool:
             if not creature.active:
@@ -727,6 +756,7 @@ class SecondaryProjectilePool:
                     x87_pc24_mul(inv_dt, entry.vel.x),
                     x87_pc24_mul(inv_dt, entry.vel.y),
                 )
+                _rocket_on_direct_hit(entry, int(hit_idx))
                 _apply_secondary_damage(
                     hit_idx,
                     damage,

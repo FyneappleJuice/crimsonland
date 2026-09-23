@@ -194,6 +194,11 @@ class SecondaryProjectile(msgspec.Struct):
     # crit.py) - carries through from the direct-hit burst into the
     # detonation AoE tick, since both phases come from the same rocket.
     crit_mult: float = 1.0
+    # Rewrite-only: whether this rocket actually rolled a crit - Projectile.
+    # did_crit's counterpart. Stamped only by the player's own trigger-pull
+    # (weapon_runtime/fire.py); consumed on the direct hit by Cold Snap's
+    # freeze, Harvester's Scythe and Overdue's streak.
+    did_crit: bool = False
     # Rewrite-only: Fork Shot bonus - True once this rocket has forked on hit
     # (as a parent) or is itself a fork child; either way it must not fork
     # again on its own hit. Mirrors Projectile.reserved's gating role for

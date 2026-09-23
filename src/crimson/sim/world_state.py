@@ -627,6 +627,10 @@ class WorldState(msgspec.Struct):
                 continue
             if not (creature.active and creature.hp > 0.0):
                 continue
+            # Rewrite-only: Deep Freeze (Cold Snap) halts the walk cycle too,
+            # same as the Evil Eyes freeze above.
+            if creature.crit_freeze_timer > 0.0:
+                continue
             type_id = creature.type_id
             info = CREATURE_ANIM[type_id]
             creature.anim_phase, _ = creature_anim_advance_phase(

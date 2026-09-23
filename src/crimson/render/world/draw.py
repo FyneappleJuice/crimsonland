@@ -45,6 +45,9 @@ if TYPE_CHECKING:
 _IGNITE_VFX_INTENSITIES: tuple[float, ...] = (0.8, 0.6, 0.4, 0.3, 0.2)
 _IGNITE_VFX_BURST_PERIOD_S = 0.5
 _IGNITE_VFX_BURST_DURATION_S = 0.35
+# Not native: Deep Freeze's frozen-solid overlay fades out over the last
+# stretch of creature.crit_freeze_timer, like the Freeze bonus's last second.
+_CRIT_FREEZE_FADE_S = 0.3
 
 _CREATURE_TEXTURE_IDS: dict[str, TextureId] = {
     "alien": TextureId.ALIEN,
@@ -497,7 +500,10 @@ def draw_freeze_overlay(render_ctx: WorldRenderCtx, *, ctx: WorldDrawContext) ->
         return
 
     freeze_timer = float(render_ctx.frame.state.bonuses.freeze)
-    if freeze_timer <= 0.0:
+    # Not native: Deep Freeze (Cold Snap) crit-freezes single creatures via
+    # creature.crit_freeze_timer, so the overlay also runs per creature.
+    creatures = render_ctx.frame.creatures.entries
+    if freeze_timer <= 0.0 and not any(c.active and c.crit_freeze_timer > 0.0 for c in creatures):
         return
 
     src = effect_src_rect(ctx.particles_texture, EffectId.FREEZE_SHATTER)
@@ -506,14 +512,17 @@ def draw_freeze_overlay(render_ctx: WorldRenderCtx, *, ctx: WorldDrawContext) ->
 
     fade = 1.0 if freeze_timer >= 1.0 else clamp(freeze_timer, 0.0, 1.0)
     freeze_alpha = clamp(fade * ctx.entity_alpha * 0.7, 0.0, 1.0)
-    if freeze_alpha <= 1e-3:
-        return
 
-    tint = rl.Color(255, 255, 255, int(freeze_alpha * 255.0 + 0.5))
     rl.begin_blend_mode(rl.BlendMode.BLEND_ALPHA)
-    for idx, creature in enumerate(render_ctx.frame.creatures.entries):
+    for idx, creature in enumerate(creatures):
         if not creature.active:
             continue
+        crit_freeze = float(creature.crit_freeze_timer)
+        crit_fade = 1.0 if crit_freeze >= _CRIT_FREEZE_FADE_S else clamp(crit_freeze / _CRIT_FREEZE_FADE_S, 0.0, 1.0)
+        alpha = max(freeze_alpha, clamp(crit_fade * ctx.entity_alpha * 0.7, 0.0, 1.0))
+        if alpha <= 1e-3:
+            continue
+        tint = rl.Color(255, 255, 255, int(alpha * 255.0 + 0.5))
         size = float(creature.size) * ctx.scale
         if size <= 1e-3:
             continue

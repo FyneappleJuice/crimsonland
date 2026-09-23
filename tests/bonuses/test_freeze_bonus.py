@@ -204,3 +204,42 @@ def test_freeze_stops_creature_movement_and_animation() -> None:
     assert creature.pos.x == moved_x
     assert creature.pos.y == moved_y
     assert creature.anim_phase == moved_phase
+
+
+def test_deep_freeze_stops_creature_movement_and_animation() -> None:
+    world_size = 1024.0
+    world = WorldState.build(
+        world_size=world_size,
+        demo_mode_active=True,
+        hardcore=False,
+        quest_fail_retry_count=0,
+    )
+    world.players.append(PlayerState(index=0, pos=Vec2(512.0, 512.0)))
+
+    creature = world.creatures.entries[0]
+    creature.active = True
+    creature.hp = 10.0
+    creature.max_hp = 10.0
+    creature.pos = Vec2(100.0, 200.0)
+    creature.move_speed = 1.0
+    creature.ai_mode = CreatureAiMode.ORBIT_PLAYER
+    creature.move_scale = 1.0
+    creature.anim_phase = 3.0
+    creature.crit_freeze_timer = 1.5
+
+    events = world.step(
+        0.2,
+        inputs=None,
+        world_size=world_size,
+        damage_scale_by_type={},
+        detail_preset=5,
+        fx_queue=FxQueue(),
+        fx_queue_rotated=FxQueueRotated(),
+        game_mode=GameMode.SURVIVAL,
+        perk_progression_enabled=False,
+    )
+
+    assert events.deaths == ()
+    assert creature.crit_freeze_timer > 0.0
+    assert creature.pos == Vec2(100.0, 200.0)
+    assert creature.anim_phase == 3.0
