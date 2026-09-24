@@ -312,6 +312,15 @@ class ProjectilePool:
         # perk-proc bolt reusing this slot could inherit a stale, still-valid
         # -looking shot_seq and get miscounted as a primary-fire hit.
         entry.shot_seq = -1
+        # Not native: Ion Overload - same reuse hazard as shot_seq above. A
+        # charged bolt that never hits anything (goes out of bounds, expires
+        # mid-flight) leaves this slot's ion_overload_charge nonzero forever,
+        # since _maybe_ion_overload_on_hit only clears it on an actual hit.
+        # Without this reset, the next totally unrelated shot to reuse this
+        # slot (any weapon, any player) silently inherits that stale charge
+        # and blooms a giant ion nova the first time IT hits something - at
+        # whatever random spot that unrelated shot happens to land.
+        entry.ion_overload_charge = 0.0
 
         collision_profile = projectile_collision_profile(type_id)
         entry.hit_radius = float(collision_profile.hit_radius)
@@ -785,9 +794,18 @@ class ProjectilePool:
                                     from ..types import SecondaryProjectileTypeId
                                     from .secondary_pool import SecondarySpawnSpec
 
+                                    # Not native: a Hollow Form clone shares its
+                                    # real player's index (see OwnerRef.
+                                    # via_hollow_form's comment) - spawn from the
+                                    # clone's frozen position instead of wherever
+                                    # the real player currently is, when this hit
+                                    # came from the clone.
+                                    bonus_spawn_pos = (
+                                        shooter.hollow_form_pos if proj.owner.via_hollow_form else shooter.pos
+                                    )
                                     rocket_idx = runtime_state.secondary_projectiles.spawn_from_spec(
                                         SecondarySpawnSpec(
-                                            pos=shooter.pos,
+                                            pos=bonus_spawn_pos,
                                             angle=0.0,
                                             type_id=SecondaryProjectileTypeId.HOMING_ROCKET,
                                             owner=proj.owner,

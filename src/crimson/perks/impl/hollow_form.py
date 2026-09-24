@@ -117,6 +117,18 @@ def _tick_hollow_form_clone(ctx: PerksUpdateEffectsCtx, player: PlayerState) -> 
     # a single consistent snapshot instead of two different ones.
     input_state = PlayerInput(aim=target_pos, fire_down=True)
 
+    # Not native: the clone shares its real player's own index/OwnerRef
+    # (needed so kills/XP still attribute correctly), so nothing downstream
+    # can tell "this shot came from the clone" from the entry alone - anything
+    # that later looks the shooter up by that index (Seeker Rounds' bonus
+    # rocket, secondary_pool.py's _maybe_rocket_seeker_rounds_on_hit and its
+    # projectile_pool.py bullet equivalent) would find the *real* player and
+    # use their current position instead of the clone's frozen hollow_form_pos.
+    # Tag every projectile/secondary the clone spawns this tick with
+    # OwnerRef.via_hollow_form so those call sites can tell the difference.
+    before_primary = {i for i, entry in enumerate(ctx.state.projectiles.entries) if entry.active}
+    before_secondary = {i for i, entry in enumerate(ctx.state.secondary_projectiles.entries) if entry.active}
+
     # Not native: run the clone through the same periodic-perk-tick pipeline
     # a real player's frame does (Hot Tempered, Fire Cough, Man Bomb, Living
     # Fortress), same order player_update() runs it in - real players and its
@@ -158,6 +170,13 @@ def _tick_hollow_form_clone(ctx: PerksUpdateEffectsCtx, player: PlayerState) -> 
             players=ctx.players,
         ),
     )
+
+    for i, entry in enumerate(ctx.state.projectiles.entries):
+        if entry.active and i not in before_primary:
+            entry.owner = msgspec.structs.replace(entry.owner, via_hollow_form=True)
+    for i, entry in enumerate(ctx.state.secondary_projectiles.entries):
+        if entry.active and i not in before_secondary:
+            entry.owner = msgspec.structs.replace(entry.owner, via_hollow_form=True)
 
 
 def update_hollow_form(ctx: PerksUpdateEffectsCtx) -> None:

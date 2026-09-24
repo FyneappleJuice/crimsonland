@@ -198,6 +198,36 @@ def test_flag_is_consumed_so_a_second_hit_cant_bloom_again() -> None:
     assert all(p.ion_overload_charge == 0.0 for p in live)
 
 
+def test_reused_slot_from_a_bolt_that_never_hit_does_not_inherit_a_stale_charge() -> None:
+    # A charged bolt that misses/goes out of bounds expires without ever
+    # reaching _maybe_ion_overload_on_hit (that only fires on an actual hit),
+    # so it never gets a chance to clear ion_overload_charge itself. If
+    # ProjectilePool.spawn() didn't reset the field on reuse, the next
+    # unrelated shot (any weapon) to land in that same pool slot would
+    # silently inherit the stale charge and bloom a phantom nova the first
+    # time IT hits something - at whatever random spot that shot lands.
+    pool = ProjectilePool(size=8)
+    idx = pool.spawn(
+        pos=Vec2(0.0, 0.0),
+        angle=0.0,
+        type_id=ProjectileTemplateId.ION_CANNON,
+        owner=OwnerRef.from_local_player(0),
+        travel_budget=16.7,
+    )
+    pool.entries[idx].ion_overload_charge = ION_OVERLOAD_BASE_CHARGE_SECONDS * 5.0
+    pool.entries[idx].active = False  # expired out of bounds, never hit anything
+
+    reused_idx = pool.spawn(
+        pos=Vec2(9999.0, 9999.0),
+        angle=0.0,
+        type_id=ProjectileTemplateId.PISTOL,
+        owner=OwnerRef.from_local_player(0),
+    )
+
+    assert reused_idx == idx
+    assert pool.entries[idx].ion_overload_charge == 0.0
+
+
 def test_nova_damages_targets_inside_the_radius_and_spares_those_outside() -> None:
     player = PlayerState(index=0, pos=Vec2())
     player.ion_overload = IonOverloadState(

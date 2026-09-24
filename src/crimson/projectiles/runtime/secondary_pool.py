@@ -367,9 +367,14 @@ class SecondaryProjectilePool:
             if shooter.seeker_rounds_hit_counter < SEEKER_ROUNDS_HIT_THRESHOLD:
                 return
             shooter.seeker_rounds_hit_counter = 0
+            # Not native: a Hollow Form clone shares its real player's index
+            # (see OwnerRef.via_hollow_form's comment) - spawn from the
+            # clone's frozen position instead of wherever the real player
+            # currently is, when this hit came from the clone.
+            spawn_pos = shooter.hollow_form_pos if entry.owner.via_hollow_form else shooter.pos
             bonus_index = self.spawn_from_spec(
                 SecondarySpawnSpec(
-                    pos=shooter.pos,
+                    pos=spawn_pos,
                     angle=0.0,
                     type_id=SecondaryProjectileTypeId.HOMING_ROCKET,
                     owner=entry.owner,

@@ -34,6 +34,18 @@ class OwnerRef(msgspec.Struct, frozen=True):
     # perk-vs-perk interaction that happens to share the same stat field
     # (Ion Gun Master -> Man Bomb, Pyromaniac -> Fire Cough).
     no_run_mod_affinity: bool = False
+    # Not native: set on every projectile a Hollow Form clone fires (perks/
+    # impl/hollow_form.py's _tick_hollow_form_clone), since the clone shares
+    # its real player's own index/OwnerRef (needed for correct kill/XP
+    # attribution) - there's no other way to tell "this shot came from the
+    # clone" from the entry alone. Unlike via_domino_effect this isn't a
+    # same-tick guard - it has to survive the shot's whole flight, since
+    # Seeker Rounds' bonus rocket (secondary_pool.py's
+    # _maybe_rocket_seeker_rounds_on_hit, projectile_pool.py's inline
+    # equivalent) needs it at hit time to spawn from the clone's frozen
+    # hollow_form_pos instead of the real player's current (possibly very
+    # different) position.
+    via_hollow_form: bool = False
 
     @classmethod
     def none(cls) -> OwnerRef:

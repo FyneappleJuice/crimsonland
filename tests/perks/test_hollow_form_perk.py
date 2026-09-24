@@ -199,6 +199,95 @@ def test_hollow_form_clone_gets_angry_reloader_ring_burst_mid_reload() -> None:
     assert len(ring_bolts) >= 7  # Angry Reloader's ring is "7 + reload_timer_max * 4" bolts
 
 
+def test_hollow_form_clone_seeker_rounds_bonus_rocket_spawns_from_the_clone_bullet_weapon() -> None:
+    # Regression: the clone shares its real player's own index/OwnerRef, so
+    # anything that looked the shooter up by that index (Seeker Rounds' bonus
+    # rocket) always found the *real* player and used their current
+    # position - even when the clone, not the real player, was the one
+    # actually firing. Move the real player far away right after the clone
+    # spawns; the bonus rocket must still appear at the clone's frozen spot.
+    from crimson.projectiles.runtime import PrimaryStepCtx
+    from crimson.projectiles.types import SecondaryProjectileTypeId
+    from tests.support.factories import make_projectile_update_options
+
+    state = GameplayState()
+    player = PlayerState(index=0, pos=Vec2(0.0, 0.0), health=100.0)
+    player.perk_counts[int(PerkId.HOLLOW_FORM)] = 1
+    player.perk_counts[int(PerkId.SEEKER_ROUNDS)] = 1
+    weapon_assign_player(player, WeaponId.ASSAULT_RIFLE, state=state)
+    creature = _make_target(Vec2(60.0, 0.0))
+
+    perks_update_effects(state, [player], 0.016, creatures=[creature])
+    assert player.hollow_form_snapshot is not None
+    clone_pos = player.hollow_form_pos
+
+    player.pos = Vec2(900.0, 900.0)
+
+    spawn_positions: list[Vec2] = []
+    for _ in range(120):
+        before = {
+            i for i, e in enumerate(state.secondary_projectiles.entries)
+            if e.active and e.type_id == SecondaryProjectileTypeId.HOMING_ROCKET
+        }
+        perks_update_effects(state, [player], 0.016, creatures=[creature])
+        state.projectiles.step(
+            PrimaryStepCtx(
+                dt=0.016,
+                creatures=[creature],
+                options=make_projectile_update_options(runtime_state=state, players=[player]),
+            ),
+        )
+        for i, e in enumerate(state.secondary_projectiles.entries):
+            if e.active and e.type_id == SecondaryProjectileTypeId.HOMING_ROCKET and i not in before:
+                spawn_positions.append(e.pos)
+        if player.hollow_form_snapshot is None:
+            break
+
+    assert len(spawn_positions) >= 1
+    for pos in spawn_positions:
+        assert pos.distance_to(clone_pos) < 50.0
+        assert pos.distance_to(player.pos) > 500.0
+
+
+def test_hollow_form_clone_seeker_rounds_bonus_rocket_spawns_from_the_clone_rocket_weapon() -> None:
+    from crimson.projectiles.runtime.secondary_pool import SecondaryStepCtx
+    from crimson.projectiles.types import SecondaryProjectileTypeId
+
+    state = GameplayState()
+    player = PlayerState(index=0, pos=Vec2(0.0, 0.0), health=100.0)
+    player.perk_counts[int(PerkId.HOLLOW_FORM)] = 1
+    player.perk_counts[int(PerkId.SEEKER_ROUNDS)] = 1
+    weapon_assign_player(player, WeaponId.ROCKET_MINIGUN, state=state)
+    creature = _make_target(Vec2(60.0, 0.0))
+
+    perks_update_effects(state, [player], 0.016, creatures=[creature])
+    assert player.hollow_form_snapshot is not None
+    clone_pos = player.hollow_form_pos
+
+    player.pos = Vec2(900.0, 900.0)
+
+    spawn_positions: list[Vec2] = []
+    for _ in range(120):
+        before = {
+            i for i, e in enumerate(state.secondary_projectiles.entries)
+            if e.active and e.type_id == SecondaryProjectileTypeId.HOMING_ROCKET
+        }
+        perks_update_effects(state, [player], 0.016, creatures=[creature])
+        state.secondary_projectiles.step(
+            SecondaryStepCtx(dt=0.016, creatures=[creature], runtime_state=state, players=[player]),
+        )
+        for i, e in enumerate(state.secondary_projectiles.entries):
+            if e.active and e.type_id == SecondaryProjectileTypeId.HOMING_ROCKET and i not in before:
+                spawn_positions.append(e.pos)
+        if player.hollow_form_snapshot is None:
+            break
+
+    assert len(spawn_positions) >= 1
+    for pos in spawn_positions:
+        assert pos.distance_to(clone_pos) < 50.0
+        assert pos.distance_to(player.pos) > 500.0
+
+
 def test_hollow_form_resets_when_perk_is_not_active() -> None:
     state = GameplayState()
     player = PlayerState(
