@@ -34,16 +34,20 @@ _DAMAGE_TYPE_SUB_ROLL: dict[CreatureDamageType, RunModId] = {
 }
 
 # WEAPON_TYPE_BOOST's sub-roll targets, same idea, keyed by archetype.
+# Not native: SMG and MELEE are deliberately excluded - their only weapons
+# (Submachine Gun, Evil Scythe) are both currently shelved/inactive, so
+# rolling either one would offer a damage bonus with nothing left to apply
+# to. RunModId.SMG_DAMAGE/MELEE_DAMAGE stay defined (same reason
+# ANXIOUS_LOADER stays in PerkId - old replays that already resolved a pick
+# to one of them must still decode), just unreachable from this pool now.
 _WEAPON_TYPE_SUB_ROLL: dict[WeaponArchetype, RunModId] = {
     WeaponArchetype.PISTOL: RunModId.PISTOL_DAMAGE,
     WeaponArchetype.RIFLE: RunModId.RIFLE_DAMAGE,
-    WeaponArchetype.SMG: RunModId.SMG_DAMAGE,
     WeaponArchetype.SHOTGUN: RunModId.SHOTGUN_DAMAGE,
     WeaponArchetype.MINIGUN: RunModId.MINIGUN_DAMAGE,
     WeaponArchetype.CANNON: RunModId.CANNON_DAMAGE,
     WeaponArchetype.FLAMETHROWER: RunModId.FLAMETHROWER_DAMAGE,
     WeaponArchetype.ARC: RunModId.ARC_DAMAGE,
-    WeaponArchetype.MELEE: RunModId.MELEE_DAMAGE,
 }
 
 # Current-weapon bias for the sub-rolls below: the entry matching whatever
