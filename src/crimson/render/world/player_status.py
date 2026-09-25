@@ -157,8 +157,11 @@ def draw_player_status(
     if flash > 0.0:
         flash_t = clamp(flash / HARVESTER_SCYTHE_FLASH_DURATION, 0.0, 1.0)
         glow_r = 10.0 * float(scale) * flash_t
+        # raylib 5.5's DrawCircleGradient takes int centerX/centerY, not a
+        # Vector2 (that's raylib 6) - the Vector2 form crashed the game on
+        # every crit heal.
         rl.draw_circle_gradient(
-            center, glow_r,
+            int(center.x), int(center.y), glow_r,
             rl.Color(140, 255, 170, int(200 * flash_t * a)),
             rl.Color(90, 235, 130, 0),
         )
