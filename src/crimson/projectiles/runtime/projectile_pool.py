@@ -327,6 +327,7 @@ class ProjectilePool:
         # Not native: Pact of Ricochet - same slot-reuse hazard.
         entry.ricochet_chained = False
         entry.ricochet_ignore_idx = -1
+        entry.ricochet_damage = 0.0
 
         collision_profile = projectile_collision_profile(type_id)
         entry.hit_radius = float(collision_profile.hit_radius)
@@ -779,7 +780,15 @@ class ProjectilePool:
                         if shooter is not None and perk_active(shooter, PerkId.COLD_SNAP):
                             creature.crit_freeze_timer = COLD_SNAP_FREEZE_DURATION
 
-                    if shooter is not None:
+                    if proj.ricochet_damage > 0.0:
+                        # Not native: a Pact of Ricochet bounce deals exactly
+                        # what the hit that spawned it dealt (every multiplier
+                        # already applied, penalty included) - see
+                        # Projectile.ricochet_damage. Recomputing it here
+                        # would score the bounce's own short hop as a
+                        # point-blank shot and drop every parent multiplier.
+                        damage_amount = float(proj.ricochet_damage)
+                    elif shooter is not None:
                         # Not native: Pact of the Deadeye relic - near/far
                         # damage curve off the shot's own travel distance.
                         deadeye_mult = relic_deadeye_pact.distance_damage_mult(dist)
@@ -827,6 +836,7 @@ class ProjectilePool:
                                     )
                                     self._entries[chain_id].ricochet_chained = True
                                     self._entries[chain_id].ricochet_ignore_idx = int(hit_idx)
+                                    self._entries[chain_id].ricochet_damage = float(damage_amount)
 
                     did_pierce = False
                     if damage_amount > 0.0 and creature.hp > 0.0:

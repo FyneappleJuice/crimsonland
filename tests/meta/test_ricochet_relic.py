@@ -73,3 +73,37 @@ def test_every_shot_in_sustained_fire_chains() -> None:
         _step(pool, (struck, other), ticks=4)  # next shot fires before this one's bounce slot frees up
         _step(pool, (struck, other), ticks=20)
         assert other.hp < before
+
+
+def _damage_dealt(*, crit_mult: float = 1.0) -> tuple[float, float]:
+    struck = _creature(pos=Vec2(400.0, 512.0), hp=1.0e9)
+    other = _creature(pos=Vec2(400.0, 650.0), hp=1.0e9)
+    pool = ProjectilePool(size=0x60)
+    _fire(pool)
+    pool.entries[0].crit_mult = float(crit_mult)
+    _step(pool, (struck, other), ticks=60)
+    return 1.0e9 - struck.hp, 1.0e9 - other.hp
+
+
+def test_bounce_deals_exactly_what_the_original_hit_dealt() -> None:
+    # Regression: bullet damage falls off with distance from the shot's
+    # origin, and the bounce was recomputed from its own spawn point right
+    # next to its target - a point-blank hit worth ~2.4x the original shot.
+    first, bounce = _damage_dealt()
+    assert first > 0.0
+    assert bounce == pytest.approx(first)
+
+
+def test_bounce_keeps_the_parent_shots_multipliers(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A Domino Effect shot's 0.25x (stamped into crit_mult) must carry over to
+    # its bounce and stack multiplicatively with the Ricochet penalty.
+    from crimson.creatures.runtime import MOMENTUM_DAMAGE_MULT
+
+    plain_first, _ = _damage_dealt()
+    first, bounce = _damage_dealt(crit_mult=MOMENTUM_DAMAGE_MULT)
+    assert first == pytest.approx(plain_first * MOMENTUM_DAMAGE_MULT, rel=1e-5)
+    assert bounce == pytest.approx(first)
+
+    monkeypatch.setattr(relics, "_ACTIVE_RELIC_IDS", ())
+    unrelicked, _ = _damage_dealt()
+    assert first == pytest.approx(unrelicked * 0.7 * MOMENTUM_DAMAGE_MULT, rel=1e-5)  # High tier: 30% less

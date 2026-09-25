@@ -186,6 +186,13 @@ class Projectile(msgspec.Struct):
     # overlaps the struck creature, so without this the bounce re-hits the
     # creature it just left instead of reaching its new target. -1 = none.
     ricochet_ignore_idx: int = -1
+    # Rewrite-only: Pact of Ricochet - the damage a bounce child deals on its
+    # hit: the parent hit's own final damage (distance falloff, crit, Domino
+    # Effect's penalty, Deadeye, the Ricochet penalty itself - all already
+    # applied). Bullet damage falls off with distance from `origin`, so
+    # recomputing it for a bounce spawned right next to its target would make
+    # every bounce a point-blank shot. 0.0 = not a bounce.
+    ricochet_damage: float = 0.0
 
 
 class SecondaryProjectile(msgspec.Struct):
