@@ -200,6 +200,24 @@ class PlayerState(msgspec.Struct):
     # +30% bonus is active while this is > 0 (creatures/runtime.py sets it).
     bane_of_legends_timer: float = 0.0
 
+    # Rewrite-only: Pact of the Slayer relic (meta/relics_impl/slayer_pact.py) -
+    # one entry per kill in the trailing window, each counting down from
+    # SLAYER_PACT_WINDOW_SECONDS; the relic's active-bonus applies while at
+    # least SLAYER_PACT_KILL_THRESHOLD entries remain. A list instead of Bane
+    # of Legends' single timer because this relic needs an actual kill
+    # *count* within the window, not just "was there any kill at all".
+    slayer_pact_kill_window: list[float] = msgspec.field(default_factory=list)
+
+    # Rewrite-only: Pact of Gathering Winds relic (meta/relics_impl/
+    # gathering_winds.py) - stacks of Tailwind, 0..GATHERING_WINDS_MAX_STACKS.
+    # +1 (capped) whenever the player's own shot lands a hit, -1 whenever the
+    # player takes a hit (from either player_damage.py entry point). Read
+    # directly by gameplay.py's movement-speed calc and player_damage.py's
+    # damage-taken calc instead of going through the static stat-mod pipeline,
+    # since it changes every tick - same reasoning as Living Fortress's inline
+    # multiplier in creatures/damage.py.
+    gathering_winds_stacks: int = 0
+
     # Rewrite-only: Harvester's Scythe - counts down from
     # HARVESTER_SCYTHE_FLASH_DURATION on every crit heal; purely a visual cue
     # (render/world/player_status.py flashes the health ring green while > 0),

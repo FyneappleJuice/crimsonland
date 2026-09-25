@@ -18,6 +18,7 @@ from pathlib import Path
 import msgspec
 
 from ..progression.modifiers import StatMod, flat, more
+from ..test_mode import test_mode_enabled
 
 GRID_W = 5
 GRID_H = 5
@@ -34,19 +35,99 @@ class RelicId(IntEnum):
     CLIP_PLUS_1 = 1
     FIRE_RATE_PLUS_5 = 2
 
+    # Deadeye pacts (meta/relics_impl/deadeye_pact.py, ricochet.py,
+    # gathering_winds.py) - each drops at one of 3 fixed strengths instead of
+    # the low/medium/high grid-tier system being rolled per-instance; see
+    # each impl module's TIER_* tables for the numbers.
+    DEADEYE_PACT_LOW = 10
+    DEADEYE_PACT_MEDIUM = 11
+    DEADEYE_PACT_HIGH = 12
+    RICOCHET_LOW = 13
+    RICOCHET_MEDIUM = 14
+    RICOCHET_HIGH = 15
+    GATHERING_WINDS_LOW = 16
+    GATHERING_WINDS_MEDIUM = 17
+    GATHERING_WINDS_HIGH = 18
+
+    # Slayer pacts (meta/relics_impl/slayer_pact.py, critical_mass.py, leech.py)
+    SLAYER_PACT_LOW = 19
+    SLAYER_PACT_MEDIUM = 20
+    SLAYER_PACT_HIGH = 21
+    CRITICAL_MASS_LOW = 22
+    CRITICAL_MASS_MEDIUM = 23
+    CRITICAL_MASS_HIGH = 24
+    LEECH_LOW = 25
+    LEECH_MEDIUM = 26
+    LEECH_HIGH = 27
+
+
+# Not native: added to `owned` (never placed, never persisted) on boot when
+# --test-mode is active, so all 6 pact relics are sitting in the relic-
+# inventory screen ready to place one at a time - swap which one's in the
+# grid and relaunch to try each in isolation instead of all 6 at once.
+# Revert to () before committing.
+_TEST_MODE_SEED_OWNED_RELICS: tuple[int, ...] = (
+    RelicId.DEADEYE_PACT_HIGH,
+    RelicId.RICOCHET_HIGH,
+    RelicId.GATHERING_WINDS_HIGH,
+    RelicId.SLAYER_PACT_HIGH,
+    RelicId.CRITICAL_MASS_HIGH,
+    RelicId.LEECH_HIGH,
+)
+
+_TIER_SUFFIX = {"Low": " (Low)", "Medium": " (Medium)", "High": " (High)"}
 
 RELIC_NAME: dict[int, str] = {
     RelicId.CLIP_PLUS_1: "+1 Clip Size",
     RelicId.FIRE_RATE_PLUS_5: "+5% Fire Rate",
+    RelicId.DEADEYE_PACT_LOW: "Pact of the Deadeye (Low)",
+    RelicId.DEADEYE_PACT_MEDIUM: "Pact of the Deadeye (Medium)",
+    RelicId.DEADEYE_PACT_HIGH: "Pact of the Deadeye (High)",
+    RelicId.RICOCHET_LOW: "Pact of Ricochet (Low)",
+    RelicId.RICOCHET_MEDIUM: "Pact of Ricochet (Medium)",
+    RelicId.RICOCHET_HIGH: "Pact of Ricochet (High)",
+    RelicId.GATHERING_WINDS_LOW: "Pact of Gathering Winds (Low)",
+    RelicId.GATHERING_WINDS_MEDIUM: "Pact of Gathering Winds (Medium)",
+    RelicId.GATHERING_WINDS_HIGH: "Pact of Gathering Winds (High)",
+    RelicId.SLAYER_PACT_LOW: "Pact of the Slayer (Low)",
+    RelicId.SLAYER_PACT_MEDIUM: "Pact of the Slayer (Medium)",
+    RelicId.SLAYER_PACT_HIGH: "Pact of the Slayer (High)",
+    RelicId.CRITICAL_MASS_LOW: "Critical Mass (Low)",
+    RelicId.CRITICAL_MASS_MEDIUM: "Critical Mass (Medium)",
+    RelicId.CRITICAL_MASS_HIGH: "Critical Mass (High)",
+    RelicId.LEECH_LOW: "Leech (Low)",
+    RelicId.LEECH_MEDIUM: "Leech (Medium)",
+    RelicId.LEECH_HIGH: "Leech (High)",
 }
 
 # Short label drawn inside a placed relic's grid cells.
 RELIC_LABEL: dict[int, str] = {
     RelicId.CLIP_PLUS_1: "+1",
     RelicId.FIRE_RATE_PLUS_5: "+5%",
+    RelicId.DEADEYE_PACT_LOW: "Far L",
+    RelicId.DEADEYE_PACT_MEDIUM: "Far M",
+    RelicId.DEADEYE_PACT_HIGH: "Far H",
+    RelicId.RICOCHET_LOW: "Chain L",
+    RelicId.RICOCHET_MEDIUM: "Chain M",
+    RelicId.RICOCHET_HIGH: "Chain H",
+    RelicId.GATHERING_WINDS_LOW: "Wind L",
+    RelicId.GATHERING_WINDS_MEDIUM: "Wind M",
+    RelicId.GATHERING_WINDS_HIGH: "Wind H",
+    RelicId.SLAYER_PACT_LOW: "Slay L",
+    RelicId.SLAYER_PACT_MEDIUM: "Slay M",
+    RelicId.SLAYER_PACT_HIGH: "Slay H",
+    RelicId.CRITICAL_MASS_LOW: "Crit L",
+    RelicId.CRITICAL_MASS_MEDIUM: "Crit M",
+    RelicId.CRITICAL_MASS_HIGH: "Crit H",
+    RelicId.LEECH_LOW: "Leech L",
+    RelicId.LEECH_MEDIUM: "Leech M",
+    RelicId.LEECH_HIGH: "Leech H",
 }
 
-# (width, height) in grid cells. Unlisted ids default to 1x1.
+# (width, height) in grid cells. Unlisted ids default to 1x1. The pact
+# relics are all 1x1 for now - the 3x4 grid + polyomino low/medium/high
+# footprint (2/3/4 cells) is a separate, not-yet-built rework; see the
+# relics_impl modules' own docstrings.
 RELIC_SHAPE: dict[int, tuple[int, int]] = {
     RelicId.CLIP_PLUS_1: (1, 1),
     RelicId.FIRE_RATE_PLUS_5: (1, 2),
@@ -83,6 +164,13 @@ class RelicSave(msgspec.Struct):
 _STATE: RelicSave | None = None
 _PATH: Path | None = None
 _ACTIVE_RUN_MODS: tuple[StatMod, ...] = ()
+# Not native: a frozen snapshot of which relic ids are active for the run
+# about to start, alongside _ACTIVE_RUN_MODS - the pact relics have custom
+# mechanics (chain-on-hit, kill-streak tracking, ...) that a plain StatMod
+# can't express, so their gameplay hooks check membership here directly
+# instead of going through the stat pipeline. Frozen at begin_run() for the
+# same determinism/replay reasons the stat mods are.
+_ACTIVE_RELIC_IDS: tuple[int, ...] = ()
 
 
 def _default_state() -> RelicSave:
@@ -112,6 +200,11 @@ def init_relics(base_dir: Path | str) -> RelicSave:
     else:
         _STATE = _default_state()
         save_relics()
+    if test_mode_enabled():
+        # In-memory only - never saved, so it can't pollute a real profile.
+        for relic_id in _TEST_MODE_SEED_OWNED_RELICS:
+            if int(relic_id) not in _STATE.owned:
+                _STATE.owned.append(int(relic_id))
     return _STATE
 
 
@@ -230,18 +323,30 @@ def placed_relic_ids() -> list[int]:
 
 def begin_run() -> None:
     """Freeze the placed relics' stat mods for the run about to start."""
-    global _ACTIVE_RUN_MODS
+    global _ACTIVE_RUN_MODS, _ACTIVE_RELIC_IDS
+    ids = placed_relic_ids()
     mods: list[StatMod] = []
-    for rid in placed_relic_ids():
+    for rid in ids:
         mods.extend(relic_stat_mods(rid))
     _ACTIVE_RUN_MODS = tuple(mods)
+    _ACTIVE_RELIC_IDS = tuple(ids)
 
 
 def end_run() -> None:
-    global _ACTIVE_RUN_MODS
+    global _ACTIVE_RUN_MODS, _ACTIVE_RELIC_IDS
     _ACTIVE_RUN_MODS = ()
+    _ACTIVE_RELIC_IDS = ()
 
 
 def active_run_stat_mods() -> tuple[StatMod, ...]:
     """Read by progression.refresh_player_stats each sim tick."""
     return _ACTIVE_RUN_MODS
+
+
+def active_relic_ids() -> tuple[int, ...]:
+    """Read by the pact relics' own gameplay hooks - see _ACTIVE_RELIC_IDS."""
+    return _ACTIVE_RELIC_IDS
+
+
+def relic_owned(relic_id: int) -> bool:
+    return int(relic_id) in _ACTIVE_RELIC_IDS

@@ -13,6 +13,7 @@ import msgspec
 from grim.sfx_map import SfxId
 
 from .math_parity import f32, x87_pc24_add, x87_pc24_mul, x87_pc24_sub
+from .meta.relics_impl import gathering_winds as relic_gathering_winds
 from .perks import PerkId
 from .perks.helpers import perk_active
 from .perks.impl.soul_tether import soul_tether_absorb
@@ -93,6 +94,14 @@ def player_take_damage(
     damage_taken_mult = float(perk_player.stats.damage_taken_mult)
     if damage_taken_mult != 1.0:
         damage_scaled = float(f32(float(damage_scaled) * damage_taken_mult))
+
+    # Not native: Pact of Gathering Winds relic - a real hit landed, so it
+    # costs a stack; the resulting damage-taken multiplier is read live off
+    # whatever's left after that cost.
+    relic_gathering_winds.lose_stack(perk_player)
+    gathering_winds_mult = relic_gathering_winds.damage_taken_mult(perk_player)
+    if gathering_winds_mult != 1.0:
+        damage_scaled = float(f32(float(damage_scaled) * gathering_winds_mult))
 
     # Rewrite-only: Desperation - incoming damage drops as current health
     # drops (health is a 0-100 value), up to DESPERATION_MAX_REDUCTION at 0 HP.
@@ -228,6 +237,15 @@ def player_take_projectile_damage(state: GameplayState, player: PlayerState, dam
         return 0.0
     if float(player.shield_timer) > 0.0:
         return 0.0
+
+    # Not native: Pact of Gathering Winds relic - see player_take_damage's own
+    # copy of this hook for why it has to be duplicated on this path too
+    # (this is the thinner of the two player-damage entry points and skips
+    # several stat hooks the other one doesn't).
+    relic_gathering_winds.lose_stack(player)
+    gathering_winds_mult = relic_gathering_winds.damage_taken_mult(player)
+    if gathering_winds_mult != 1.0:
+        dmg = float(f32(dmg * gathering_winds_mult))
 
     # Rewrite-only: Soul Tether's shield absorbs before health does.
     dmg = soul_tether_absorb(player, dmg)

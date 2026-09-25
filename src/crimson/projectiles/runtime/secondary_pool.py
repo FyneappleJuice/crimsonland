@@ -16,6 +16,7 @@ from ...creatures.damage_types import CreatureDamageType
 from ...creatures.lifecycle import creature_lifecycle_is_alive, creature_lifecycle_is_collidable
 from ...effects import EffectPool, FxQueue, SpriteEffectPool
 from ...effects_atlas import EffectId
+from ...meta.relics_impl import gathering_winds as relic_gathering_winds
 from ...math_parity import (
     NATIVE_HALF_PI,
     f32,
@@ -773,6 +774,12 @@ class SecondaryProjectilePool:
                 _maybe_rocket_fork_on_hit(entry, int(hit_idx))
                 _maybe_rocket_explosive_payload_on_hit(entry)
                 _maybe_rocket_seeker_rounds_on_hit(entry)
+                # Not native: Pact of Gathering Winds relic - same direct-hit
+                # scoping as Seeker Rounds above (a rocket's own splash damage
+                # doesn't separately grant stacks, only the direct hit does).
+                rocket_owner_idx = entry.owner.player_index_in_bounds(len(players))
+                if rocket_owner_idx is not None:
+                    relic_gathering_winds.gain_stack(players[rocket_owner_idx])
 
                 entry.type_id = SecondaryProjectileTypeId.DETONATION
                 entry.vel = Vec2(0.0, f32(det_scale))

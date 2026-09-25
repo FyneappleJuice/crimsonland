@@ -50,6 +50,8 @@ from ..owner_ref import OwnerRef
 from ..perks import PerkId
 from ..perks.helpers import perk_active
 from ..perks.impl.bane_of_legends import BANE_OF_LEGENDS_WINDOW_DURATION
+from ..meta.relics_impl import leech as relic_leech
+from ..meta.relics_impl import slayer_pact as relic_slayer_pact
 from ..perks.impl.hit_list import HIT_LIST_BONUS_PER_KILL, HIT_LIST_MAX_BONUS
 from ..player_damage import PlayerDeathRuntime, player_take_damage
 from ..progression import resolve_team_stats
@@ -2064,6 +2066,13 @@ class CreaturePool:
         # bonus-damage window (perks/impl/bane_of_legends.py ticks it down).
         if killer is not None and perk_active(killer, PerkId.BANE_OF_LEGENDS):
             killer.bane_of_legends_timer = BANE_OF_LEGENDS_WINDOW_DURATION
+
+        # Not native: Pact of the Slayer / Leech relics - both trigger on a
+        # kill, independent of any perk (meta/relics_impl/slayer_pact.py,
+        # leech.py both no-op if their relic isn't equipped).
+        if killer is not None:
+            relic_slayer_pact.register_kill(killer)
+            relic_leech.hp_cost_on_kill(killer)
 
         # Rewrite-only: The Hit List - crossing off the marked Apex monster
         # pays out a small permanent damage bonus, capped (perks/impl/hit_list.py

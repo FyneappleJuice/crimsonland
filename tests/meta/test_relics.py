@@ -12,6 +12,7 @@ def _fresh_relics(tmp_path, monkeypatch):
     monkeypatch.setattr(R, "_STATE", None)
     monkeypatch.setattr(R, "_PATH", None)
     monkeypatch.setattr(R, "_ACTIVE_RUN_MODS", ())
+    monkeypatch.setattr(R, "_ACTIVE_RELIC_IDS", ())
     R.init_relics(tmp_path)
     yield
 

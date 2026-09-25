@@ -18,6 +18,8 @@ from .bonuses.hud import BonusHudState
 from .bonuses.pool import BonusPool
 from .effects import EffectPool, ParticlePool, SpriteEffectPool
 from .game_modes import GameMode
+from .meta.relics_impl import gathering_winds as relic_gathering_winds
+from .meta.relics_impl import slayer_pact as relic_slayer_pact
 from .math_parity import (
     NATIVE_HALF_PI,
     NATIVE_PI,
@@ -944,6 +946,9 @@ def player_update(
         speed_multiplier += 1.0
     # Not native: run mods (crimson.run_mods.RunModId.MOVE_SPEED).
     speed_multiplier *= float(player.stats.move_speed_mult)
+    # Not native: Pact of Gathering Winds relic - read live off stacks rather
+    # than through the stat pipeline, since it changes every hit/hit-taken.
+    speed_multiplier *= relic_gathering_winds.speed_mult(player)
 
     movement_dt = float(dt)
     if state.time_scale_active and movement_dt > 0.0:
@@ -958,6 +963,10 @@ def player_update(
                 x87_pc24_div(f32(0.6), time_scale_factor),
                 movement_dt,
             )
+
+    # Not native: Pact of the Slayer relic's kill-streak window - decays
+    # unconditionally every tick, independent of any perk being active.
+    relic_slayer_pact.update_kill_window(player, dt)
 
     apply_player_perk_ticks(
         player=player,

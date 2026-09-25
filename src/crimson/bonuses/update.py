@@ -26,7 +26,9 @@ _TEST_MODE_BONUS_SPAWN_INTERVAL = 5.0
 # change what --test-mode auto-spawns.
 _TEST_MODE_BONUS_CYCLE: tuple[BonusId, ...] = ()
 # Weapons dropped once near spawn on a fresh test run. Empty = none.
-_TEST_MODE_WEAPON_DROPS: tuple[tuple[float, WeaponId], ...] = ()
+_TEST_MODE_WEAPON_DROPS: tuple[tuple[float, WeaponId], ...] = (
+    (150.0, WeaponId.ASSAULT_RIFLE),
+)
 # Perks granted once, for free, at the start of a fresh test run. Empty = none.
 # Only safe for perks with no apply_handler (pure stat/effects-step perks) -
 # this sets perk_counts directly, skipping whatever an apply_handler would

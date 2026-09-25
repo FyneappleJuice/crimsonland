@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from crimson.bonuses.ids import BonusId
 from crimson.bonuses.update import (
     _TEST_MODE_BONUS_CYCLE,
@@ -7,8 +9,24 @@ from crimson.bonuses.update import (
     update_test_mode_fork_spawner,
 )
 from crimson.gameplay import GameplayState
+from crimson.meta import relics as relics_mod
 from crimson.test_mode import set_test_mode_enabled
 from crimson.weapons import WeaponId
+
+
+@pytest.fixture(autouse=True)
+def _reset_relics_state(monkeypatch):
+    # Not native: update_test_mode_fork_spawner force-places the test-mode
+    # seed relics (see _TEST_MODE_SEED_RELICS in bonuses/update.py) the same
+    # way it force-drops test weapons - without resetting meta.relics'
+    # module-level globals here, one test in this file leaves _ACTIVE_RUN_MODS/
+    # _ACTIVE_RELIC_IDS "active" for every other test in the whole pytest
+    # session, since that module state isn't scoped to a single GameplayState.
+    monkeypatch.setattr(relics_mod, "_STATE", None)
+    monkeypatch.setattr(relics_mod, "_PATH", None)
+    monkeypatch.setattr(relics_mod, "_ACTIVE_RUN_MODS", ())
+    monkeypatch.setattr(relics_mod, "_ACTIVE_RELIC_IDS", ())
+    yield
 
 
 def _weapon_drops(state: GameplayState) -> list:

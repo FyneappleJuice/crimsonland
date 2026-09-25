@@ -20,6 +20,7 @@ from ..math_parity import (
     x87_pc24_mul,
     x87_pc24_sub,
 )
+from ..meta.relics_impl import critical_mass as relic_critical_mass
 from ..perks import PerkId
 from ..perks.helpers import perk_active
 from ..perks.impl.pendulum import pendulum_damage_mult, pendulum_fire_rate_mult
@@ -566,18 +567,23 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
                 )
                 if energy_heat_mult != 1.0:
                     state.projectiles.entries[int(proj_id)].energy_heat_mult = float(energy_heat_mult)
+                # Not native: Critical Mass relic - evaluated fresh per pellet
+                # (not cached), since the nearby-enemy count can change every
+                # shot in a moving fight.
+                critical_mass_chance = relic_critical_mass.crit_bonus_chance(player.pos, creatures)
+                critical_mass_mult = relic_critical_mass.crit_mult_penalty_mult(player.pos, creatures)
                 pellet_crit_mult, pellet_did_crit = roll_primary_crit(
                     weapon_id,
                     force_crit=death_wish_force_crit,
                     lucky_power=diamond_flask_power,
-                    increased_chance=float(perk_player.stats.crit_chance),
+                    increased_chance=float(perk_player.stats.crit_chance) + critical_mass_chance,
                     # Not native: was missing here (every other roll_crit_mult
                     # call site already passes it) - the primary weapon's own
                     # crit was silently ignoring the secondary "Crit
                     # Multiplier" run-mod bucket and always using the flat
                     # CRIT_MULTIPLIER default instead of the player's actual
                     # stats.crit_mult.
-                    crit_mult=float(perk_player.stats.crit_mult),
+                    crit_mult=float(perk_player.stats.crit_mult) * critical_mass_mult,
                 )
                 state.projectiles.entries[int(proj_id)].crit_mult = pellet_crit_mult * pendulum_dmg_mult
                 state.projectiles.entries[int(proj_id)].did_crit = pellet_did_crit

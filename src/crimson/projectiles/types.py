@@ -176,6 +176,11 @@ class Projectile(msgspec.Struct):
     # regardless of pellet count or pierce count. -1 = not a primary-fire
     # bolt (perk-proc bursts, secondary weapons, ...) - never counted.
     shot_seq: int = -1
+    # Rewrite-only: Pact of Ricochet relic - set on the bounce child spawned
+    # by a chained hit, so its own hit resolution knows not to chain again
+    # (chains once) but still takes the same damage penalty as the shot that
+    # spawned it (both the original and the bounce hit for less).
+    ricochet_chained: bool = False
 
 
 class SecondaryProjectile(msgspec.Struct):

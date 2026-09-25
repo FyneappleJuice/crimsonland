@@ -14,6 +14,9 @@ from ...creatures.damage_runtime import CreatureDamageRuntime, DirectCreatureDam
 from ...creatures.damage_types import CreatureDamageType
 from ...creatures.lifecycle import creature_lifecycle_is_alive, creature_lifecycle_is_collidable
 from ...effects import EffectPool
+from ...meta.relics_impl import deadeye_pact as relic_deadeye_pact
+from ...meta.relics_impl import gathering_winds as relic_gathering_winds
+from ...meta.relics_impl import ricochet as relic_ricochet
 from ...math_parity import (
     NATIVE_HALF_PI,
     f32,
@@ -768,6 +771,54 @@ class ProjectilePool:
                         if shooter is not None and perk_active(shooter, PerkId.COLD_SNAP):
                             creature.crit_freeze_timer = COLD_SNAP_FREEZE_DURATION
 
+                    if shooter is not None:
+                        # Not native: Pact of the Deadeye relic - near/far
+                        # damage curve off the shot's own travel distance.
+                        deadeye_mult = relic_deadeye_pact.distance_damage_mult(dist)
+                        if deadeye_mult != 1.0:
+                            damage_amount = float(f32(float(damage_amount) * deadeye_mult))
+
+                        # Not native: Pact of Ricochet relic - both the
+                        # original hit and its one bounce deal reduced
+                        # damage; only non-piercing shots chain (a piercing
+                        # round already hits multiple targets on its own).
+                        ricochet_mult = relic_ricochet.damage_mult()
+                        if ricochet_mult != 1.0 and proj.pierce_left < 1.0:
+                            damage_amount = float(f32(float(damage_amount) * ricochet_mult))
+                            if not proj.ricochet_chained:
+                                chain_idx = relic_ricochet.pick_chain_target(proj.pos, int(hit_idx), creatures)
+                                if chain_idx is not None:
+                                    chain_target = creatures[chain_idx]
+                                    chain_dx = float(chain_target.pos.x) - float(proj.pos.x)
+                                    chain_dy = float(chain_target.pos.y) - float(proj.pos.y)
+                                    chain_angle = math.atan2(chain_dy, chain_dx) + NATIVE_HALF_PI
+                                    # Not native: spawning exactly at proj.pos
+                                    # (still inside the just-hit creature's own
+                                    # hit radius) lets the bounce immediately
+                                    # re-hit the same creature and never
+                                    # travel anywhere - nudge the spawn point
+                                    # partway toward the new target, just far
+                                    # enough to clear the struck creature's
+                                    # own size, without overshooting past the
+                                    # new target itself.
+                                    chain_dist = math.hypot(chain_dx, chain_dy)
+                                    chain_pos = proj.pos
+                                    if chain_dist > 0.0:
+                                        clearance = min(chain_dist * 0.5, float(creature.size) + 10.0)
+                                        chain_pos = Vec2(
+                                            float(proj.pos.x) + chain_dx / chain_dist * clearance,
+                                            float(proj.pos.y) + chain_dy / chain_dist * clearance,
+                                        )
+                                    chain_id = self.spawn(
+                                        pos=chain_pos,
+                                        angle=chain_angle,
+                                        type_id=proj.type_id,
+                                        owner=proj.owner,
+                                        travel_budget=float(proj.travel_budget),
+                                        hits_players=bool(proj.hits_players),
+                                    )
+                                    self._entries[chain_id].ricochet_chained = True
+
                     did_pierce = False
                     if damage_amount > 0.0 and creature.hp > 0.0:
                         # Not native: Overdue's non-crit streak and Harvester's
@@ -779,6 +830,12 @@ class ProjectilePool:
                         # per creature it goes on to hit, so each connect
                         # counts separately, same as a fresh shot would.
                         if shooter is not None:
+                            # Not native: Pact of Gathering Winds relic - a
+                            # confirmed hit builds a stack, regardless of
+                            # weapon/perk. Piercing shots re-enter this block
+                            # once per creature hit, same as Seeker Rounds
+                            # below, so a pierce through 3 targets grants 3.
+                            relic_gathering_winds.gain_stack(shooter)
                             if (
                                 perk_active(shooter, PerkId.SEEKER_ROUNDS)
                                 and proj.shot_seq >= 0

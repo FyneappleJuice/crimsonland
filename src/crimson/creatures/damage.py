@@ -18,6 +18,8 @@ from ..perks import PerkId
 from ..perks.helpers import perk_active
 from ..perks.impl.bane_of_legends import BANE_OF_LEGENDS_KILL_BONUS, BANE_OF_LEGENDS_PENALTY
 from ..perks.impl.delicate_watch import DELICATE_WATCH_BONUS
+from ..meta.relics_impl import leech as relic_leech
+from ..meta.relics_impl import slayer_pact as relic_slayer_pact
 from ..progression import PlayerStats, resolve_team_stats, resolve_team_stats_perks_only
 from ..rng_caller_static import RngCallerStatic
 from ..sim.state_types import PlayerState
@@ -547,6 +549,9 @@ def creature_apply_damage(
                 if float(shooter.bane_of_legends_timer) > 0.0:
                     bane_mult *= 1.0 + BANE_OF_LEGENDS_KILL_BONUS * efficacy
                 ctx.damage = f32(float(ctx.damage) * bane_mult)
+            slayer_pact_mult = relic_slayer_pact.damage_mult(shooter)
+            if slayer_pact_mult != 1.0:
+                ctx.damage = f32(float(ctx.damage) * slayer_pact_mult)
             if perk_active(shooter, PerkId.DELICATE_WATCH):
                 ctx.damage = f32(float(ctx.damage) * (1.0 + DELICATE_WATCH_BONUS * efficacy))
             if perk_active(shooter, PerkId.HIT_LIST) and float(shooter.hit_list_bonus) > 0.0:
@@ -577,6 +582,19 @@ def creature_apply_damage(
     # Not native: Loose Cannon - applied last, against the fully resolved
     # damage, so it varies whatever every prior bonus/multiplier landed on.
     _damage_variance_mult(ctx)
+
+    # Not native: Leech relic - heal off the fully resolved damage (post
+    # variance), resolved fresh rather than reusing the shooter-perk block's
+    # own `shooter` local, since that block doesn't always run (its own
+    # ctx.damage > 0.0 guard may have been false).
+    leech_shooter_idx = ctx.owner.player_index()
+    leech_shooter = (
+        ctx.players[leech_shooter_idx]
+        if leech_shooter_idx is not None and 0 <= leech_shooter_idx < len(ctx.players)
+        else None
+    )
+    if leech_shooter is not None:
+        relic_leech.heal_on_hit(leech_shooter, float(ctx.damage))
 
     creature.hp = x87_pc24_sub(creature.hp, ctx.damage)
     creature.vel = Vec2(
