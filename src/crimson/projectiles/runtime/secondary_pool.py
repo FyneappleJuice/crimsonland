@@ -489,6 +489,12 @@ class SecondaryProjectilePool:
                     # Crit compensation/multiplier, stamped on the rocket when it was
                     # fired - carries through into its detonation AoE tick.
                     damage = x87_pc24_mul(damage, float(entry.crit_mult))
+                # Not native: Pact of Ricochet's penalty - every detonation is a
+                # projectile's child (a rocket's, or Explosive Payload's off a
+                # bullet or rocket hit).
+                ricochet_mult = relic_ricochet.projectile_damage_mult(entry.owner)
+                if ricochet_mult != 1.0:
+                    damage = x87_pc24_mul(damage, ricochet_mult)
                 for creature_idx in creature_spatial.candidate_indices(pos=entry.pos, radius=float(radius)):
                     creature = creatures[int(creature_idx)]
                     if not _creature_is_collidable(creature):
@@ -804,6 +810,11 @@ class SecondaryProjectilePool:
                     damage = float(entry.ricochet_damage)
                 else:
                     _maybe_rocket_ricochet_on_hit(entry, int(hit_idx), float(damage))
+                # Not native: Pact of Ricochet's penalty, once per hit - the
+                # bounce above carries the pre-penalty damage.
+                ricochet_mult = relic_ricochet.projectile_damage_mult(entry.owner)
+                if ricochet_mult != 1.0:
+                    damage = x87_pc24_mul(damage, ricochet_mult)
                 inv_dt = f32(1.0 / float(dt))
                 impulse = Vec2(
                     x87_pc24_mul(inv_dt, entry.vel.x),

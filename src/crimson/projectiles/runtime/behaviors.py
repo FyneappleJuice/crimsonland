@@ -16,6 +16,7 @@ from ...creatures.lifecycle import creature_lifecycle_is_collidable
 from ...creatures.spawn import CreatureFlags
 from ...effects import EffectPool
 from ...math_parity import NATIVE_HALF_PI, NATIVE_PI, f32, x87_pc24_mul, x87_pc24_sub
+from ...meta.relics_impl import ricochet as relic_ricochet
 from ...owner_ref import OwnerRef
 from ...rng_caller_static import RngCallerStatic
 from ...weapons import weapon_entry_for_projectile_type_id
@@ -118,6 +119,11 @@ def _linger_ion_aoe(
     decay = x87_pc24_mul(ctx.dt, f32(life_decay_scale))
     proj.life_timer = _life_timer_sub_f32(proj.life_timer, decay)
     damage = x87_pc24_mul(ctx.dt, f32(damage_per_second))
+    # Not native: Pact of Ricochet's penalty - the cloud is the ion bolt's own
+    # child, so it pays the same penalty the bolt's hit did.
+    ricochet_mult = relic_ricochet.projectile_damage_mult(proj.owner)
+    if ricochet_mult != 1.0:
+        damage = float(f32(float(damage) * ricochet_mult))
     radius = x87_pc24_mul(f32(ctx.ion_scale), f32(base_radius))
     for creature_idx, creature in enumerate(ctx.creatures):
         if not creature.active:

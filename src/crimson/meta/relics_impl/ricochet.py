@@ -25,6 +25,7 @@ from ..relics import RelicId, relic_owned
 
 if TYPE_CHECKING:
     from ...creatures.runtime import CreatureState
+    from ...owner_ref import OwnerRef
 
 RICOCHET_SEARCH_RADIUS = 300.0
 
@@ -57,6 +58,18 @@ def damage_mult() -> float:
     return 1.0 - _PENALTY_BY_RELIC[relic_id]
 
 
+def projectile_damage_mult(owner: OwnerRef) -> float:
+    """The penalty for damage from a projectile (or anything it spawned - a
+    bounce, an explosion, an ion cloud) owned by `owner`. Chaining is a
+    projectile property, so only projectile damage pays for it: non-projectile
+    damage (Nuke, Man Bomb, Radioactive, plague, flamethrower particles and
+    their ignite) is never penalized, and neither is a creature-owned derived
+    shot (Fork Shot / Splitter children, Shock Chain relays)."""
+    if not owner.is_player():
+        return 1.0
+    return damage_mult()
+
+
 def pick_chain_target(
     origin_pos: Vec2,
     exclude_idx: int,
@@ -84,4 +97,5 @@ __all__ = [
     "active_relic_id",
     "damage_mult",
     "pick_chain_target",
+    "projectile_damage_mult",
 ]

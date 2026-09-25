@@ -48,6 +48,7 @@ from ..creatures.damage_types import CreatureDamageType
 from ..creatures.lifecycle import creature_lifecycle_is_collidable
 from ..effects_atlas import EffectId
 from ..math_parity import f32, native_fire_muzzle_pos
+from ..meta.relics_impl import ricochet as relic_ricochet
 from ..owner_ref import OwnerRef
 from ..projectiles.types import ProjectileTemplateId
 from ..sim.state_types import GameplayState, PlayerState
@@ -208,10 +209,12 @@ def update_ion_overload_clouds(
         if creature_damage_runtime is None or not creatures:
             continue
 
-        damage = float(f32(dt * float(overload.cloud_dps)))
+        owner = OwnerRef.from_local_player(int(player.index))
+        # Not native: Pact of Ricochet's penalty - the nova is the overload
+        # bolt's own child, so it pays the same penalty the bolt's hit did.
+        damage = float(f32(dt * float(overload.cloud_dps) * relic_ricochet.projectile_damage_mult(owner)))
         radius = float(overload.cloud_radius)
         radius_sq = radius * radius
-        owner = OwnerRef.from_local_player(int(player.index))
         for idx, creature in enumerate(creatures):
             if not creature.active or float(creature.hp) <= 0.0:
                 continue

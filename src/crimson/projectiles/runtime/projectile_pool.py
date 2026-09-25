@@ -797,9 +797,9 @@ class ProjectilePool:
 
                         # Not native: Pact of Ricochet relic - a non-piercing
                         # shot chains once (a piercing round already hits
-                        # multiple targets on its own). The relic's damage
-                        # penalty isn't applied here: creatures/damage.py
-                        # applies it to all of the shooter's damage.
+                        # multiple targets on its own). The bounce carries
+                        # this hit's pre-penalty damage; the penalty is
+                        # applied below, once per hit, to both.
                         if relic_ricochet.active_relic_id() is not None and proj.pierce_left < 1.0:
                             if not proj.ricochet_chained:
                                 chain_idx = relic_ricochet.pick_chain_target(proj.pos, int(hit_idx), creatures)
@@ -836,6 +836,12 @@ class ProjectilePool:
                                     self._entries[chain_id].ricochet_chained = True
                                     self._entries[chain_id].ricochet_ignore_idx = int(hit_idx)
                                     self._entries[chain_id].ricochet_damage = float(damage_amount)
+
+                    # Not native: Pact of Ricochet's penalty - every
+                    # projectile hit (bounces included) pays it.
+                    ricochet_mult = relic_ricochet.projectile_damage_mult(proj.owner)
+                    if ricochet_mult != 1.0:
+                        damage_amount = float(f32(float(damage_amount) * ricochet_mult))
 
                     did_pierce = False
                     if damage_amount > 0.0 and creature.hp > 0.0:

@@ -52,7 +52,6 @@ from ..perks.helpers import perk_active
 from ..perks.impl.bane_of_legends import BANE_OF_LEGENDS_WINDOW_DURATION
 from ..perks.impl.momentum import momentum_cooldown_remaining, start_momentum_cooldown
 from ..meta.relics_impl import leech as relic_leech
-from ..meta.relics_impl import ricochet as relic_ricochet
 from ..meta.relics_impl import slayer_pact as relic_slayer_pact
 from ..perks.impl.hit_list import HIT_LIST_BONUS_PER_KILL, HIT_LIST_MAX_BONUS
 from ..player_damage import PlayerDeathRuntime, player_take_damage
@@ -1193,10 +1192,6 @@ class CreaturePool:
         # per creature; 1.0 (a no-op) when no All Damage stacks are picked, so
         # native math is bit-for-bit unchanged for a run with no run mods.
         self_tick_damage_mult = float(resolve_team_stats(players).damage_mult) if players else 1.0
-        # Not native: Radioactive's aura and Plaguebearer's plague write hp
-        # directly (bypassing creature_apply_damage), so Pact of Ricochet's
-        # all-damage penalty is folded in here instead.
-        self_tick_damage_mult *= relic_ricochet.damage_mult()
         creature_damage_runtime = _CreaturePoolCreatureDamageRuntime(
             pool=self,
             state=state,

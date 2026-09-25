@@ -114,42 +114,56 @@ def test_bounce_keeps_the_parent_shots_multipliers() -> None:
     assert bounce == pytest.approx(first)
 
 
-@pytest.mark.parametrize(
-    ("damage_type", "is_projectile_hit"),
-    [
-        (CreatureDamageType.BULLET, True),
-        (CreatureDamageType.EXPLOSION, True),  # rocket impact
-        (CreatureDamageType.EXPLOSION, False),  # blast-radius tick
-        (CreatureDamageType.ION, False),  # lingering ion cloud
-        (CreatureDamageType.FIRE, False),  # ignite DoT
-        (CreatureDamageType.FIRE, True),  # flame particle
-        (CreatureDamageType.PLASMA, True),
-        (CreatureDamageType.LIGHTNING, True),
-    ],
-)
-def test_penalty_applies_to_all_player_damage(damage_type: int, is_projectile_hit: bool, monkeypatch: pytest.MonkeyPatch) -> None:
-    def _dealt(owner: OwnerRef) -> float:
+def _without_relic(monkeypatch: pytest.MonkeyPatch, fn):
+    with monkeypatch.context() as m:
+        m.setattr(relics, "_ACTIVE_RELIC_IDS", ())
+        return fn()
+
+
+def test_bullet_hit_and_its_bounce_pay_the_penalty(monkeypatch: pytest.MonkeyPatch) -> None:
+    first, bounce = _damage_dealt()
+    plain, _ = _without_relic(monkeypatch, _damage_dealt)
+    assert first == pytest.approx(plain * 0.7, rel=1e-5)  # High tier: 30% less
+    assert bounce == pytest.approx(first)
+
+
+def _ion_rifle_total_damage() -> float:
+    # Ion Rifle bolt + its lingering cloud, on a lone creature (no bounce).
+    creature = _creature(pos=Vec2(400.0, 512.0), hp=1.0e9)
+    pool = ProjectilePool(size=0x60)
+    pool.spawn(
+        pos=Vec2(110.0, 512.0),
+        angle=math.pi / 2,
+        type_id=ProjectileTemplateId.ION_RIFLE,
+        owner=OwnerRef.from_local_player(0),
+    )
+    _step(pool, (creature,), ticks=120)
+    return 1.0e9 - creature.hp
+
+
+def test_ion_bolt_and_its_cloud_pay_the_penalty(monkeypatch: pytest.MonkeyPatch) -> None:
+    with_relic = _ion_rifle_total_damage()
+    plain = _without_relic(monkeypatch, _ion_rifle_total_damage)
+    assert plain > 0.0
+    assert with_relic == pytest.approx(plain * 0.7, rel=1e-4)
+
+
+def test_non_projectile_damage_is_not_penalized() -> None:
+    # Nuke, Man Bomb, Radioactive, flamethrower/ignite, ... all resolve through
+    # creature_apply_damage directly - no projectile, so no penalty.
+    for damage_type in (CreatureDamageType.EXPLOSION, CreatureDamageType.FIRE, CreatureDamageType.ION):
         creature = CreatureState(active=True, hp=1000.0, max_hp=1000.0)
         creature_apply_damage(
             creature,
             damage_amount=10.0,
             damage_type=int(damage_type),
             impulse=Vec2(),
-            owner=owner,
+            owner=OwnerRef.from_player(0),
             dt=0.016,
             players=[PlayerState(index=0, pos=Vec2())],
             rng=Crand(1),
-            is_projectile_hit=is_projectile_hit,
         )
-        return 1000.0 - float(creature.hp)
-
-    with_relic = _dealt(OwnerRef.from_player(0))
-    from_creature = _dealt(OwnerRef.from_creature(3))
-    monkeypatch.setattr(relics, "_ACTIVE_RELIC_IDS", ())
-    without_relic = _dealt(OwnerRef.from_player(0))
-
-    assert with_relic == pytest.approx(without_relic * 0.7, rel=1e-5)  # High tier: 30% less
-    assert from_creature == pytest.approx(without_relic, rel=1e-5)  # not the player's damage
+        assert 1000.0 - float(creature.hp) == pytest.approx(10.0, rel=1e-5)
 
 
 def _fire_rocket_into_pair(weapon_id: WeaponId) -> tuple[RecordingCreatureDamageRuntime, tuple, PlayerState]:
@@ -208,3 +222,14 @@ def test_rocket_direct_hit_chains_to_another_creature(weapon_id: WeaponId) -> No
 def test_rocket_chains_only_once() -> None:
     runtime, _, _ = _fire_rocket_into_pair(WeaponId.ROCKET_LAUNCHER)
     assert len(_direct_hits(runtime)) == 2  # parent's direct hit + one bounce, no further chaining
+
+
+def test_rocket_hit_and_explosion_pay_the_penalty(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _struck_total() -> float:
+        runtime, _, _ = _fire_rocket_into_pair(WeaponId.ROCKET_LAUNCHER)
+        return sum(dmg for idx, dmg, *_ in runtime.calls if idx == 0)
+
+    with_relic = _struck_total()
+    plain = _without_relic(monkeypatch, _struck_total)
+    assert plain > 0.0
+    assert with_relic == pytest.approx(plain * 0.7, rel=1e-3)
