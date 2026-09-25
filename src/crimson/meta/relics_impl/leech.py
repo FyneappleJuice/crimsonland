@@ -24,9 +24,9 @@ from ..relics import RelicId, relic_owned
 LEECH_HP_COST_PER_KILL = 0.05  # 5% of current HP, fixed at every tier
 
 _HEAL_PCT_BY_RELIC: dict[int, float] = {
-    RelicId.LEECH_LOW: 0.0084,
-    RelicId.LEECH_MEDIUM: 0.014,
-    RelicId.LEECH_HIGH: 0.021,
+    RelicId.LEECH_LOW: 0.00756,
+    RelicId.LEECH_MEDIUM: 0.0126,
+    RelicId.LEECH_HIGH: 0.0189,
 }
 
 

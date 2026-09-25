@@ -83,6 +83,7 @@ def roll_primary_crit(
     lucky_power: float = 0.0,
     increased_chance: float = 0.0,
     crit_mult: float = CRIT_MULTIPLIER,
+    added_chance: float = 0.0,
 ) -> tuple[float, bool]:
     """Like `roll_crit_mult`, but also reports whether this particular roll
     crit (needed by perks that react to a real crit landing, e.g. Cold Snap's
@@ -105,6 +106,11 @@ def roll_primary_crit(
     perks that need this act on bonus-spawned projectiles.
     """
     chance = crit_chance_for_weapon(weapon_id, increased_chance=increased_chance)
+    # `added_chance` (Critical Mass) is a flat add on top of the weapon's own
+    # (increased) chance, not another "increased%" - so it's worth the same
+    # absolute amount on every weapon, including 0%-base ones.
+    if added_chance > 0.0:
+        chance = min(1.0, chance + float(added_chance))
 
     if lucky_power > 0.0 and chance > 0.0:
         effective_chance = 1.0 - (1.0 - chance) ** lucky_power

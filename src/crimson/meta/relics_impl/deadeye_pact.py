@@ -3,8 +3,10 @@ from __future__ import annotations
 """Pact of the Deadeye relic (not native, inspired by Far Shot).
 
 Projectile damage scales with how far the shot has traveled when it lands:
-a fixed -25% penalty at point-blank range, climbing linearly to a tier-scaled
-bonus (+12%/+20%/+30%) by DEADEYE_PACT_FAR_DISTANCE. The near-side penalty is
+a fixed -20% penalty at point-blank range, climbing logarithmically (fast up
+close, flattening out further away) to a tier-scaled bonus (+12%/+20%/+30%)
+at DEADEYE_PACT_FAR_DISTANCE, clamped there beyond it. Break-even (no bonus)
+falls out of the curve: ~211/158/126 units for Low/Medium/High. The near-side penalty is
 identical at every tier - only the far-side payoff scales - so High always
 strictly beats Low (same cost, bigger reward), never a bigger drawback.
 
@@ -14,11 +16,13 @@ inside creature_apply_damage's shooter-perk block, since that block doesn't
 have the shot's travel distance available.
 """
 
+import math
+
 from ..relics import RelicId, relic_owned
 
 DEADEYE_PACT_NEAR_DISTANCE = 50.0  # matches the base damage formula's own distance floor
 DEADEYE_PACT_FAR_DISTANCE = 500.0
-DEADEYE_PACT_NEAR_MULT = 0.75  # fixed at every tier: -25% at point-blank
+DEADEYE_PACT_NEAR_MULT = 0.80  # fixed at every tier: -20% at point-blank
 
 _FAR_MULT_BY_RELIC: dict[int, float] = {
     RelicId.DEADEYE_PACT_LOW: 1.12,
@@ -46,8 +50,25 @@ def distance_damage_mult(dist: float) -> float:
     far_mult = _FAR_MULT_BY_RELIC[relic_id]
     if dist >= DEADEYE_PACT_FAR_DISTANCE:
         return far_mult
-    t = (dist - DEADEYE_PACT_NEAR_DISTANCE) / (DEADEYE_PACT_FAR_DISTANCE - DEADEYE_PACT_NEAR_DISTANCE)
-    return DEADEYE_PACT_NEAR_MULT + t * (far_mult - DEADEYE_PACT_NEAR_MULT)
+    return DEADEYE_PACT_NEAR_MULT + _log_progress(dist) * (far_mult - DEADEYE_PACT_NEAR_MULT)
+
+
+def _log_progress(dist: float) -> float:
+    """0.0 at DEADEYE_PACT_NEAR_DISTANCE, 1.0 at DEADEYE_PACT_FAR_DISTANCE,
+    logarithmic in between."""
+    return math.log(dist / DEADEYE_PACT_NEAR_DISTANCE) / math.log(DEADEYE_PACT_FAR_DISTANCE / DEADEYE_PACT_NEAR_DISTANCE)
+
+
+def neutral_distance() -> float | None:
+    """Travel distance where the near/far curve crosses exactly 1.0 (no bonus,
+    no penalty) - for the in-world ring. None if the relic isn't equipped."""
+    relic_id = _active_relic_id()
+    if relic_id is None:
+        return None
+    # Invert the log curve at mult == 1.0.
+    far_mult = _FAR_MULT_BY_RELIC[relic_id]
+    progress = (1.0 - DEADEYE_PACT_NEAR_MULT) / (far_mult - DEADEYE_PACT_NEAR_MULT)
+    return DEADEYE_PACT_NEAR_DISTANCE * (DEADEYE_PACT_FAR_DISTANCE / DEADEYE_PACT_NEAR_DISTANCE) ** progress
 
 
 __all__ = [
@@ -55,4 +76,5 @@ __all__ = [
     "DEADEYE_PACT_NEAR_DISTANCE",
     "DEADEYE_PACT_NEAR_MULT",
     "distance_damage_mult",
+    "neutral_distance",
 ]

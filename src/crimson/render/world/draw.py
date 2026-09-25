@@ -8,6 +8,7 @@ import msgspec
 
 from grim.assets import RuntimeResources, TextureId
 from grim.color import RGBA
+from grim.fonts.small import draw_small_text
 from grim.geom import Vec2
 from grim.math import clamp
 from grim.raylib_api import rl
@@ -15,6 +16,9 @@ from grim.terrain_render import _maybe_alpha_test
 
 from ...creatures.spawn import CreatureFlags, CreatureTypeId
 from ...effects_atlas import EFFECT_ID_ATLAS_TABLE_BY_ID, SIZE_CODE_GRID, EffectId
+from ...meta.relics_impl import critical_mass as relic_critical_mass
+from ...meta.relics_impl import deadeye_pact as relic_deadeye_pact
+from ...meta.relics_impl import slayer_pact as relic_slayer_pact
 from ...perks import PerkId
 from ...perks.helpers import perk_active
 from ...sim.world_defs import CREATURE_ANIM, CREATURE_ASSET
@@ -113,6 +117,10 @@ def draw_world(
             draw_hit_list_marker(render_ctx, ctx=draw_ctx)
         with profile_pass("freeze_overlay"):
             draw_freeze_overlay(render_ctx, ctx=draw_ctx)
+        # Not native: Critical Mass's enemy-count radius and Deadeye's
+        # break-even distance, under the players.
+        draw_critical_mass_radius(render_ctx, ctx=draw_ctx)
+        draw_deadeye_neutral_ring(render_ctx, ctx=draw_ctx)
         with profile_pass("players_alive"):
             draw_players(render_ctx, ctx=draw_ctx, alive=True)
             # Not native: Hollow Form's clone, drawn dimmed right after the
@@ -495,6 +503,74 @@ def draw_hit_list_marker(render_ctx: WorldRenderCtx, *, ctx: WorldDrawContext) -
         break  # only ever one mark active at a time
 
 
+_CRITICAL_MASS_RING_COLOR = (90, 230, 120)
+_CRITICAL_MASS_RING_ALPHA = 70
+_CRITICAL_MASS_FILL_ALPHA = 12
+
+
+def draw_critical_mass_radius(render_ctx: WorldRenderCtx, *, ctx: WorldDrawContext) -> None:
+    """Not native: a faint green circle around each living player showing the
+    Critical Mass relic's CRITICAL_MASS_RADIUS - the area whose enemies count
+    toward its crit bonus."""
+    if not relic_critical_mass.critical_mass_active():
+        return
+    radius = float(relic_critical_mass.CRITICAL_MASS_RADIUS) * ctx.scale
+    if radius <= 1.0:
+        return
+    r, g, b = _CRITICAL_MASS_RING_COLOR
+    fill = rl.Color(r, g, b, int(_CRITICAL_MASS_FILL_ALPHA * ctx.entity_alpha))
+    ring = rl.Color(r, g, b, int(_CRITICAL_MASS_RING_ALPHA * ctx.entity_alpha))
+    for player in render_ctx.frame.players:
+        if float(player.health) <= 0.0:
+            continue
+        center = render_ctx._world_to_screen_with(player.pos, camera=ctx.camera, view_scale=ctx.view_scale)
+        c = rl.Vector2(float(center.x), float(center.y))
+        rl.draw_circle_v(c, radius, fill)
+        rl.draw_ring(c, radius - 1.5, radius + 1.5, 0.0, 360.0, 96, ring)
+
+
+_DEADEYE_RING_COLOR = (255, 215, 60)
+_DEADEYE_RING_ALPHA = 110
+
+
+def draw_deadeye_neutral_ring(render_ctx: WorldRenderCtx, *, ctx: WorldDrawContext) -> None:
+    """Not native: a yellow ring around each living player at the Pact of the
+    Deadeye's break-even distance - shots landing inside it deal less than
+    normal, outside it more."""
+    distance = relic_deadeye_pact.neutral_distance()
+    if distance is None:
+        return
+    radius = float(distance) * ctx.scale
+    if radius <= 1.0:
+        return
+    r, g, b = _DEADEYE_RING_COLOR
+    color = rl.Color(r, g, b, int(_DEADEYE_RING_ALPHA * ctx.entity_alpha))
+    for player in render_ctx.frame.players:
+        if float(player.health) <= 0.0:
+            continue
+        center = render_ctx._world_to_screen_with(player.pos, camera=ctx.camera, view_scale=ctx.view_scale)
+        c = rl.Vector2(float(center.x), float(center.y))
+        rl.draw_ring(c, radius - 1.0, radius + 1.0, 0.0, 360.0, 96, color)
+
+
+_SLAYER_TIMER_TEXT_SCALE = 1.2
+_SLAYER_TIMER_OFFSET = Vec2(14.0, -24.0)  # up-right of the cursor
+_SLAYER_TIMER_COLOR = rl.Color(255, 90, 70, 255)
+
+
+def _draw_slayer_pact_timer(render_ctx: WorldRenderCtx, player: PlayerState, aim_screen: Vec2) -> None:
+    """Not native: Pact of the Slayer's streak-bonus countdown, top-right of
+    the cursor, only while the bonus is active."""
+    remaining = relic_slayer_pact.buff_remaining(player)
+    font = render_ctx.frame.resources.small_font
+    if remaining <= 0.0 or font is None:
+        return
+    text = f"{remaining:.1f}s"
+    pos = Vec2(float(aim_screen.x) + _SLAYER_TIMER_OFFSET.x, float(aim_screen.y) + _SLAYER_TIMER_OFFSET.y)
+    draw_small_text(font, text, Vec2(pos.x + 1.0, pos.y + 1.0), rl.Color(0, 0, 0, 185), scale=_SLAYER_TIMER_TEXT_SCALE)
+    draw_small_text(font, text, pos, _SLAYER_TIMER_COLOR, scale=_SLAYER_TIMER_TEXT_SCALE)
+
+
 def draw_freeze_overlay(render_ctx: WorldRenderCtx, *, ctx: WorldDrawContext) -> None:
     if ctx.particles_texture is None:
         return
@@ -687,6 +763,7 @@ def draw_aim_enhancements(
             continue
         aim_screen = transform(player.aim, ctx.camera, ctx.view_scale)
         draw_aim_cursor(ctx.particles_texture, render_ctx.frame.resources.texture(TextureId.UI_AIM), pos=aim_screen)
+        _draw_slayer_pact_timer(render_ctx, player, aim_screen)
 
 
 def _creature_texture(resources: RuntimeResources, asset_name: str | None) -> rl.Texture | None:

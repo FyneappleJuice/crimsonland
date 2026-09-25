@@ -174,6 +174,7 @@ def _rocket_crit_mult_with_powerups(
     *,
     weapon_id: WeaponId,
     perk_player: PlayerState,
+    creatures: Sequence[CreatureState] | None,
     base_damage_mult: float = 1.0,
 ) -> tuple[float, bool]:
     """Not native: returns the (crit_mult, did_crit) the caller should stamp on
@@ -186,10 +187,15 @@ def _rocket_crit_mult_with_powerups(
     _maybe_rocket_explosive_payload_on_hit), same as every bullet weapon - not
     here at spawn time."""
 
+    # Not native: Critical Mass relic - same fire-time evaluation as the
+    # primary pellet loop, from the firing player's own position.
+    critical_mass_chance = relic_critical_mass.crit_bonus_chance(perk_player.pos, creatures)
+    critical_mass_mult = relic_critical_mass.crit_mult_penalty_mult(perk_player.pos, creatures)
     crit_mult, did_crit = roll_primary_crit(
         weapon_id,
         increased_chance=float(perk_player.stats.crit_chance),
-        crit_mult=float(perk_player.stats.crit_mult),
+        crit_mult=float(perk_player.stats.crit_mult) * critical_mass_mult,
+        added_chance=critical_mass_chance,
     )
     return float(crit_mult) * float(base_damage_mult), did_crit
 
@@ -576,7 +582,8 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
                     weapon_id,
                     force_crit=death_wish_force_crit,
                     lucky_power=diamond_flask_power,
-                    increased_chance=float(perk_player.stats.crit_chance) + critical_mass_chance,
+                    increased_chance=float(perk_player.stats.crit_chance),
+                    added_chance=critical_mass_chance,
                     # Not native: was missing here (every other roll_crit_mult
                     # call site already passes it) - the primary weapon's own
                     # crit was silently ignoring the secondary "Crit
@@ -631,6 +638,7 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
             secondary_entry.crit_mult, secondary_entry.did_crit = _rocket_crit_mult_with_powerups(
                 weapon_id=weapon_id,
                 perk_player=perk_player,
+                creatures=creatures,
             )
             # Not native: Explosive Payload / Fork Shot eligibility is stamped
             # here, from this fire_weapon() call's own player (a Domino Effect/
@@ -766,6 +774,7 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
                 swarmer_entry.crit_mult, swarmer_entry.did_crit = _rocket_crit_mult_with_powerups(
                     weapon_id=weapon_id,
                     perk_player=perk_player,
+                    creatures=creatures,
                     base_damage_mult=_MINI_ROCKET_SWARMERS_DAMAGE_MULT,
                 )
                 swarmer_entry.explosive_payload_eligible = bool(

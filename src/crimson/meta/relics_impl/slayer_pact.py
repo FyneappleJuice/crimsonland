@@ -54,6 +54,19 @@ def update_kill_window(player: PlayerState, dt: float) -> None:
     player.slayer_pact_kill_window = [t - dt for t in window if t - dt > 0.0]
 
 
+def buff_remaining(player: PlayerState) -> float:
+    """Seconds until the active streak bonus runs out, 0.0 if it isn't active
+    (or the relic isn't equipped). The bonus holds while at least
+    SLAYER_PACT_KILL_THRESHOLD kills are still inside the window, so it ends
+    when the threshold-th most recent kill ages out."""
+    if _active_relic_id() is None:
+        return 0.0
+    window = player.slayer_pact_kill_window
+    if len(window) < SLAYER_PACT_KILL_THRESHOLD:
+        return 0.0
+    return float(sorted(window, reverse=True)[SLAYER_PACT_KILL_THRESHOLD - 1])
+
+
 def damage_mult(player: PlayerState) -> float:
     """The multiplier to apply to the shooter's outgoing damage - 1.0 if the
     relic isn't equipped."""
@@ -69,6 +82,7 @@ def damage_mult(player: PlayerState) -> float:
 __all__ = [
     "SLAYER_PACT_KILL_THRESHOLD",
     "SLAYER_PACT_WINDOW_SECONDS",
+    "buff_remaining",
     "damage_mult",
     "register_kill",
     "update_kill_window",

@@ -36,10 +36,10 @@ def test_kill_cost_is_a_straight_hp_loss_not_damage_taken() -> None:
     assert player.adrenaline_rush_window_timer == 0.0
 
 
-def test_heal_per_hit_is_nerfed_30_percent() -> None:
+def test_heal_per_hit_high_tier() -> None:
     player = PlayerState(index=0, pos=Vec2(), health=50.0)
     leech.heal_on_hit(player, 100.0)
-    assert float(player.health) == pytest.approx(50.0 + 100.0 * 0.03 * 0.7, rel=1e-5)
+    assert float(player.health) == pytest.approx(50.0 + 100.0 * 0.0189, rel=1e-5)
 
 
 def test_nothing_happens_without_the_relic(monkeypatch: pytest.MonkeyPatch) -> None:

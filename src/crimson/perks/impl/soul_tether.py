@@ -6,7 +6,8 @@ Any heal that would push health past 100 instead redirects the overflow into
 a shield (render/world/player_status.py draws it as a blue overlay on the
 health ring). The shield absorbs incoming damage before health does
 (player_damage.py), and degenerates at SOUL_TETHER_DECAY_RATE/s starting
-SOUL_TETHER_DECAY_DELAY seconds after it was last topped up.
+SOUL_TETHER_DECAY_DELAY seconds after it was last topped up. The shield caps
+at SOUL_TETHER_MAX_SHIELD; overflow past that is lost.
 """
 
 from ...sim.state_types import PlayerState
@@ -17,6 +18,7 @@ from ..runtime.hook_types import PerkHooks
 
 SOUL_TETHER_DECAY_DELAY = 5.0
 SOUL_TETHER_DECAY_RATE = 20.0
+SOUL_TETHER_MAX_SHIELD = 100.0
 
 
 def soul_tether_clamp_and_gain(player: PlayerState, raw_new_health: float) -> float:
@@ -25,7 +27,7 @@ def soul_tether_clamp_and_gain(player: PlayerState, raw_new_health: float) -> fl
     Tether is active. Callers pass the *unclamped* would-be health."""
     if perk_active(player, PerkId.SOUL_TETHER) and raw_new_health > 100.0:
         overflow = raw_new_health - 100.0
-        player.soul_tether_shield = float(player.soul_tether_shield) + overflow
+        player.soul_tether_shield = min(SOUL_TETHER_MAX_SHIELD, float(player.soul_tether_shield) + overflow)
         player.soul_tether_decay_delay_timer = SOUL_TETHER_DECAY_DELAY
         return 100.0
     return min(100.0, raw_new_health)

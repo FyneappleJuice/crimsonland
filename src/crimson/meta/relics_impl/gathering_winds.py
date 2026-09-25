@@ -5,8 +5,8 @@ from __future__ import annotations
 Fixed floor of -20% move speed / +20% damage taken at every tier. Each shot
 that *lands a hit* grants a stack of Tailwind (max GATHERING_WINDS_MAX_STACKS);
 each stack moves you toward a tier-scaled ceiling (+12/+20/+30% speed,
--12/-20/-30% damage taken). Getting hit removes exactly 1 stack, not all of
-them, so one bad hit costs a rung, not the whole climb.
+-12/-20/-30% damage taken). Getting hit removes GATHERING_WINDS_STACKS_LOST_PER_HIT
+(5) stacks - half the climb, not all of it.
 
 Stacks are read directly by their consumption points (gameplay.py's
 movement-speed calc, player_damage.py's damage-taken calc) instead of going
@@ -26,6 +26,7 @@ from ...sim.state_types import PlayerState
 from ..relics import RelicId, relic_owned
 
 GATHERING_WINDS_MAX_STACKS = 10
+GATHERING_WINDS_STACKS_LOST_PER_HIT = 5
 GATHERING_WINDS_FLOOR_SPEED = -0.20  # fixed at every tier
 GATHERING_WINDS_FLOOR_DAMAGE_TAKEN = 0.20  # fixed at every tier (a penalty, so positive)
 
@@ -54,7 +55,7 @@ def lose_stack(player: PlayerState) -> None:
     """Called wherever the player is confirmed to take damage."""
     if _active_relic_id() is None:
         return
-    player.gathering_winds_stacks = max(0, int(player.gathering_winds_stacks) - 1)
+    player.gathering_winds_stacks = max(0, int(player.gathering_winds_stacks) - GATHERING_WINDS_STACKS_LOST_PER_HIT)
 
 
 def _fraction(player: PlayerState) -> float:
@@ -89,6 +90,7 @@ def damage_taken_mult(player: PlayerState) -> float:
 
 __all__ = [
     "GATHERING_WINDS_MAX_STACKS",
+    "GATHERING_WINDS_STACKS_LOST_PER_HIT",
     "damage_taken_mult",
     "gain_stack",
     "lose_stack",
