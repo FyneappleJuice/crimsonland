@@ -536,14 +536,25 @@ def test_replay_codec_rejects_invalid_perk_choice_index(choice_index: int) -> No
         load_replay(_dump_wire(replay_obj))
 
 
-@pytest.mark.parametrize("choice_index", [-1, 3])
+@pytest.mark.parametrize("choice_index", [-1, 5])
 def test_replay_codec_rejects_invalid_run_mod_choice_index(choice_index: int) -> None:
     replay_obj = _minimal_wire_replay_obj()
     tick = cast("dict[str, object]", cast("list[object]", replay_obj["ticks"])[0])
     tick["prelude"] = [{"type": "run_mod_pick", "player_index": 0, "choice_index": choice_index}]
 
-    with pytest.raises(ReplayCodecError, match="choice_index must be in 0..2"):
+    with pytest.raises(ReplayCodecError, match="choice_index must be in 0..4"):
         load_replay(_dump_wire(replay_obj))
+
+
+@pytest.mark.parametrize("choice_index", [3, 4])
+def test_replay_codec_accepts_perk_expert_and_master_run_mod_choices(choice_index: int) -> None:
+    # Regression: Perk Expert/Perk Master offer a 4th/5th run mod, but the
+    # codec capped choice_index at 0..2, so picking one crashed the live game.
+    replay_obj = _minimal_wire_replay_obj()
+    tick = cast("dict[str, object]", cast("list[object]", replay_obj["ticks"])[0])
+    tick["prelude"] = [{"type": "run_mod_pick", "player_index": 0, "choice_index": choice_index}]
+
+    load_replay(_dump_wire(replay_obj))
 
 
 def test_replay_load_rejects_noncanonical_f32_inputs() -> None:

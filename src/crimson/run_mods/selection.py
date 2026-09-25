@@ -17,6 +17,9 @@ if TYPE_CHECKING:
     from ..creatures.runtime import CreatureState
 
 RUN_MOD_CHOICE_COUNT = 3
+# Most choices an offer can ever show (Perk Master) - also the replay codec's
+# bound on RunModPickCommand.choice_index.
+RUN_MOD_MAX_CHOICE_COUNT = RUN_MOD_CHOICE_COUNT + 2
 
 # The pool `run_mod_generate_choices` actually draws from - everything except
 # the hidden sub-roll targets (see ids.py's RUN_MOD_HIDDEN_FROM_POOL).
@@ -71,7 +74,7 @@ def run_mod_choice_count(player: PlayerState) -> int:
     # Mirrors perk_choice_count's non-additive shape: Perk Master overrides
     # Perk Expert's bonus rather than stacking on top of it.
     if perk_active(player, PerkId.PERK_MASTER):
-        return RUN_MOD_CHOICE_COUNT + 2
+        return RUN_MOD_MAX_CHOICE_COUNT
     if perk_active(player, PerkId.PERK_EXPERT):
         return RUN_MOD_CHOICE_COUNT + 1
     return RUN_MOD_CHOICE_COUNT

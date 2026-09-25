@@ -12,6 +12,7 @@ from ..game_modes import GameMode
 from ..math_parity import f32
 from ..persistence.save_status import GameStatusData
 from ..quests.level import QuestLevel
+from ..run_mods.selection import RUN_MOD_MAX_CHOICE_COUNT
 from ..sim.input_providers import (
     GameFrameRngAdvanceOperation,
     PerkMenuOpenCommand,
@@ -558,9 +559,13 @@ def _validate_tick_operations(
             raise ReplayCodecError(
                 f"replay tick {tick_idx} prelude {operation_index} choice_index must be in 0..6",
             )
-        if isinstance(operation, RunModPickCommand) and not (0 <= int(operation.choice_index) < 3):
+        # Perk Expert/Perk Master widen a run-mod offer past the base 3 choices.
+        if isinstance(operation, RunModPickCommand) and not (
+            0 <= int(operation.choice_index) < RUN_MOD_MAX_CHOICE_COUNT
+        ):
             raise ReplayCodecError(
-                f"replay tick {tick_idx} prelude {operation_index} choice_index must be in 0..2",
+                f"replay tick {tick_idx} prelude {operation_index} choice_index must be in "
+                f"0..{RUN_MOD_MAX_CHOICE_COUNT - 1}",
             )
 
     for operation_index, operation in enumerate(tick.postlude):
