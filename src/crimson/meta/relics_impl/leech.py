@@ -6,7 +6,12 @@ Every hit heals you a % of the damage it dealt; every kill costs you a flat
 % of your *current* HP, unconditionally (no rate limit - a multi-kill AoE/
 pierce hit costs once per kill it scores, on purpose). Current HP rather than
 max HP so the cost is self-limiting instead of a flat number that can chain
-into a death spiral. The heal-per-hit is the only tier-scaled side; the kill
+into a death spiral.
+
+The kill cost is a straight HP loss, not damage taken - it deliberately
+bypasses player_take_damage, so nothing that reacts to a hit (Thick Skinned,
+dodge, shields, Highlander's roll, Gathering Winds' stack loss, pain SFX /
+aim jitter) fires once per kill. The heal-per-hit is the only tier-scaled side; the kill
 cost is a fixed constant at every tier - same "constant cost, scaling
 reward" shape as every other pact relic, so High always beats Low.
 """
@@ -16,12 +21,12 @@ from ...perks.impl.soul_tether import soul_tether_clamp_and_gain
 from ...sim.state_types import PlayerState
 from ..relics import RelicId, relic_owned
 
-LEECH_HP_COST_PER_KILL = 0.03  # 3% of current HP, fixed at every tier
+LEECH_HP_COST_PER_KILL = 0.05  # 5% of current HP, fixed at every tier
 
 _HEAL_PCT_BY_RELIC: dict[int, float] = {
-    RelicId.LEECH_LOW: 0.012,
-    RelicId.LEECH_MEDIUM: 0.020,
-    RelicId.LEECH_HIGH: 0.030,
+    RelicId.LEECH_LOW: 0.0084,
+    RelicId.LEECH_MEDIUM: 0.014,
+    RelicId.LEECH_HIGH: 0.021,
 }
 
 
