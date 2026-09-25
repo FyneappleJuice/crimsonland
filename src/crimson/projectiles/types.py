@@ -181,6 +181,11 @@ class Projectile(msgspec.Struct):
     # (chains once) but still takes the same damage penalty as the shot that
     # spawned it (both the original and the bounce hit for less).
     ricochet_chained: bool = False
+    # Rewrite-only: Pact of Ricochet - the creature a bounce child bounced off,
+    # which it must pass through. In a packed horde the chain target often
+    # overlaps the struck creature, so without this the bounce re-hits the
+    # creature it just left instead of reaching its new target. -1 = none.
+    ricochet_ignore_idx: int = -1
 
 
 class SecondaryProjectile(msgspec.Struct):

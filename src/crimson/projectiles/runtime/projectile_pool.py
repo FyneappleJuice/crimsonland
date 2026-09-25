@@ -324,6 +324,9 @@ class ProjectilePool:
         # and blooms a giant ion nova the first time IT hits something - at
         # whatever random spot that unrelated shot happens to land.
         entry.ion_overload_charge = 0.0
+        # Not native: Pact of Ricochet - same slot-reuse hazard.
+        entry.ricochet_chained = False
+        entry.ricochet_ignore_idx = -1
 
         collision_profile = projectile_collision_profile(type_id)
         entry.hit_radius = float(collision_profile.hit_radius)
@@ -627,6 +630,11 @@ class ProjectilePool:
                         creature = creatures[idx]
                         if not _creature_is_collidable(creature):
                             continue
+                        if proj.ricochet_ignore_idx == idx:
+                            # Not native: a Pact of Ricochet bounce passes
+                            # through the creature it bounced off - see
+                            # Projectile.ricochet_ignore_idx.
+                            continue
                         if proj.pierce_left >= 1.0 and creature.hp <= 0.0:
                             # WPU pierce: a corpse we just punched through must not
                             # count as the hit that stops the bolt.
@@ -818,6 +826,7 @@ class ProjectilePool:
                                         hits_players=bool(proj.hits_players),
                                     )
                                     self._entries[chain_id].ricochet_chained = True
+                                    self._entries[chain_id].ricochet_ignore_idx = int(hit_idx)
 
                     did_pierce = False
                     if damage_amount > 0.0 and creature.hp > 0.0:
