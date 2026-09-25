@@ -170,6 +170,11 @@ class PlayerState(msgspec.Struct):
     # instantly regardless of threshold, trivializing the perk for fast
     # weapons while slow weapons (Cannon) still struggle.
     overdue_tick_cooldown_timer: float = 0.0
+    # Rewrite-only: Domino Effect (Momentum) internal cooldowns - see
+    # perks/impl/momentum.py. A kill only fires the free shot while the
+    # killer's own timer is 0: the player's, or their Hollow Form clone's.
+    momentum_cooldown_timer: float = 0.0
+    hollow_form_momentum_cooldown_timer: float = 0.0
 
     # Rewrite-only: Seeker Rounds - counts confirmed *shots* landed (not
     # individual hit instances - a shotgun's pellets or one piercing round's

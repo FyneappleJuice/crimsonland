@@ -918,3 +918,125 @@ def test_adrenaline_rush_does_nothing_once_the_window_expires() -> None:
         impulse=Vec2(), owner=OwnerRef.from_player(0), dt=0.016, players=[player], rng=Crand(1),
     )
     assert_float_close(100.0 - creature.hp, 10.0)
+
+
+def _clone_kill_setup(*, snapshot_weapon_id: WeaponId | None) -> tuple[GameplayState, PlayerState, CreaturePool]:
+    # The real player has walked far away from their Hollow Form clone, which
+    # sits at the origin next to the kill - with its own creature nearby
+    # that's nearer to the player instead, so "nearest to whom" is visible.
+    state, player, pool = _kill_setup(weapon_id=WeaponId.ASSAULT_RIFLE, momentum=True)
+    player.pos = Vec2(900.0, 900.0)
+    player.hollow_form_pos = Vec2(0.0, 0.0)
+    if snapshot_weapon_id is not None:
+        snapshot = PlayerState(index=0, pos=Vec2(0.0, 0.0))
+        snapshot.perk_counts[int(PerkId.MOMENTUM)] = 1
+        weapon_assign_player(snapshot, snapshot_weapon_id, state=state)
+        player.hollow_form_snapshot = snapshot
+    by_player = pool.entries[3]
+    by_player.active = True
+    by_player.pos = Vec2(880.0, 900.0)
+    by_player.hp = 100.0
+    pool.entries[0].last_hit_owner = OwnerRef(
+        kind=OwnerRef.from_player(0).kind,
+        index=0,
+        via_hollow_form=True,
+    )
+    return state, player, pool
+
+
+def test_momentum_shot_from_a_clone_kill_fires_from_the_clone_with_its_weapon() -> None:
+    state, player, pool = _clone_kill_setup(snapshot_weapon_id=WeaponId.PISTOL)
+    pool.handle_death(0, state=state, players=[player], rng=state.rng, world_width=1024.0, world_height=1024.0, fx_queue=None)
+
+    spawned = list(state.projectiles.iter_active())
+    assert len(spawned) == 1
+    shot = spawned[0]
+    # The clone's own weapon snapshot, not the player's current one.
+    assert weapon_entry_for_projectile_type_id(shot.type_id).weapon_id == WeaponId.PISTOL
+    # Fired from the clone's position, at the creature nearest the clone.
+    assert shot.origin.distance_to(player.hollow_form_pos) < 40.0
+    heading = float(shot.angle) - math.pi / 2
+    assert abs(math.atan2(math.sin(heading), math.cos(heading))) < 0.2  # toward +x, the (50, 0) creature
+    # Still the player's shot for credit, and tagged as the clone's.
+    assert shot.owner.player_index() == 0
+    assert shot.owner.via_hollow_form is True
+    assert shot.owner.via_domino_effect is True
+
+
+def test_momentum_shot_from_a_clone_kill_still_fires_from_the_clone_after_it_expires() -> None:
+    state, player, pool = _clone_kill_setup(snapshot_weapon_id=None)
+    pool.handle_death(0, state=state, players=[player], rng=state.rng, world_width=1024.0, world_height=1024.0, fx_queue=None)
+
+    spawned = list(state.projectiles.iter_active())
+    assert len(spawned) == 1
+    assert spawned[0].origin.distance_to(player.hollow_form_pos) < 40.0
+    # No snapshot left - falls back to the player's own weapon.
+    assert weapon_entry_for_projectile_type_id(spawned[0].type_id).weapon_id == WeaponId.ASSAULT_RIFLE
+
+
+def test_momentum_shot_from_a_player_kill_still_fires_from_the_player() -> None:
+    state, player, pool = _clone_kill_setup(snapshot_weapon_id=WeaponId.PISTOL)
+    pool.entries[0].last_hit_owner = OwnerRef.from_player(0)
+    pool.handle_death(0, state=state, players=[player], rng=state.rng, world_width=1024.0, world_height=1024.0, fx_queue=None)
+
+    spawned = list(state.projectiles.iter_active())
+    assert len(spawned) == 1
+    assert spawned[0].origin.distance_to(player.pos) < 40.0
+    assert spawned[0].owner.via_hollow_form is False
+
+
+def _kill_again(state: GameplayState, player: PlayerState, pool: CreaturePool) -> int:
+    """Kill creature 0 again (fresh corpse, same spot) and return how many
+    new primary shots that death fired."""
+    for entry in state.projectiles.entries:
+        entry.active = False
+    dying = pool.entries[0]
+    dying.active = True
+    dying.hp = 0.0
+    dying.lifecycle_stage = CREATURE_LIFECYCLE_ALIVE
+    dying.last_hit_owner = OwnerRef.from_player(0)
+    pool.handle_death(0, state=state, players=[player], rng=state.rng, world_width=1024.0, world_height=1024.0, fx_queue=None)
+    return len(list(state.projectiles.iter_active()))
+
+
+def test_momentum_cooldown_blocks_a_second_shot_until_it_expires() -> None:
+    from crimson.perks.impl.momentum import MOMENTUM_COOLDOWN
+
+    state, player, pool = _kill_setup(weapon_id=WeaponId.ASSAULT_RIFLE, momentum=True)
+    assert _kill_again(state, player, pool) == 1
+    assert player.momentum_cooldown_timer == pytest.approx(MOMENTUM_COOLDOWN)
+
+    assert _kill_again(state, player, pool) == 0  # still on cooldown
+
+    perks_update_effects(state, [player], MOMENTUM_COOLDOWN * 0.5)
+    assert _kill_again(state, player, pool) == 0
+    perks_update_effects(state, [player], MOMENTUM_COOLDOWN * 0.5 + 0.01)
+    assert player.momentum_cooldown_timer == 0.0
+    assert _kill_again(state, player, pool) == 1
+
+
+def test_momentum_cooldown_only_starts_when_a_shot_actually_fires() -> None:
+    state, player, pool = _kill_setup(weapon_id=WeaponId.ASSAULT_RIFLE, momentum=True)
+    for idx in (1, 2):
+        pool.entries[idx].active = False  # nothing left alive to shoot at
+    assert _kill_again(state, player, pool) == 0
+    assert player.momentum_cooldown_timer == 0.0
+
+
+def test_momentum_player_and_clone_have_separate_cooldowns() -> None:
+    from crimson.perks.impl.momentum import MOMENTUM_COOLDOWN
+
+    state, player, pool = _clone_kill_setup(snapshot_weapon_id=WeaponId.PISTOL)
+    player.momentum_cooldown_timer = MOMENTUM_COOLDOWN  # the player just proc'd
+
+    # The clone's kill still fires, and only starts the clone's own cooldown.
+    pool.handle_death(0, state=state, players=[player], rng=state.rng, world_width=1024.0, world_height=1024.0, fx_queue=None)
+    assert len(list(state.projectiles.iter_active())) == 1
+    assert player.hollow_form_momentum_cooldown_timer == pytest.approx(MOMENTUM_COOLDOWN)
+    assert player.momentum_cooldown_timer == pytest.approx(MOMENTUM_COOLDOWN)
+
+    # And the player's own cooldown clears independently of the clone's.
+    player.hollow_form_momentum_cooldown_timer = MOMENTUM_COOLDOWN * 10.0
+    perks_update_effects(state, [player], MOMENTUM_COOLDOWN + 0.01)
+    assert player.momentum_cooldown_timer == 0.0
+    assert _kill_again(state, player, pool) == 1

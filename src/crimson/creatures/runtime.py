@@ -50,6 +50,7 @@ from ..owner_ref import OwnerRef
 from ..perks import PerkId
 from ..perks.helpers import perk_active
 from ..perks.impl.bane_of_legends import BANE_OF_LEGENDS_WINDOW_DURATION
+from ..perks.impl.momentum import momentum_cooldown_remaining, start_momentum_cooldown
 from ..meta.relics_impl import leech as relic_leech
 from ..meta.relics_impl import slayer_pact as relic_slayer_pact
 from ..perks.impl.hit_list import HIT_LIST_BONUS_PER_KILL, HIT_LIST_MAX_BONUS
@@ -259,13 +260,26 @@ def _fire_momentum_shot(
     killer: PlayerState,
     state: GameplayState,
     players: list[PlayerState] | None = None,
-) -> None:
+    from_hollow_form: bool = False,
+) -> bool:
+    """Returns whether a shot actually fired (False: no target, or fire failed)."""
+    # The bonus shot fires from whoever landed the kill: the killer's own
+    # position, or - for a kill by the Hollow Form clone (from_hollow_form) -
+    # the clone's, with the clone's own weapon snapshot. The clone is its own
+    # shooter; only the credit (kills/XP, via the shared owner index) rolls up
+    # to the player. "Nearest" is measured from that same firing point.
+    shooter = killer
+    origin = killer.pos
+    if from_hollow_form:
+        origin = killer.hollow_form_pos
+        # The clone may already be gone (its window ended while the killing
+        # shot was still in flight) - its position outlives it, but its
+        # weapon snapshot doesn't, so fall back to the player's own.
+        if killer.hollow_form_snapshot is not None:
+            shooter = killer.hollow_form_snapshot
     nearest_idx: int | None = None
     nearest_dist = None
-    # The bonus shot fires from the killer's own position (matching Hollow
-    # Form's clone), not from wherever the kill happened - "nearest" is
-    # nearest to the player, same reference point the shot actually fires from.
-    dx0, dy0 = float(killer.pos.x), float(killer.pos.y)
+    dx0, dy0 = float(origin.x), float(origin.y)
     for other_idx, other in enumerate(pool._entries):
         if other_idx == dying_idx or not other.active or float(other.hp) <= 0.0:
             continue
@@ -277,7 +291,7 @@ def _fire_momentum_shot(
             nearest_dist = dist
             nearest_idx = other_idx
     if nearest_idx is None:
-        return
+        return False
 
     target = pool._entries[nearest_idx]
 
@@ -285,7 +299,7 @@ def _fire_momentum_shot(
     from ..weapon_runtime import WeaponFireCtx, fire_weapon
 
     clone = msgspec.structs.replace(
-        killer,
+        shooter,
         # Unlike Hollow Form's clone, active powerup timers do NOT carry over
         # to this one - the free shot only inherits the killer's weapon and
         # perks, not whatever bonus happens to be running.
@@ -295,8 +309,9 @@ def _fire_momentum_shot(
         projectile_fork_timer=0.0,
         explosive_payload_timer=0.0,
         plasma_overload_timer=0.0,
+        hollow_form_snapshot=None,
         weapon=msgspec.structs.replace(
-            killer.weapon,
+            shooter.weapon,
             # Exactly one shot's worth, not a full clip: some weapons (Mini-
             # Rocket Swarmers' SwarmerDumpMode) dump their *entire* clip as
             # rockets in a single fire_weapon() call, keyed directly off this
@@ -308,7 +323,7 @@ def _fire_momentum_shot(
             shot_cooldown=0.0,
         ),
     )
-    clone.pos = killer.pos
+    clone.pos = origin
     clone.aim = target.pos
     # Not a plain atan2: aim_heading feeds the muzzle-position formula
     # (native_fire_muzzle_pos), which uses this specific fpatan(pos - aim) -
@@ -329,7 +344,7 @@ def _fire_momentum_shot(
             ),
         )
     except Exception:
-        return
+        return False
     # Not native: Perk Efficacy lessens Domino Effect's own penalty instead of
     # deepening it, capped at full (unpenalized) damage.
     momentum_mult = min(1.0, MOMENTUM_DAMAGE_MULT * float(killer.stats.perk_efficacy))
@@ -340,11 +355,20 @@ def _fire_momentum_shot(
             # carries the flag all the way to creature.last_hit_owner, which
             # is exactly what _start_death checks - no need to plumb a new
             # field through the whole hit-resolution call chain.
-            entry.owner = msgspec.structs.replace(entry.owner, via_domino_effect=True)
+            entry.owner = msgspec.structs.replace(
+                entry.owner,
+                via_domino_effect=True,
+                via_hollow_form=bool(from_hollow_form),
+            )
     for i, entry in enumerate(state.secondary_projectiles.entries):
         if entry.active and i not in before_secondary_active:
             entry.crit_mult = float(entry.crit_mult) * momentum_mult
-            entry.owner = msgspec.structs.replace(entry.owner, via_domino_effect=True)
+            entry.owner = msgspec.structs.replace(
+                entry.owner,
+                via_domino_effect=True,
+                via_hollow_form=bool(from_hollow_form),
+            )
+    return True
 
 
 def pack_bonus_on_death_args(bonus_id: BonusId, amount_override: int) -> int:
@@ -2052,15 +2076,28 @@ class CreaturePool:
             )
 
         # Rewrite-only: Momentum - a kill fires a free shot at the nearest
-        # other living creature, from wherever the kill happened. Guarded
+        # other living creature, from whoever landed it (player or their
+        # Hollow Form clone - see _fire_momentum_shot). Guarded
         # against a Domino Effect shot killing something and re-triggering
-        # another one (see OwnerRef.via_domino_effect).
+        # another one (see OwnerRef.via_domino_effect). The player and their
+        # clone each have their own cooldown (perks/impl/momentum.py).
+        by_clone = bool(creature.last_hit_owner.via_hollow_form)
         if (
             killer is not None
             and perk_active(killer, PerkId.MOMENTUM)
             and not creature.last_hit_owner.via_domino_effect
+            and momentum_cooldown_remaining(killer, by_clone=by_clone) <= 0.0
         ):
-            _fire_momentum_shot(self, dying_idx=int(idx), killer=killer, state=state, players=players)
+            fired = _fire_momentum_shot(
+                self,
+                dying_idx=int(idx),
+                killer=killer,
+                state=state,
+                players=players,
+                from_hollow_form=by_clone,
+            )
+            if fired:
+                start_momentum_cooldown(killer, by_clone=by_clone)
 
         # Rewrite-only: Bane of Legends - a kill opens/refreshes the 5s
         # bonus-damage window (perks/impl/bane_of_legends.py ticks it down).

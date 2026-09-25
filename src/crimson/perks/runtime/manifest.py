@@ -27,6 +27,7 @@ from ..impl.lean_mean_exp_machine_effect import HOOKS as LEAN_MEAN_EXP_MACHINE_H
 from ..impl.lifeline_50_50 import HOOKS as LIFELINE_50_50_HOOKS
 from ..impl.living_fortress import HOOKS as LIVING_FORTRESS_HOOKS
 from ..impl.man_bomb import HOOKS as MAN_BOMB_HOOKS
+from ..impl.momentum import HOOKS as MOMENTUM_HOOKS
 from ..impl.my_favourite_weapon import HOOKS as MY_FAVOURITE_WEAPON_HOOKS
 from ..impl.overdue_window import HOOKS as OVERDUE_HOOKS
 from ..impl.plaguebearer import HOOKS as PLAGUEBEARER_HOOKS
@@ -72,6 +73,7 @@ PERK_HOOKS_IN_ORDER: tuple[PerkHooks, ...] = (
     KINETIC_DISCIPLINE_HOOKS,
     ADRENALINE_RUSH_HOOKS,
     BANE_OF_LEGENDS_HOOKS,
+    MOMENTUM_HOOKS,
     HOLLOW_FORM_HOOKS,
     SOUL_TETHER_HOOKS,
     HIT_LIST_HOOKS,

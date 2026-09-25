@@ -179,7 +179,7 @@ PERK_MECHANICAL: dict[PerkId, str] = {
     PerkId.AMMO_SHIELD: "redirects a fraction of incoming damage into ammo drain",
     PerkId.COUP_DE_GRACE: "guaranteed kill on enemies below a health-percent threshold",
     PerkId.DEATH_WISH: "forces guaranteed crits while the player is at critically low health",
-    PerkId.MOMENTUM: "a kill fires a free shot at the nearest other creature",
+    PerkId.MOMENTUM: "a kill fires a free shot at the nearest other creature (0.4s cooldown, separate for the Hollow Form clone)",
     PerkId.COLD_SNAP: "critical hits freeze the target; frozen targets (by any source) take bonus damage",
     PerkId.DESPERATION: "incoming damage scales down as the player's health drops",
     PerkId.OVERDUE: "a streak of non-crits opens a timed bonus-crit-damage window",
