@@ -69,6 +69,13 @@ _DEFAULT_CELL = 58.0
 _DEFAULT_CELL_GAP = 0.0  # cells are neighbors - no gap between them
 _DEFAULT_GRID_TOP = 54.0
 _DEFAULT_HEADER_PAD = 38.0
+# Inventory list: rows scroll (mouse wheel) inside the left panel, clipped
+# between the INVENTORY header and the "holding:" line at the bottom.
+_INV_ROW_GAP = 12.0
+_INV_LIST_TOP_PAD = 30.0  # below the INVENTORY header
+_INV_LIST_BOTTOM_PAD = 44.0  # above the panel's bottom edge (holding: line)
+_INV_SCROLLBAR_W = 4.0
+_WARN = rl.Color(230, 110, 90, 255)
 
 # Panel-open slide-in, same 300ms native timing/easing the other classic-
 # menu-panel screens use (see MenuView._ui_element_anim, reused below via
@@ -150,6 +157,9 @@ class RelicInventoryView:
         self._close_action: str | None = None
         self._held: int = 0  # relic id currently on the cursor (0 = none)
         self._inv_rects: list[tuple[Rect, int]] = []  # (icon rect, relic id)
+        self._inv_scroll = 0.0  # px scrolled down the inventory list
+        self._inv_max_scroll = 0.0  # from the last draw, for clamping
+        self._inv_clip = Rect.from_pos_size(Vec2(), Vec2())  # visible list area
         # Grid geometry from the last draw() call, so update() can map a mouse
         # position to a (row, col) cell without keeping a 25-Rect list around.
         self._grid_gx = 0.0
@@ -182,6 +192,7 @@ class RelicInventoryView:
         self._closing = False
         self._close_action = None
         self._held = 0
+        self._inv_scroll = 0.0
         self._play_btn = UiButtonState("Play", force_wide=True)
         self._back_btn = UiButtonState("Back", force_wide=True)
         if self.state.audio is not None:
@@ -242,6 +253,12 @@ class RelicInventoryView:
                     self._unequip_to_inventory(idx)
                 return
 
+        # Mouse wheel scrolls the inventory list while hovering the left panel.
+        wheel = float(rl.get_mouse_wheel_move())
+        if wheel != 0.0 and self._left_panel.contains(mp):
+            pitch = _DEFAULT_CELL + _INV_ROW_GAP
+            self._inv_scroll = min(self._inv_max_scroll, max(0.0, self._inv_scroll - wheel * pitch))
+
         scale = self._scale()
         play_w = button_width(require_runtime_resources(self.state), "Play", scale=scale, force_wide=True)
         back_w = button_width(require_runtime_resources(self.state), "Back", scale=scale, force_wide=True)
@@ -258,9 +275,9 @@ class RelicInventoryView:
         if not click:
             return
 
-        # inventory rows
+        # inventory rows (only the part of the list actually visible counts)
         for rect, rid in self._inv_rects:
-            if rect.contains(mp):
+            if self._inv_clip.contains(mp) and rect.contains(mp):
                 if self._held:
                     self._return_held()
                 else:
@@ -448,9 +465,22 @@ class RelicInventoryView:
             counts[rid] = counts.get(rid, 0) + 1
 
         cell = _DEFAULT_CELL
-        row_gap = 12.0
-        ry = y + 30.0  # top-left aligned, right under the header - not centered
+        row_gap = _INV_ROW_GAP
+        list_top = y + _INV_LIST_TOP_PAD  # top-left aligned, right under the header
+        list_bottom = p.y + p.h - _INV_LIST_BOTTOM_PAD
+        clip = Rect.from_pos_size(Vec2(p.x, list_top), Vec2(p.w, max(0.0, list_bottom - list_top)))
+        self._inv_clip = clip
 
+        # Clamp scroll against this frame's content height (the list can
+        # shrink when a relic is picked up).
+        content_h = 0.0
+        for rid in counts:
+            content_h += relics.relic_shape(rid)[1] * cell + row_gap
+        self._inv_max_scroll = max(0.0, content_h - row_gap - clip.h)
+        self._inv_scroll = min(self._inv_scroll, self._inv_max_scroll)
+        ry = list_top - self._inv_scroll
+
+        rl.begin_scissor_mode(int(clip.x), int(clip.y), int(clip.w), int(clip.h))
         self._inv_rects = []
         for rid in sorted(counts):
             w_cells, h_cells = relics.relic_shape(rid)
@@ -484,9 +514,18 @@ class RelicInventoryView:
                 scale=scale, color=_BLUE,
             )
             ry += icon_h + row_gap
+        rl.end_scissor_mode()
+
+        # Scrollbar, only when the list overflows the panel.
+        if self._inv_max_scroll > 0.0 and clip.h > 0.0:
+            track_x = p.x + p.w - header_pad * 0.5
+            thumb_h = max(24.0, clip.h * clip.h / (clip.h + self._inv_max_scroll))
+            thumb_y = clip.y + (clip.h - thumb_h) * (self._inv_scroll / self._inv_max_scroll)
+            rl.draw_rectangle(int(track_x), int(clip.y), int(_INV_SCROLLBAR_W), int(clip.h), rl.Color(255, 255, 255, 30))
+            rl.draw_rectangle(int(track_x), int(thumb_y), int(_INV_SCROLLBAR_W), int(thumb_h), _BLUE)
 
         if not counts:
-            draw_ui_text(res, "empty - kill monsters to find relics", Vec2(x, ry), scale=scale, color=_DIM)
+            draw_ui_text(res, "empty", Vec2(x, list_top), scale=scale, color=_DIM)
 
         held_name = relics.RELIC_NAME.get(self._held, "")
         held_line = f"holding: {held_name}" if self._held else ""
@@ -584,17 +623,14 @@ class RelicInventoryView:
             rl.draw_rectangle(int(px), int(py), int(pw), int(ph), rl.Color(preview_color.r, preview_color.g, preview_color.b, 90))
             rl.draw_rectangle_lines_ex(rl.Rectangle(px, py, pw, ph), 2.0, preview_color)
 
-        clip_id = int(relics.RelicId.CLIP_PLUS_1)
-        fire_rate_id = int(relics.RelicId.FIRE_RATE_PLUS_5)
-        clip_n = sum(1 for p in st.placements if p.relic_id == clip_id)
-        fire_rate_n = sum(1 for p in st.placements if p.relic_id == fire_rate_id)
-        parts = []
-        if clip_n:
-            parts.append(f"+{clip_n} clip size")
-        if fire_rate_n:
-            parts.append(f"+{fire_rate_n * 5}% fire rate")
-        summary = "run bonus:  " + (", ".join(parts) if parts else "none")
-        draw_ui_text(res, summary, Vec2(gx, gy + relics.GRID_H * (cell + gap) + 6.0), scale=scale, color=_WHITE)
+        labels = [relics.RELIC_LABEL.get(p.relic_id, "?") for p in st.placements]
+        summary = "equipped:  " + (", ".join(labels) if labels else "none")
+        summary_y = gy + relics.GRID_H * (cell + gap) + 6.0
+        draw_ui_text(res, summary, Vec2(gx, summary_y), scale=scale, color=_WHITE)
+        if self._held and relics.family_conflict(self._held):
+            draw_ui_text(
+                res, "only one of each pact can be equipped", Vec2(gx, summary_y + 18.0), scale=scale, color=_WARN,
+            )
 
     def _draw_sign(self, res) -> None:
         screen_w = float(self.state.config.display.width)

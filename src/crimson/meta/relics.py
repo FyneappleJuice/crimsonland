@@ -17,23 +17,19 @@ from pathlib import Path
 
 import msgspec
 
-from ..progression.modifiers import StatMod, flat, more
+from ..progression.modifiers import StatMod
 from ..test_mode import test_mode_enabled
 
 GRID_W = 5
 GRID_H = 5
 GRID_SLOTS = GRID_W * GRID_H
 
-# Relics granted on a fresh profile (no relics.json yet) - handy for testing.
-SEED_RELIC_COUNT = 8
-SEED_FIRE_RATE_RELIC_COUNT = 6  # exercises 1x2 placement/collision on a fresh profile
-
 _RELICS_FILE = "relics.json"
 
 
 class RelicId(IntEnum):
-    CLIP_PLUS_1 = 1
-    FIRE_RATE_PLUS_5 = 2
+    # 1 (+1 Clip Size) and 2 (+5% Fire Rate) were the original placeholder
+    # test relics - removed; _normalize() strips them out of old saves.
 
     # Deadeye pacts (meta/relics_impl/deadeye_pact.py, ricochet.py,
     # gathering_winds.py) - each drops at one of 3 fixed strengths instead of
@@ -61,25 +57,37 @@ class RelicId(IntEnum):
     LEECH_HIGH = 27
 
 
-# Not native: added to `owned` (never placed, never persisted) on boot when
-# --test-mode is active, so all 6 pact relics are sitting in the relic-
-# inventory screen ready to place one at a time - swap which one's in the
-# grid and relaunch to try each in isolation instead of all 6 at once.
-# Revert to () before committing.
-_TEST_MODE_SEED_OWNED_RELICS: tuple[int, ...] = (
-    RelicId.DEADEYE_PACT_HIGH,
-    RelicId.RICOCHET_HIGH,
-    RelicId.GATHERING_WINDS_HIGH,
-    RelicId.SLAYER_PACT_HIGH,
-    RelicId.CRITICAL_MASS_HIGH,
-    RelicId.LEECH_HIGH,
-)
+# Not native: with --test-mode, init_relics tops the inventory up so exactly
+# one of each of these exists (owned or placed) - every pact at every tier,
+# ready to try. Counts what's already placed, so it never creates duplicates.
+_TEST_MODE_SEED_OWNED_RELICS: tuple[int, ...] = tuple(RelicId)
+
+# Pact family (the pact itself, regardless of tier). Only one relic per
+# family can be placed at a time - see _family_conflict.
+RELIC_FAMILY: dict[int, str] = {
+    RelicId.DEADEYE_PACT_LOW: "deadeye",
+    RelicId.DEADEYE_PACT_MEDIUM: "deadeye",
+    RelicId.DEADEYE_PACT_HIGH: "deadeye",
+    RelicId.RICOCHET_LOW: "ricochet",
+    RelicId.RICOCHET_MEDIUM: "ricochet",
+    RelicId.RICOCHET_HIGH: "ricochet",
+    RelicId.GATHERING_WINDS_LOW: "gathering_winds",
+    RelicId.GATHERING_WINDS_MEDIUM: "gathering_winds",
+    RelicId.GATHERING_WINDS_HIGH: "gathering_winds",
+    RelicId.SLAYER_PACT_LOW: "slayer",
+    RelicId.SLAYER_PACT_MEDIUM: "slayer",
+    RelicId.SLAYER_PACT_HIGH: "slayer",
+    RelicId.CRITICAL_MASS_LOW: "critical_mass",
+    RelicId.CRITICAL_MASS_MEDIUM: "critical_mass",
+    RelicId.CRITICAL_MASS_HIGH: "critical_mass",
+    RelicId.LEECH_LOW: "leech",
+    RelicId.LEECH_MEDIUM: "leech",
+    RelicId.LEECH_HIGH: "leech",
+}
 
 _TIER_SUFFIX = {"Low": " (Low)", "Medium": " (Medium)", "High": " (High)"}
 
 RELIC_NAME: dict[int, str] = {
-    RelicId.CLIP_PLUS_1: "+1 Clip Size",
-    RelicId.FIRE_RATE_PLUS_5: "+5% Fire Rate",
     RelicId.DEADEYE_PACT_LOW: "Pact of the Deadeye (Low)",
     RelicId.DEADEYE_PACT_MEDIUM: "Pact of the Deadeye (Medium)",
     RelicId.DEADEYE_PACT_HIGH: "Pact of the Deadeye (High)",
@@ -102,8 +110,6 @@ RELIC_NAME: dict[int, str] = {
 
 # Short label drawn inside a placed relic's grid cells.
 RELIC_LABEL: dict[int, str] = {
-    RelicId.CLIP_PLUS_1: "+1",
-    RelicId.FIRE_RATE_PLUS_5: "+5%",
     RelicId.DEADEYE_PACT_LOW: "Far L",
     RelicId.DEADEYE_PACT_MEDIUM: "Far M",
     RelicId.DEADEYE_PACT_HIGH: "Far H",
@@ -128,10 +134,7 @@ RELIC_LABEL: dict[int, str] = {
 # relics are all 1x1 for now - the 3x4 grid + polyomino low/medium/high
 # footprint (2/3/4 cells) is a separate, not-yet-built rework; see the
 # relics_impl modules' own docstrings.
-RELIC_SHAPE: dict[int, tuple[int, int]] = {
-    RelicId.CLIP_PLUS_1: (1, 1),
-    RelicId.FIRE_RATE_PLUS_5: (1, 2),
-}
+RELIC_SHAPE: dict[int, tuple[int, int]] = {}
 
 
 def relic_shape(relic_id: int) -> tuple[int, int]:
@@ -139,10 +142,10 @@ def relic_shape(relic_id: int) -> tuple[int, int]:
 
 
 def relic_stat_mods(relic_id: int) -> list[StatMod]:
-    if int(relic_id) == RelicId.CLIP_PLUS_1:
-        return [flat("clip_size_add", 1.0, source="relic:clip_plus_1")]
-    if int(relic_id) == RelicId.FIRE_RATE_PLUS_5:
-        return [more("shot_cooldown_mult", -0.05, source="relic:fire_rate_plus_5")]
+    # No relic is a plain stat mod right now - the pacts all have custom
+    # mechanics, hooked in through active_relic_ids() instead. Kept as the
+    # extension point for future plain-stat relics.
+    _ = relic_id
     return []
 
 
@@ -174,17 +177,19 @@ _ACTIVE_RELIC_IDS: tuple[int, ...] = ()
 
 
 def _default_state() -> RelicSave:
-    return RelicSave(
-        owned=(
-            [int(RelicId.CLIP_PLUS_1)] * SEED_RELIC_COUNT
-            + [int(RelicId.FIRE_RATE_PLUS_5)] * SEED_FIRE_RATE_RELIC_COUNT
-        ),
-        placements=[],
-    )
+    return RelicSave(owned=[], placements=[])
+
+
+_KNOWN_RELIC_IDS = frozenset(int(r) for r in RelicId)
 
 
 def _normalize(state: RelicSave) -> RelicSave:
-    return RelicSave(owned=list(state.owned or []), placements=list(state.placements or []))
+    # Drop ids that no longer exist (the removed +1 Clip / +5% Fire Rate
+    # placeholders) so an old save doesn't carry dead entries around.
+    return RelicSave(
+        owned=[int(r) for r in (state.owned or []) if int(r) in _KNOWN_RELIC_IDS],
+        placements=[p for p in (state.placements or []) if int(p.relic_id) in _KNOWN_RELIC_IDS],
+    )
 
 
 def init_relics(base_dir: Path | str) -> RelicSave:
@@ -201,9 +206,11 @@ def init_relics(base_dir: Path | str) -> RelicSave:
         _STATE = _default_state()
         save_relics()
     if test_mode_enabled():
-        # In-memory only - never saved, so it can't pollute a real profile.
+        # Top up to one of each - counting placed relics too, so a relic
+        # sitting in the grid isn't handed out again as a duplicate.
+        have = set(_STATE.owned) | {int(p.relic_id) for p in _STATE.placements}
         for relic_id in _TEST_MODE_SEED_OWNED_RELICS:
-            if int(relic_id) not in _STATE.owned:
+            if int(relic_id) not in have:
                 _STATE.owned.append(int(relic_id))
     return _STATE
 
@@ -246,12 +253,28 @@ def _fits(
     return all((row + dy, col + dx) not in occupied for dy in range(h) for dx in range(w))
 
 
+def _family_conflict(state: RelicSave, relic_id: int) -> bool:
+    """True if a relic of the same pact family (any tier) is already placed -
+    only one of each pact can be equipped at a time."""
+    family = RELIC_FAMILY.get(int(relic_id))
+    if family is None:
+        return False
+    return any(RELIC_FAMILY.get(int(p.relic_id)) == family for p in state.placements)
+
+
+def family_conflict(relic_id: int) -> bool:
+    return _family_conflict(relic_state(), relic_id)
+
+
 def fits(relic_id: int, row: int, col: int) -> bool:
     """Would relic_id fit anchored at (row, col) against the current grid?
     For the UI to preview a placement before the click actually commits it."""
 
+    st = relic_state()
+    if _family_conflict(st, relic_id):
+        return False
     w, h = relic_shape(relic_id)
-    return _fits(relic_state(), row, col, w, h)
+    return _fits(st, row, col, w, h)
 
 
 def placement_at(row: int, col: int) -> tuple[int, PlacedRelic] | None:
@@ -265,7 +288,7 @@ def placement_at(row: int, col: int) -> tuple[int, PlacedRelic] | None:
 # --- inventory ops ------------------------------------------------------
 
 
-def award_relic_drop(relic_id: int = int(RelicId.CLIP_PLUS_1)) -> None:
+def award_relic_drop(relic_id: int) -> None:
     """A monster dropped a relic - auto-collected into the global inventory."""
     relic_state().owned.append(int(relic_id))
     save_relics()
@@ -277,6 +300,8 @@ def equip_from_owned(owned_index: int) -> bool:
     if not (0 <= owned_index < len(st.owned)):
         return False
     relic_id = st.owned[owned_index]
+    if _family_conflict(st, relic_id):
+        return False
     w, h = relic_shape(relic_id)
     for row in range(GRID_H):
         for col in range(GRID_W):
@@ -296,7 +321,7 @@ def place_held_relic(relic_id: int, row: int, col: int) -> bool:
     """
     st = relic_state()
     w, h = relic_shape(relic_id)
-    if not _fits(st, row, col, w, h):
+    if _family_conflict(st, relic_id) or not _fits(st, row, col, w, h):
         return False
     st.placements.append(PlacedRelic(relic_id=relic_id, row=row, col=col))
     save_relics()

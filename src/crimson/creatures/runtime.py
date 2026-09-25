@@ -130,14 +130,10 @@ _RELIC_DROP_CHANCE = (0.015, 0.10, 0.30, 0.75)
 
 
 def _maybe_drop_relic(creature: CreatureState, rng: CrandLike) -> None:
-    _ = rng
-    tier = int(getattr(creature, "rarity", 0) or 0)
-    chance = _RELIC_DROP_CHANCE[tier if 0 <= tier < len(_RELIC_DROP_CHANCE) else 0]
-    if chance <= 0.0 or _RELIC_DROP_RNG.random() >= chance:
-        return
-    from ..meta.relics import award_relic_drop
-
-    award_relic_drop()
+    # Disabled: monsters only ever dropped the +1 Clip placeholder relic,
+    # which has been removed. No drop table for the pact relics yet - wire
+    # one in here (meta.relics.award_relic_drop(relic_id)) when there is.
+    _ = creature, rng
 
 _CREATURE_CONTACT_SFX: dict[CreatureTypeId, tuple[SfxId, SfxId]] = {
     CreatureTypeId.ZOMBIE: (SfxId.ZOMBIE_ATTACK_01, SfxId.ZOMBIE_ATTACK_02),
