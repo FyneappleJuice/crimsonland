@@ -15,9 +15,11 @@ def build_perk_availability(*, status: GameStatus | None) -> list[bool]:
     unlocks entirely - `status` is kept in the signature for existing callers
     but no longer gates anything here. `ANTIPERK` stays excluded - it's a
     hidden placeholder, not real content. `ANXIOUS_LOADER` and `FINAL_REVENGE`
-    are disabled by design decision (weak/unfun, needs a rework) - kept in the
-    enum/tables so existing picks in old saves/replays still resolve, just
-    never offered again. The four concrete masteries (`PERK_MASTERY_CONCRETE_IDS`)
+    are disabled by design decision (weak/unfun, needs a rework), and
+    `BANE_OF_LEGENDS` because Pact of the Slayer (meta/relics_impl/
+    slayer_pact.py) now provides it as a relic - all kept in the enum/tables
+    so existing picks in old saves/replays still resolve, just never offered
+    again. The four concrete masteries (`PERK_MASTERY_CONCRETE_IDS`)
     are excluded the same way - they're only reachable through WEAPON_MASTERY's
     own resolution (perks/selection.py), never offered as their own pool entry.
     """
@@ -28,6 +30,7 @@ def build_perk_availability(*, status: GameStatus | None) -> list[bool]:
     available[int(PerkId.ANTIPERK)] = False
     available[int(PerkId.ANXIOUS_LOADER)] = False
     available[int(PerkId.FINAL_REVENGE)] = False
+    available[int(PerkId.BANE_OF_LEGENDS)] = False
     for concrete_id in PERK_MASTERY_CONCRETE_IDS:
         available[int(concrete_id)] = False
     return available
