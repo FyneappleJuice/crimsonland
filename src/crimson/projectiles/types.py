@@ -249,6 +249,14 @@ class SecondaryProjectile(msgspec.Struct):
     # regardless of how many rockets that shot spawned. -1 = not tracked
     # (never counted).
     shot_seq: int = -1
+    # Rewrite-only: Pact of Ricochet - rocket counterparts of Projectile's
+    # ricochet_chained / ricochet_ignore_idx / ricochet_damage. A bounce rocket
+    # passes through the creature it bounced off and deals its parent's
+    # direct-hit damage exactly (a fresh rocket's hit scales with its own,
+    # much lower, speed); its detonation matches via the inherited crit_mult.
+    ricochet_chained: bool = False
+    ricochet_ignore_idx: int = -1
+    ricochet_damage: float = 0.0
 
 
 __all__ = [

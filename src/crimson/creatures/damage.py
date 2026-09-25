@@ -19,6 +19,7 @@ from ..perks.helpers import perk_active
 from ..perks.impl.bane_of_legends import BANE_OF_LEGENDS_KILL_BONUS, BANE_OF_LEGENDS_PENALTY
 from ..perks.impl.delicate_watch import DELICATE_WATCH_BONUS
 from ..meta.relics_impl import leech as relic_leech
+from ..meta.relics_impl import ricochet as relic_ricochet
 from ..meta.relics_impl import slayer_pact as relic_slayer_pact
 from ..progression import PlayerStats, resolve_team_stats, resolve_team_stats_perks_only
 from ..rng_caller_static import RngCallerStatic
@@ -552,6 +553,12 @@ def creature_apply_damage(
             slayer_pact_mult = relic_slayer_pact.damage_mult(shooter)
             if slayer_pact_mult != 1.0:
                 ctx.damage = f32(float(ctx.damage) * slayer_pact_mult)
+            # Not native: Pact of Ricochet's penalty applies to *all* of the
+            # shooter's damage - direct hits, bounces, explosions, ion clouds,
+            # ignite, perk procs - not just the bullet hit that chains.
+            ricochet_mult = relic_ricochet.damage_mult()
+            if ricochet_mult != 1.0:
+                ctx.damage = f32(float(ctx.damage) * ricochet_mult)
             if perk_active(shooter, PerkId.DELICATE_WATCH):
                 ctx.damage = f32(float(ctx.damage) * (1.0 + DELICATE_WATCH_BONUS * efficacy))
             if perk_active(shooter, PerkId.HIT_LIST) and float(shooter.hit_list_bonus) > 0.0:

@@ -4,14 +4,22 @@ import math
 
 import pytest
 
+from crimson.creatures.damage import creature_apply_damage
+from crimson.creatures.damage_types import CreatureDamageType
+from crimson.creatures.runtime import CreatureState
+from crimson.gameplay import GameplayState
 from crimson.meta import relics
 from crimson.meta.relics import RelicId
 from crimson.owner_ref import OwnerRef
-from crimson.projectiles.runtime import PrimaryStepCtx, ProjectilePool
+from crimson.projectiles.runtime import PrimaryStepCtx, ProjectilePool, SecondaryStepCtx
 from crimson.projectiles.types import ProjectileTemplateId
+from crimson.sim.input import PlayerInput
 from crimson.sim.state_types import PlayerState, WeaponSlot
+from crimson.weapon_runtime import WeaponFireCtx, fire_weapon, weapon_assign_player
 from crimson.weapons import WeaponId
 from grim.geom import Vec2
+from grim.rand import Crand
+from tests.support.factories import RecordingCreatureDamageRuntime
 from tests.support.factories import make_creature_state as _creature
 from tests.support.factories import make_projectile_update_options
 
@@ -94,9 +102,10 @@ def test_bounce_deals_exactly_what_the_original_hit_dealt() -> None:
     assert bounce == pytest.approx(first)
 
 
-def test_bounce_keeps_the_parent_shots_multipliers(monkeypatch: pytest.MonkeyPatch) -> None:
-    # A Domino Effect shot's 0.25x (stamped into crit_mult) must carry over to
-    # its bounce and stack multiplicatively with the Ricochet penalty.
+def test_bounce_keeps_the_parent_shots_multipliers() -> None:
+    # A Domino Effect shot's 0.25x (stamped into crit_mult) carries over to its
+    # bounce. (The Ricochet penalty itself is applied later, centrally, in
+    # creature_apply_damage - see test_penalty_applies_to_all_player_damage.)
     from crimson.creatures.runtime import MOMENTUM_DAMAGE_MULT
 
     plain_first, _ = _damage_dealt()
@@ -104,6 +113,98 @@ def test_bounce_keeps_the_parent_shots_multipliers(monkeypatch: pytest.MonkeyPat
     assert first == pytest.approx(plain_first * MOMENTUM_DAMAGE_MULT, rel=1e-5)
     assert bounce == pytest.approx(first)
 
+
+@pytest.mark.parametrize(
+    ("damage_type", "is_projectile_hit"),
+    [
+        (CreatureDamageType.BULLET, True),
+        (CreatureDamageType.EXPLOSION, True),  # rocket impact
+        (CreatureDamageType.EXPLOSION, False),  # blast-radius tick
+        (CreatureDamageType.ION, False),  # lingering ion cloud
+        (CreatureDamageType.FIRE, False),  # ignite DoT
+        (CreatureDamageType.FIRE, True),  # flame particle
+        (CreatureDamageType.PLASMA, True),
+        (CreatureDamageType.LIGHTNING, True),
+    ],
+)
+def test_penalty_applies_to_all_player_damage(damage_type: int, is_projectile_hit: bool, monkeypatch: pytest.MonkeyPatch) -> None:
+    def _dealt(owner: OwnerRef) -> float:
+        creature = CreatureState(active=True, hp=1000.0, max_hp=1000.0)
+        creature_apply_damage(
+            creature,
+            damage_amount=10.0,
+            damage_type=int(damage_type),
+            impulse=Vec2(),
+            owner=owner,
+            dt=0.016,
+            players=[PlayerState(index=0, pos=Vec2())],
+            rng=Crand(1),
+            is_projectile_hit=is_projectile_hit,
+        )
+        return 1000.0 - float(creature.hp)
+
+    with_relic = _dealt(OwnerRef.from_player(0))
+    from_creature = _dealt(OwnerRef.from_creature(3))
     monkeypatch.setattr(relics, "_ACTIVE_RELIC_IDS", ())
-    unrelicked, _ = _damage_dealt()
-    assert first == pytest.approx(unrelicked * 0.7 * MOMENTUM_DAMAGE_MULT, rel=1e-5)  # High tier: 30% less
+    without_relic = _dealt(OwnerRef.from_player(0))
+
+    assert with_relic == pytest.approx(without_relic * 0.7, rel=1e-5)  # High tier: 30% less
+    assert from_creature == pytest.approx(without_relic, rel=1e-5)  # not the player's damage
+
+
+def _fire_rocket_into_pair(weapon_id: WeaponId) -> tuple[RecordingCreatureDamageRuntime, tuple, PlayerState]:
+    state = GameplayState()
+    player = PlayerState(index=0, pos=Vec2(0.0, 0.0))
+    weapon_assign_player(player, weapon_id, state=state)
+    player.aim_heading = math.pi / 2  # heading convention: 0=up, +90deg=+x
+    struck = _creature(pos=Vec2(120.0, 0.0), hp=1.0e9)
+    other = _creature(pos=Vec2(120.0, 200.0), hp=1.0e9)
+    creatures = (struck, other)
+    runtime = RecordingCreatureDamageRuntime(creatures=creatures)
+    fire_weapon(
+        WeaponFireCtx(
+            player=player,
+            input_state=PlayerInput(fire_down=True, aim=struck.pos),
+            dt=0.016,
+            state=state,
+            creatures=creatures,
+        ),
+    )
+    for _ in range(240):
+        state.secondary_projectiles.step(
+            SecondaryStepCtx(
+                dt=1.0 / 60.0,
+                creatures=creatures,
+                runtime_state=state,
+                players=[player],
+                creature_damage_runtime=runtime,
+            ),
+        )
+    return runtime, creatures, player
+
+
+def _direct_hits(runtime: RecordingCreatureDamageRuntime) -> list:
+    # A rocket's direct hit carries its full velocity as impulse (x 1/dt); the
+    # detonation AoE ticks that follow carry only a tiny push.
+    return [c for c in runtime.calls if c[2] == int(CreatureDamageType.EXPLOSION) and c[3].length() > 100.0]
+
+
+@pytest.mark.parametrize(
+    "weapon_id",
+    [WeaponId.ROCKET_LAUNCHER, WeaponId.SEEKER_ROCKETS, WeaponId.ROCKET_MINIGUN],
+)
+def test_rocket_direct_hit_chains_to_another_creature(weapon_id: WeaponId) -> None:
+    runtime, _, _ = _fire_rocket_into_pair(weapon_id)
+    direct = [(idx, dmg, owner) for idx, dmg, _, impulse, owner in _direct_hits(runtime)]
+    struck_hits = [d for d in direct if d[0] == 0]
+    bounce_hits = [d for d in direct if d[0] == 1]
+    assert struck_hits and bounce_hits
+    # The bounce hits for exactly its parent's direct-hit damage, and stays
+    # the player's shot (credit, and the relic's own penalty, downstream).
+    assert bounce_hits[0][1] == pytest.approx(struck_hits[0][1])
+    assert bounce_hits[0][2].player_index() == 0
+
+
+def test_rocket_chains_only_once() -> None:
+    runtime, _, _ = _fire_rocket_into_pair(WeaponId.ROCKET_LAUNCHER)
+    assert len(_direct_hits(runtime)) == 2  # parent's direct hit + one bounce, no further chaining

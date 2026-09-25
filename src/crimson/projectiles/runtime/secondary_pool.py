@@ -17,6 +17,7 @@ from ...creatures.lifecycle import creature_lifecycle_is_alive, creature_lifecyc
 from ...effects import EffectPool, FxQueue, SpriteEffectPool
 from ...effects_atlas import EffectId
 from ...meta.relics_impl import gathering_winds as relic_gathering_winds
+from ...meta.relics_impl import ricochet as relic_ricochet
 from ...math_parity import (
     NATIVE_HALF_PI,
     f32,
@@ -174,6 +175,9 @@ class SecondaryProjectilePool:
         entry.explosive_payload_eligible = False
         entry.fork_shot_eligible = False
         entry.shot_seq = -1
+        entry.ricochet_chained = False
+        entry.ricochet_ignore_idx = -1
+        entry.ricochet_damage = 0.0
 
         rule = secondary_rule_for_type_id(type_id)
         match rule:
@@ -406,6 +410,43 @@ class SecondaryProjectilePool:
                 shooter.overdue_streak = int(shooter.overdue_streak) + 1
                 shooter.overdue_tick_cooldown_timer = OVERDUE_TICK_COOLDOWN
 
+        def _maybe_rocket_ricochet_on_hit(entry: SecondaryProjectile, hit_idx: int, damage: float) -> None:
+            """Pact of Ricochet (not native) - a rocket's direct hit chains
+            once to a random nearby creature, like a bullet's. The bounce is
+            a real rocket of the same type (so it detonates too), stays the
+            player's own (kills credit them; the relic's penalty applies to it
+            in creatures/damage.py like everything else), passes through the
+            creature it bounced off, and hits for exactly its parent's
+            direct-hit damage."""
+
+            if entry.ricochet_chained or relic_ricochet.active_relic_id() is None:
+                return
+            if entry.owner.player_index_in_bounds(len(players)) is None:
+                return
+            chain_idx = relic_ricochet.pick_chain_target(entry.pos, int(hit_idx), creatures)
+            if chain_idx is None:
+                return
+            entry.ricochet_chained = True
+            target_pos = creatures[chain_idx].pos
+            delta = target_pos - entry.pos
+            bounce_index = self.spawn_from_spec(
+                SecondarySpawnSpec(
+                    pos=entry.pos,
+                    angle=math.atan2(float(delta.y), float(delta.x)) + NATIVE_HALF_PI,
+                    type_id=entry.type_id,
+                    owner=entry.owner,
+                    target_hint=target_pos,
+                    creatures=creatures,
+                ),
+            )
+            bounce = self._entries[bounce_index]
+            bounce.crit_mult = float(entry.crit_mult)
+            bounce.ricochet_chained = True
+            bounce.ricochet_ignore_idx = int(hit_idx)
+            bounce.ricochet_damage = float(damage)
+            if entry.type_id == SecondaryProjectileTypeId.HOMING_ROCKET:
+                bounce.target_id = int(chain_idx)
+
         def _creature_is_collidable(creature: CreatureState) -> bool:
             if not creature.active:
                 return False
@@ -623,6 +664,8 @@ class SecondaryProjectilePool:
                 creature = creatures[int(idx)]
                 if not _creature_is_collidable(creature):
                     continue
+                if entry.ricochet_ignore_idx == int(idx):
+                    continue  # a Ricochet bounce passes through what it bounced off
                 if _within_native_find_radius(
                     origin=entry.pos,
                     target=creature.pos,
@@ -757,6 +800,10 @@ class SecondaryProjectilePool:
                 if entry.crit_mult != 1.0:
                     # Crit compensation/multiplier, stamped on the rocket when it was fired.
                     damage = x87_pc24_mul(damage, float(entry.crit_mult))
+                if entry.ricochet_damage > 0.0:
+                    damage = float(entry.ricochet_damage)
+                else:
+                    _maybe_rocket_ricochet_on_hit(entry, int(hit_idx), float(damage))
                 inv_dt = f32(1.0 / float(dt))
                 impulse = Vec2(
                     x87_pc24_mul(inv_dt, entry.vel.x),

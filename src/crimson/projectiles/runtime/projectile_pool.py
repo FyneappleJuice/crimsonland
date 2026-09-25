@@ -795,13 +795,12 @@ class ProjectilePool:
                         if deadeye_mult != 1.0:
                             damage_amount = float(f32(float(damage_amount) * deadeye_mult))
 
-                        # Not native: Pact of Ricochet relic - both the
-                        # original hit and its one bounce deal reduced
-                        # damage; only non-piercing shots chain (a piercing
-                        # round already hits multiple targets on its own).
-                        ricochet_mult = relic_ricochet.damage_mult()
-                        if ricochet_mult != 1.0 and proj.pierce_left < 1.0:
-                            damage_amount = float(f32(float(damage_amount) * ricochet_mult))
+                        # Not native: Pact of Ricochet relic - a non-piercing
+                        # shot chains once (a piercing round already hits
+                        # multiple targets on its own). The relic's damage
+                        # penalty isn't applied here: creatures/damage.py
+                        # applies it to all of the shooter's damage.
+                        if relic_ricochet.active_relic_id() is not None and proj.pierce_left < 1.0:
                             if not proj.ricochet_chained:
                                 chain_idx = relic_ricochet.pick_chain_target(proj.pos, int(hit_idx), creatures)
                                 if chain_idx is not None:
