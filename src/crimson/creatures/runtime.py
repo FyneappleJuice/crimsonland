@@ -51,6 +51,9 @@ from ..perks import PerkId
 from ..perks.helpers import perk_active
 from ..perks.impl.bane_of_legends import BANE_OF_LEGENDS_WINDOW_DURATION
 from ..perks.impl.momentum import momentum_cooldown_remaining, start_momentum_cooldown
+from ..meta.relics_impl import first_strike as relic_first_strike
+from ..meta.relics_impl import fortify as relic_fortify
+from ..meta.relics_impl import impaler as relic_impaler
 from ..meta.relics_impl import leech as relic_leech
 from ..meta.relics_impl import slayer_pact as relic_slayer_pact
 from ..perks.impl.hit_list import HIT_LIST_BONUS_PER_KILL, HIT_LIST_MAX_BONUS
@@ -456,6 +459,16 @@ class CreatureState(msgspec.Struct):
     # Rewrite-only: Cold Snap freezes the target on a crit (weapon_runtime/
     # crit.py, projectiles/runtime/projectile_pool.py). > 0 blocks movement.
     crit_freeze_timer: float = 0.0
+    # Rewrite-only: Pact of the Impaler (meta/relics_impl/impaler.py) - one
+    # entry per Impale on this creature: its stored burst damage and how many
+    # more hits it lasts. impale_timer is shared by the whole stack (a fresh
+    # Impale refreshes it); the stack clears when it runs out.
+    impale_stored: list[float] = msgspec.field(default_factory=list)
+    impale_hits_left: list[int] = msgspec.field(default_factory=list)
+    impale_timer: float = 0.0
+    # Rewrite-only: Pact of the First Strike (meta/relics_impl/first_strike.py) -
+    # True once a player's direct projectile hit has landed on this creature.
+    struck: bool = False
     # Rewrite-only: true whenever this creature is frozen for any reason
     # (Cold Snap's crit_freeze_timer above, or the native Evil Eyes perk's
     # aim-target lock) - set once per tick in the update loop below. Deep
@@ -718,7 +731,10 @@ def _creature_interaction_contact_damage(ctx: _CreatureInteractionCtx) -> None:
         elif perk_active(perk_player, PerkId.VEINS_OF_POISON):
             creature.flags |= CreatureFlags.SELF_DAMAGE_TICK
 
-    dealt = float(creature.contact_damage)
+    # Not native: Pact of the First Strike's cost - an unstruck creature hits harder.
+    dealt = float(creature.contact_damage) * relic_first_strike.incoming_damage_mult(creature)
+    # Not native: Pact of Fortification - less damage taken from hits.
+    dealt *= relic_fortify.damage_taken_mult(ctx.player)
     player_take_damage(
         ctx.state,
         ctx.player,
@@ -1408,6 +1424,7 @@ class CreaturePool:
             # full-incapacitation shape as the native Evil Eyes freeze below.
             if creature.crit_freeze_timer > 0.0:
                 creature.crit_freeze_timer = max(0.0, float(creature.crit_freeze_timer) - float(dt))
+            relic_impaler.tick(creature, dt)
 
             frozen_by_evil_eyes = idx in evil_targets
             creature.is_frozen = frozen_by_evil_eyes or creature.crit_freeze_timer > 0.0
@@ -1791,6 +1808,8 @@ class CreaturePool:
         entry.affix_lob_timer = 0.0
         entry.crit_freeze_timer = 0.0
         entry.is_frozen = False
+        relic_impaler.clear(entry)
+        entry.struck = False
 
         entry.bonus_id = init.bonus_id
         entry.bonus_duration_override = (
@@ -2027,6 +2046,8 @@ class CreaturePool:
                 # freshly spawned child.
                 child.crit_freeze_timer = 0.0
                 child.is_frozen = False
+                relic_impaler.clear(child)  # fresh lists, not the parent's
+                child.struck = False  # a fresh creature - not hit yet
                 self._entries[child_idx] = child
                 self.spawned_count += 1
 

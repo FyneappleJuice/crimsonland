@@ -17,6 +17,9 @@ from ...creatures.lifecycle import creature_lifecycle_is_alive, creature_lifecyc
 from ...effects import EffectPool, FxQueue, SpriteEffectPool
 from ...effects_atlas import EffectId
 from ...meta.relics_impl import gathering_winds as relic_gathering_winds
+from ...meta.relics_impl import first_strike as relic_first_strike
+from ...meta.relics_impl import fortify as relic_fortify
+from ...meta.relics_impl import impaler as relic_impaler
 from ...meta.relics_impl import ricochet as relic_ricochet
 from ...math_parity import (
     NATIVE_HALF_PI,
@@ -821,6 +824,20 @@ class SecondaryProjectilePool:
                     x87_pc24_mul(inv_dt, entry.vel.y),
                 )
                 _rocket_on_direct_hit(entry, int(hit_idx))
+                # Not native: Pact of the Impaler - the impact (not the blast
+                # ticks that follow) deals less, triggers and leaves Impales.
+                # Not native: Pact of the First Strike - the opening hit.
+                opener_mult = relic_first_strike.opening_hit_mult(creatures[int(hit_idx)], entry.owner)
+                if opener_mult != 1.0:
+                    damage = x87_pc24_mul(damage, opener_mult)
+                impale_burst = 0.0
+                if relic_impaler.impaler_active_for(entry.owner):
+                    damage = x87_pc24_mul(damage, relic_impaler.IMPALER_DIRECT_MULT)
+                    impale_burst = relic_impaler.on_direct_hit(creatures[int(hit_idx)], float(damage))
+                # Not native: Pact of Fortification - stacks off the impact.
+                fortify_player_idx = entry.owner.player_index_in_bounds(len(players))
+                if fortify_player_idx is not None:
+                    relic_fortify.gain_from_hit(players[fortify_player_idx], creatures[int(hit_idx)], float(damage))
                 _apply_secondary_damage(
                     hit_idx,
                     damage,
@@ -828,6 +845,13 @@ class SecondaryProjectilePool:
                     impulse=impulse,
                     is_projectile_hit=True,
                 )
+                if impale_burst > 0.0 and float(creatures[int(hit_idx)].hp) > 0.0:
+                    _apply_secondary_damage(
+                        hit_idx,
+                        impale_burst,
+                        owner=msgspec.structs.replace(entry.owner, via_impale=True),
+                        impulse=Vec2(),
+                    )
                 creature_spatial.sync_index(int(hit_idx))
                 _maybe_rocket_fork_on_hit(entry, int(hit_idx))
                 _maybe_rocket_explosive_payload_on_hit(entry)

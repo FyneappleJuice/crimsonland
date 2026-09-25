@@ -46,6 +46,10 @@ class OwnerRef(msgspec.Struct, frozen=True):
     # hollow_form_pos instead of the real player's current (possibly very
     # different) position.
     via_hollow_form: bool = False
+    # Not native: set on the burst damage a Pact of the Impaler stack releases
+    # (meta/relics_impl/impaler.py) - it's the shooter's damage (kill/XP
+    # credit), but mustn't impale again or heal through Leech.
+    via_impale: bool = False
 
     @classmethod
     def none(cls) -> OwnerRef:

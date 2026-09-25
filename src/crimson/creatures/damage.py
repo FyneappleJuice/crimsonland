@@ -593,7 +593,7 @@ def creature_apply_damage(
         if leech_shooter_idx is not None and 0 <= leech_shooter_idx < len(ctx.players)
         else None
     )
-    if leech_shooter is not None:
+    if leech_shooter is not None and not ctx.owner.via_impale:
         relic_leech.heal_on_hit(leech_shooter, float(ctx.damage))
 
     creature.hp = x87_pc24_sub(creature.hp, ctx.damage)

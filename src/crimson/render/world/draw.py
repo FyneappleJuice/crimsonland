@@ -18,7 +18,9 @@ from ...creatures.spawn import CreatureFlags, CreatureTypeId
 from ...effects_atlas import EFFECT_ID_ATLAS_TABLE_BY_ID, SIZE_CODE_GRID, EffectId
 from ...meta.relics_impl import critical_mass as relic_critical_mass
 from ...meta.relics_impl import deadeye_pact as relic_deadeye_pact
+from ...meta.relics_impl import first_strike as relic_first_strike
 from ...meta.relics_impl import slayer_pact as relic_slayer_pact
+from ...meta.relics_impl import warbanner as relic_warbanner
 from ...perks import PerkId
 from ...perks.helpers import perk_active
 from ...sim.world_defs import CREATURE_ANIM, CREATURE_ASSET
@@ -115,12 +117,17 @@ def draw_world(
             draw_creatures(render_ctx, ctx=draw_ctx)
             # Not native: The Hit List's marked-Apex indicator.
             draw_hit_list_marker(render_ctx, ctx=draw_ctx)
+            # Not native: Pact of the Impaler's per-creature Impale count.
+            draw_impale_pips(render_ctx, ctx=draw_ctx)
+            # Not native: Pact of the First Strike's not-yet-hit creatures.
+            draw_first_strike_marks(render_ctx, ctx=draw_ctx)
         with profile_pass("freeze_overlay"):
             draw_freeze_overlay(render_ctx, ctx=draw_ctx)
         # Not native: Critical Mass's enemy-count radius and Deadeye's
         # break-even distance, under the players.
         draw_critical_mass_radius(render_ctx, ctx=draw_ctx)
         draw_deadeye_neutral_ring(render_ctx, ctx=draw_ctx)
+        draw_warbanners(render_ctx, ctx=draw_ctx)
         with profile_pass("players_alive"):
             draw_players(render_ctx, ctx=draw_ctx, alive=True)
             # Not native: Hollow Form's clone, drawn dimmed right after the
@@ -481,6 +488,53 @@ def draw_creatures(render_ctx: WorldRenderCtx, *, ctx: WorldDrawContext) -> None
         )
 
 
+_IMPALE_PIP_COLOR = (225, 225, 235)
+_FIRST_STRIKE_MARK_COLOR = (235, 60, 50)
+_FIRST_STRIKE_MARK_ALPHA = 110
+
+
+def draw_first_strike_marks(render_ctx: WorldRenderCtx, *, ctx: WorldDrawContext) -> None:
+    """Not native: a faint red ring around every creature you haven't hit yet
+    while Pact of the First Strike is equipped - where the big opening hit is
+    waiting, and which creatures still hit you harder."""
+
+    if not relic_first_strike.first_strike_active():
+        return
+    color = rl.Color(*_FIRST_STRIKE_MARK_COLOR, int(_FIRST_STRIKE_MARK_ALPHA * clamp(ctx.entity_alpha, 0.0, 1.0)))
+    for creature in render_ctx.frame.creatures.entries:
+        if creature.struck or not creature.active or float(creature.hp) <= 0.0:
+            continue
+        screen = render_ctx._world_to_screen_with(creature.pos, camera=ctx.camera, view_scale=ctx.view_scale)
+        radius = float(creature.size) * ctx.scale * 0.5
+        if radius <= 1.0:
+            continue
+        c = rl.Vector2(float(screen.x), float(screen.y))
+        rl.draw_ring(c, radius - 1.0, radius + 1.0, 0.0, 360.0, 32, color)
+
+
+def draw_impale_pips(render_ctx: WorldRenderCtx, *, ctx: WorldDrawContext) -> None:
+    """Not native: one small pip per Impale (up to 5) in a row under each
+    impaled creature, so the Pact of the Impaler stack can be read at a glance."""
+
+    alpha = int(clamp(ctx.entity_alpha, 0.0, 1.0) * 230.0)
+    fill = rl.Color(*_IMPALE_PIP_COLOR, alpha)
+    outline = rl.Color(20, 20, 24, alpha)
+    radius = max(2.0, 2.5 * ctx.scale)
+    spacing = radius * 2.6
+    for creature in render_ctx.frame.creatures.entries:
+        count = len(creature.impale_stored)
+        if count <= 0 or not creature.active or float(creature.hp) <= 0.0:
+            continue
+        screen = render_ctx._world_to_screen_with(creature.pos, camera=ctx.camera, view_scale=ctx.view_scale)
+        size = float(creature.size) * ctx.scale
+        y = float(screen.y) + size * 0.5 + radius + 2.0
+        x0 = float(screen.x) - spacing * (count - 1) * 0.5
+        for i in range(count):
+            c = rl.Vector2(x0 + spacing * i, y)
+            rl.draw_circle_v(c, radius + 1.0, outline)
+            rl.draw_circle_v(c, radius, fill)
+
+
 def draw_hit_list_marker(render_ctx: WorldRenderCtx, *, ctx: WorldDrawContext) -> None:
     """Not native: a pulsing marker above the single monster The Hit List has
     currently marked (perks/impl/hit_list.py rolls the mark)."""
@@ -527,6 +581,42 @@ def draw_critical_mass_radius(render_ctx: WorldRenderCtx, *, ctx: WorldDrawConte
         c = rl.Vector2(float(center.x), float(center.y))
         rl.draw_circle_v(c, radius, fill)
         rl.draw_ring(c, radius - 1.5, radius + 1.5, 0.0, 360.0, 96, ring)
+
+
+_WARBANNER_COLOR = (255, 225, 90)
+_WARBANNER_FILL_ALPHA = 28
+_WARBANNER_FILL_ALPHA_INSIDE = 55
+_WARBANNER_BORDER_ALPHA = 170
+_WARBANNER_SPRITE_SIZE = 34.0  # world px, before view scale
+
+
+def draw_warbanners(render_ctx: WorldRenderCtx, *, ctx: WorldDrawContext) -> None:
+    """Not native: every War Banner a player has planted - a pale yellow area
+    with a yellow border and the banner sprite at its center. The area gets a
+    little brighter while its player is standing in it."""
+    radius_world = relic_warbanner.radius()
+    if radius_world <= 0.0:
+        return
+    radius = radius_world * ctx.scale
+    r, g, b = _WARBANNER_COLOR
+    a = clamp(ctx.entity_alpha, 0.0, 1.0)
+    border = rl.Color(r, g, b, int(_WARBANNER_BORDER_ALPHA * a))
+    texture = render_ctx.frame.resources.texture_optional(TextureId.WARBANNER)
+    size = _WARBANNER_SPRITE_SIZE * ctx.scale
+    for player in render_ctx.frame.players:
+        if not player.warbanner_positions:
+            continue
+        inside = relic_warbanner.in_banner(player)
+        fill = rl.Color(r, g, b, int((_WARBANNER_FILL_ALPHA_INSIDE if inside else _WARBANNER_FILL_ALPHA) * a))
+        for pos in player.warbanner_positions:
+            screen = render_ctx._world_to_screen_with(pos, camera=ctx.camera, view_scale=ctx.view_scale)
+            c = rl.Vector2(float(screen.x), float(screen.y))
+            rl.draw_circle_v(c, radius, fill)
+            rl.draw_ring(c, radius - 1.5, radius + 1.5, 0.0, 360.0, 96, border)
+            if texture is not None:
+                src = rl.Rectangle(0.0, 0.0, float(texture.width), float(texture.height))
+                dst = rl.Rectangle(c.x - size * 0.5, c.y - size * 0.5, size, size)
+                rl.draw_texture_pro(texture, src, dst, rl.Vector2(0.0, 0.0), 0.0, rl.Color(255, 255, 255, int(255 * a)))
 
 
 _DEADEYE_RING_COLOR = (255, 215, 60)

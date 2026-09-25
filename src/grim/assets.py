@@ -110,6 +110,10 @@ class TextureId(Enum):
     # since the weapon is now mechanically a plain Pistol clone. Absent from a
     # stock PAQ - always served from the committed fallback copy.
     TENET_GUN_WEAPON_ICON = auto()
+    # Rewrite-only content: the War Banner relic's planted banner sprite
+    # (render/world/draw.py). Absent from a stock PAQ - always served from the
+    # committed fallback copy.
+    WARBANNER = auto()
 
 
 class TextureSpec(msgspec.Struct, frozen=True):
@@ -201,6 +205,7 @@ OPTIONAL_TEXTURE_SPECS: Final[dict[TextureId, TextureSpec]] = {
     TextureId.EXPLOSIVE_PAYLOAD_ICON: TextureSpec("game/explosive_payload.png", clamp=True),
     TextureId.EVIL_SCYTHE_WEAPON_ICON: TextureSpec("game/evil_scythe_weapon_icon.png", clamp=True),
     TextureId.TENET_GUN_WEAPON_ICON: TextureSpec("game/tenet_gun_weapon_icon.png", clamp=True),
+    TextureId.WARBANNER: TextureSpec("game/warbanner.png", clamp=True, point_filter=True),
 }
 _OPTIONAL_TEXTURE_FALLBACK_DIR: Final[Path] = Path(__file__).resolve().parent / "optional_textures"
 

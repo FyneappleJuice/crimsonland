@@ -60,7 +60,7 @@ def test_test_mode_tops_up_to_one_of_each_without_duplicating_placed(tmp_path, m
     set_test_mode_enabled(True)
     st = R.init_relics(tmp_path)
     everything = sorted(st.owned + [p.relic_id for p in st.placements])
-    assert everything == sorted(int(r) for r in R.RelicId)  # exactly one of each
+    assert everything == sorted(int(r) for r in R.RelicId if int(r) not in R.SHELVED_RELIC_IDS)  # one of each
 
     # Relaunching doesn't add more.
     monkeypatch.setattr(R, "_STATE", None)
@@ -144,3 +144,16 @@ def test_begin_run_freezes_placed_relic_ids():
     assert set(R.active_relic_ids()) == {CHAIN_H, CRIT_H}
     R.end_run()
     assert R.active_relic_ids() == ()
+
+
+def test_shelved_relics_are_stripped_and_never_seeded(tmp_path, monkeypatch):
+    shelved = sorted(R.SHELVED_RELIC_IDS)
+    assert shelved  # First Strike, for now
+    (tmp_path / "relics.json").write_text(
+        json.dumps({"owned": [shelved[0], CHAIN_H], "placements": [{"relic_id": shelved[1], "row": 0, "col": 0}]}),
+    )
+    monkeypatch.setattr(R, "_STATE", None)
+    set_test_mode_enabled(True)
+    st = R.init_relics(tmp_path)
+    ids = set(st.owned) | {p.relic_id for p in st.placements}
+    assert not ids & R.SHELVED_RELIC_IDS

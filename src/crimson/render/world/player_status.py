@@ -22,6 +22,7 @@ from grim.math import clamp
 from grim.raylib_api import rl
 
 from ...bonuses.ids import BonusId
+from ...meta.relics_impl import fortify as relic_fortify
 from ...perks.helpers import perk_active
 from ...perks.ids import PerkId
 from ...perks.impl.delicate_watch import DELICATE_WATCH_BREAK_THRESHOLD
@@ -122,6 +123,17 @@ def draw_player_status(
         else:
             col = rl.Color(210, 30, 30, int(225 * a))
         rl.draw_ring(center, r_in, r_out, start, end, _RING_SEGMENTS, col)
+
+    # Not native: Pact of Fortification - a thin grey arc just outside the
+    # health ring, filling clockwise from 12 o'clock toward the stack cap.
+    fortify_fill = relic_fortify.fill_fraction(player)
+    if fortify_fill > 0.0:
+        f_in = r_out + 1.5 * float(scale)
+        f_out = f_in + max(1.5, 2.0 * float(scale))
+        rl.draw_ring(
+            center, f_in, f_out, -90.0, -90.0 + 360.0 * fortify_fill, _RING_SEGMENTS,
+            rl.Color(185, 188, 196, int(210 * a)),
+        )
 
     # Not native: threshold ticks for perks whose behavior flips at a specific
     # health value, so the ring doubles as a readout of "how close am I."

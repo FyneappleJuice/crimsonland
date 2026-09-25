@@ -16,6 +16,9 @@ from ...creatures.lifecycle import creature_lifecycle_is_alive, creature_lifecyc
 from ...effects import EffectPool
 from ...meta.relics_impl import deadeye_pact as relic_deadeye_pact
 from ...meta.relics_impl import gathering_winds as relic_gathering_winds
+from ...meta.relics_impl import first_strike as relic_first_strike
+from ...meta.relics_impl import fortify as relic_fortify
+from ...meta.relics_impl import impaler as relic_impaler
 from ...meta.relics_impl import ricochet as relic_ricochet
 from ...math_parity import (
     NATIVE_HALF_PI,
@@ -397,6 +400,52 @@ class ProjectilePool:
 
         creature_spatial = CreatureSpatialHash(creatures=creatures, is_collidable=_creature_is_collidable)
 
+        def _apply_direct_hit(
+            hit_idx: int,
+            damage: float,
+            *,
+            damage_type: int,
+            impulse: Vec2,
+            owner: OwnerRef,
+        ) -> None:
+            """A bullet's direct hit. With Pact of the Impaler (not native) it
+            deals less, triggers the target's Impales and leaves a new one;
+            the released burst lands after the hit, if the target survived."""
+            # Not native: Pact of the First Strike - the opening hit on a
+            # creature (only that one, not the rest of a shotgun blast).
+            opener_mult = relic_first_strike.opening_hit_mult(creatures[int(hit_idx)], owner)
+            if opener_mult != 1.0:
+                damage = float(f32(float(damage) * opener_mult))
+            burst = 0.0
+            if relic_impaler.impaler_active_for(owner):
+                damage = float(f32(float(damage) * relic_impaler.IMPALER_DIRECT_MULT))
+                burst = relic_impaler.on_direct_hit(creatures[int(hit_idx)], damage)
+            # Not native: Pact of Fortification - the player (or their
+            # clone) gains stacks off their own direct hit.
+            fortify_player_idx = owner.player_index_in_bounds(len(players))
+            if fortify_player_idx is not None:
+                relic_fortify.gain_from_hit(players[fortify_player_idx], creatures[int(hit_idx)], float(damage))
+            _apply_damage_to_creature(
+                creatures,
+                int(hit_idx),
+                float(damage),
+                damage_type=damage_type,
+                impulse=impulse,
+                owner=owner,
+                creature_damage_runtime=creature_damage_runtime,
+                is_projectile_hit=True,
+            )
+            if burst > 0.0 and float(creatures[int(hit_idx)].hp) > 0.0:
+                _apply_damage_to_creature(
+                    creatures,
+                    int(hit_idx),
+                    float(burst),
+                    damage_type=damage_type,
+                    impulse=Vec2(),
+                    owner=msgspec.structs.replace(owner, via_impale=True),
+                    creature_damage_runtime=creature_damage_runtime,
+                )
+
         def _damage_scale(type_id: int) -> float:
             value = damage_scale_by_type.get(type_id)
             if value is not None:
@@ -689,7 +738,16 @@ class ProjectilePool:
                                 continue
 
                             proj.life_timer = 0.25
-                            hit_runtime.apply_player_damage(int(hit_player_idx), 10.0)
+                            # Not native: Pact of the First Strike's cost - a shot
+                            # from a creature you haven't hit yet hits harder.
+                            shooter_creature_idx = proj.owner.creature_index_in_bounds(len(creatures))
+                            shooter_creature = creatures[shooter_creature_idx] if shooter_creature_idx is not None else None
+                            hit_runtime.apply_player_damage(
+                                int(hit_player_idx),
+                                10.0
+                                * relic_first_strike.incoming_damage_mult(shooter_creature)
+                                * relic_fortify.damage_taken_mult(players[int(hit_player_idx)]),
+                            )
 
                             step += 3
                             continue
@@ -936,15 +994,12 @@ class ProjectilePool:
                         impulse = Vec2(float(impulse_axis), float(impulse_axis))
                         damage_type = _damage_type_for(type_id)
                         if remaining <= 0.0:
-                            _apply_damage_to_creature(
-                                creatures,
+                            _apply_direct_hit(
                                 int(hit_idx),
                                 float(damage_amount),
                                 damage_type=damage_type,
                                 impulse=impulse,
                                 owner=proj.owner,
-                                creature_damage_runtime=creature_damage_runtime,
-                                is_projectile_hit=True,
                             )
                             creature_spatial.sync_index(int(hit_idx))
                             if proj.pierce_left >= 1.0:
@@ -955,15 +1010,12 @@ class ProjectilePool:
                             elif proj.life_timer != 0.25:
                                 proj.life_timer = 0.25
                         else:
-                            _apply_damage_to_creature(
-                                creatures,
+                            _apply_direct_hit(
                                 int(hit_idx),
                                 float(remaining),
                                 damage_type=damage_type,
                                 impulse=impulse,
                                 owner=proj.owner,
-                                creature_damage_runtime=creature_damage_runtime,
-                                is_projectile_hit=True,
                             )
                             creature_spatial.sync_index(int(hit_idx))
                             proj.damage_pool -= float(creature.hp)

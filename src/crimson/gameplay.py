@@ -18,8 +18,10 @@ from .bonuses.hud import BonusHudState
 from .bonuses.pool import BonusPool
 from .effects import EffectPool, ParticlePool, SpriteEffectPool
 from .game_modes import GameMode
+from .meta.relics_impl import fortify as relic_fortify
 from .meta.relics_impl import gathering_winds as relic_gathering_winds
 from .meta.relics_impl import slayer_pact as relic_slayer_pact
+from .meta.relics_impl import warbanner as relic_warbanner
 from .math_parity import (
     NATIVE_HALF_PI,
     NATIVE_PI,
@@ -295,6 +297,8 @@ def survival_check_level_up(
     # XP jumps across multiple thresholds in a single frame.
     if player.experience > survival_level_threshold(player.level):
         player.level += 1
+        # Not native: War Banner relic - every level up plants a banner here.
+        relic_warbanner.plant_on_level_up(player)
         perk_state.pending_count += 1
         perk_state.choices_dirty = True
         if run_mod_state is not None:
@@ -706,6 +710,8 @@ def advance_weapon_shot_cooldown(
         recipe = FIRE_RECIPE_BY_WEAPON.get(WeaponId(player.weapon.weapon_id))
         if recipe is not None and isinstance(recipe.mode, SwarmerDumpMode):
             cooldown_decay_mult *= 1.0 + 2.0 * float(player.stats.perk_efficacy)
+    # Not native: War Banner relic - attack speed, its own multiplicative bucket.
+    cooldown_decay_mult *= relic_warbanner.attack_speed_mult(player)
     cooldown_decay = float(f32(float(dt) * cooldown_decay_mult))
     next_shot_cooldown = float(f32(float(player.weapon.shot_cooldown) - float(cooldown_decay)))
     player.weapon.shot_cooldown = max(0.0, float(next_shot_cooldown))
@@ -735,6 +741,11 @@ def advance_weapon_reload(
     if reload_stationary and perk_active(perk_player, PerkId.STATIONARY_RELOADER):
         # Not native: Perk Efficacy scales the bonus above the 1x baseline.
         reload_scale = 1.0 + 2.0 * float(perk_player.stats.perk_efficacy)
+    # Not native: War Banner's attack speed - for whole-clip dump weapons the
+    # reload *is* the gap between volleys, so it speeds that up too.
+    recipe = FIRE_RECIPE_BY_WEAPON.get(WeaponId(player.weapon.weapon_id))
+    if recipe is not None and isinstance(recipe.mode, SwarmerDumpMode):
+        reload_scale *= relic_warbanner.attack_speed_mult(player)
 
     if (
         perk_active(perk_player, PerkId.ANXIOUS_LOADER)
@@ -949,6 +960,10 @@ def player_update(
     # Not native: Pact of Gathering Winds relic - read live off stacks rather
     # than through the stat pipeline, since it changes every hit/hit-taken.
     speed_multiplier *= relic_gathering_winds.speed_mult(player)
+    # Not native: Pact of Fortification's cost - heavier, slower.
+    speed_multiplier *= relic_fortify.speed_mult()
+    # Not native: War Banner relic - its own multiplicative bucket.
+    speed_multiplier *= relic_warbanner.move_speed_mult(player)
 
     movement_dt = float(dt)
     if state.time_scale_active and movement_dt > 0.0:
@@ -967,6 +982,8 @@ def player_update(
     # Not native: Pact of the Slayer relic's kill-streak window - decays
     # unconditionally every tick, independent of any perk being active.
     relic_slayer_pact.update_kill_window(player, dt)
+    # Not native: Pact of Fortification's stack instances age out on their own.
+    relic_fortify.tick(player, dt)
 
     apply_player_perk_ticks(
         player=player,

@@ -56,11 +56,40 @@ class RelicId(IntEnum):
     LEECH_MEDIUM = 26
     LEECH_HIGH = 27
 
+    # Champion pacts (meta/relics_impl/impaler.py)
+    IMPALER_LOW = 28
+    IMPALER_MEDIUM = 29
+    IMPALER_HIGH = 30
+    # Champion pacts (meta/relics_impl/first_strike.py)
+    FIRST_STRIKE_LOW = 31
+    FIRST_STRIKE_MEDIUM = 32
+    FIRST_STRIKE_HIGH = 33
+    # Champion pacts (meta/relics_impl/fortify.py)
+    FORTIFY_LOW = 34
+    FORTIFY_MEDIUM = 35
+    FORTIFY_HIGH = 36
+    # meta/relics_impl/warbanner.py
+    WARBANNER_LOW = 37
+    WARBANNER_MEDIUM = 38
+    WARBANNER_HIGH = 39
+
 
 # Not native: with --test-mode, init_relics tops the inventory up so exactly
 # one of each of these exists (owned or placed) - every pact at every tier,
 # ready to try. Counts what's already placed, so it never creates duplicates.
-_TEST_MODE_SEED_OWNED_RELICS: tuple[int, ...] = tuple(RelicId)
+# Shelved relics: fully implemented but out of play for now - never seeded,
+# and stripped from saves on load (like removed ids) so they can't be placed.
+# Pact of the First Strike is waiting on a rework (opening hit always crits
+# instead of a flat damage bonus) - see meta/relics_impl/first_strike.py.
+SHELVED_RELIC_IDS: frozenset[int] = frozenset(
+    {
+        int(RelicId.FIRST_STRIKE_LOW),
+        int(RelicId.FIRST_STRIKE_MEDIUM),
+        int(RelicId.FIRST_STRIKE_HIGH),
+    },
+)
+
+_TEST_MODE_SEED_OWNED_RELICS: tuple[int, ...] = tuple(r for r in RelicId if int(r) not in SHELVED_RELIC_IDS)
 
 # Pact family (the pact itself, regardless of tier). Only one relic per
 # family can be placed at a time - see _family_conflict.
@@ -83,6 +112,18 @@ RELIC_FAMILY: dict[int, str] = {
     RelicId.LEECH_LOW: "leech",
     RelicId.LEECH_MEDIUM: "leech",
     RelicId.LEECH_HIGH: "leech",
+    RelicId.IMPALER_LOW: "impaler",
+    RelicId.IMPALER_MEDIUM: "impaler",
+    RelicId.IMPALER_HIGH: "impaler",
+    RelicId.FIRST_STRIKE_LOW: "first_strike",
+    RelicId.FIRST_STRIKE_MEDIUM: "first_strike",
+    RelicId.FIRST_STRIKE_HIGH: "first_strike",
+    RelicId.FORTIFY_LOW: "fortify",
+    RelicId.FORTIFY_MEDIUM: "fortify",
+    RelicId.FORTIFY_HIGH: "fortify",
+    RelicId.WARBANNER_LOW: "warbanner",
+    RelicId.WARBANNER_MEDIUM: "warbanner",
+    RelicId.WARBANNER_HIGH: "warbanner",
 }
 
 _TIER_SUFFIX = {"Low": " (Low)", "Medium": " (Medium)", "High": " (High)"}
@@ -106,6 +147,18 @@ RELIC_NAME: dict[int, str] = {
     RelicId.LEECH_LOW: "Leech (Low)",
     RelicId.LEECH_MEDIUM: "Leech (Medium)",
     RelicId.LEECH_HIGH: "Leech (High)",
+    RelicId.IMPALER_LOW: "Pact of the Impaler (Low)",
+    RelicId.IMPALER_MEDIUM: "Pact of the Impaler (Medium)",
+    RelicId.IMPALER_HIGH: "Pact of the Impaler (High)",
+    RelicId.FIRST_STRIKE_LOW: "Pact of the First Strike (Low)",
+    RelicId.FIRST_STRIKE_MEDIUM: "Pact of the First Strike (Medium)",
+    RelicId.FIRST_STRIKE_HIGH: "Pact of the First Strike (High)",
+    RelicId.FORTIFY_LOW: "Pact of Fortification (Low)",
+    RelicId.FORTIFY_MEDIUM: "Pact of Fortification (Medium)",
+    RelicId.FORTIFY_HIGH: "Pact of Fortification (High)",
+    RelicId.WARBANNER_LOW: "War Banner (Low)",
+    RelicId.WARBANNER_MEDIUM: "War Banner (Medium)",
+    RelicId.WARBANNER_HIGH: "War Banner (High)",
 }
 
 # Short label drawn inside a placed relic's grid cells.
@@ -128,6 +181,18 @@ RELIC_LABEL: dict[int, str] = {
     RelicId.LEECH_LOW: "Leech L",
     RelicId.LEECH_MEDIUM: "Leech M",
     RelicId.LEECH_HIGH: "Leech H",
+    RelicId.IMPALER_LOW: "Imp L",
+    RelicId.IMPALER_MEDIUM: "Imp M",
+    RelicId.IMPALER_HIGH: "Imp H",
+    RelicId.FIRST_STRIKE_LOW: "1st L",
+    RelicId.FIRST_STRIKE_MEDIUM: "1st M",
+    RelicId.FIRST_STRIKE_HIGH: "1st H",
+    RelicId.FORTIFY_LOW: "Fort L",
+    RelicId.FORTIFY_MEDIUM: "Fort M",
+    RelicId.FORTIFY_HIGH: "Fort H",
+    RelicId.WARBANNER_LOW: "Bnr L",
+    RelicId.WARBANNER_MEDIUM: "Bnr M",
+    RelicId.WARBANNER_HIGH: "Bnr H",
 }
 
 # (width, height) in grid cells. Unlisted ids default to 1x1. The pact
@@ -180,7 +245,7 @@ def _default_state() -> RelicSave:
     return RelicSave(owned=[], placements=[])
 
 
-_KNOWN_RELIC_IDS = frozenset(int(r) for r in RelicId)
+_KNOWN_RELIC_IDS = frozenset(int(r) for r in RelicId) - SHELVED_RELIC_IDS
 
 
 def _normalize(state: RelicSave) -> RelicSave:

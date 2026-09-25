@@ -222,6 +222,14 @@ class PlayerState(msgspec.Struct):
     # since it changes every tick - same reasoning as Living Fortress's inline
     # multiplier in creatures/damage.py.
     gathering_winds_stacks: int = 0
+    # Rewrite-only: Pact of Fortification (meta/relics_impl/fortify.py) - one
+    # entry per pooled 0.1s gain instance: its (fractional) stacks and seconds
+    # left. Instances expire independently, never refreshed.
+    fortify_stacks: list[float] = msgspec.field(default_factory=list)
+    fortify_timers: list[float] = msgspec.field(default_factory=list)
+    # Rewrite-only: War Banner relic (meta/relics_impl/warbanner.py) - where
+    # each level up planted a banner; kept for the whole run.
+    warbanner_positions: list[Vec2] = msgspec.field(default_factory=list)
 
     # Rewrite-only: Harvester's Scythe - counts down from
     # HARVESTER_SCYTHE_FLASH_DURATION on every crit heal; purely a visual cue

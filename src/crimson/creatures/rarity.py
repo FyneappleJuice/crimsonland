@@ -595,7 +595,12 @@ def _death_explosion(pool, creature, *, state, players, detail_preset: int) -> N
         if float(p.health) <= 0.0:
             continue
         if math.hypot(float(p.pos.x) - cx, float(p.pos.y) - cy) <= VOLATILE_RADIUS:
-            player_take_damage(state, p, VOLATILE_DAMAGE, players=players)
+            # Not native: Pact of the First Strike's cost applies to this blast too.
+            from ..meta.relics_impl.first_strike import incoming_damage_mult
+            from ..meta.relics_impl.fortify import damage_taken_mult
+
+            dealt = VOLATILE_DAMAGE * incoming_damage_mult(creature) * damage_taken_mult(p)
+            player_take_damage(state, p, dealt, players=players)
 
     try:
         from grim.sfx_map import SfxId
