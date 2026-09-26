@@ -171,3 +171,22 @@ def test_bolt_ages_out() -> None:
     update_arc_gun([player], [], ARC_BOLT_LIFETIME + 0.01, creature_damage_runtime=None)
     assert player.arc_gun.bolt_timer == 0.0
     assert player.arc_gun.chain == []
+
+
+def test_damage_is_credited_to_whichever_player_actually_fired() -> None:
+    # Regression: owner used to be hardcoded to player 0 regardless of which
+    # player's Arc Gun was resolving - wrong kill/XP credit in co-op whenever
+    # player 2+ fired it.
+    player0 = PlayerState(index=0, pos=Vec2(0.0, 0.0))
+    player1 = PlayerState(index=1, pos=Vec2(0.0, 0.0))
+    target = _creature(pos=Vec2(210.0, 0.0), hp=1e9, size=20.0)
+    creatures = [target]
+    runtime = _RecordingRuntime(creatures)
+
+    start_arc_strike(player1, Vec2(200.0, 0.0), weapon_power_up=False)
+    update_arc_gun([player0, player1], creatures, 0.016, creature_damage_runtime=runtime)
+
+    assert runtime.calls
+    for call in runtime.calls:
+        owner = call[4]
+        assert owner.player_index() == 1

@@ -55,6 +55,47 @@ def test_plasma_cannon_hit_spawns_rings_and_sfx() -> None:
     assert len(spawned) == 12
 
 
+def test_plasma_cannon_ring_inherits_owner_and_discount() -> None:
+    # Regression: the ring used to be hardcoded to player 0 regardless of who
+    # actually fired the shot (wrong shooter/kill credit in co-op whenever
+    # player 2+ fired it), and always dealt full, undiscounted damage even
+    # when the triggering shot itself was discounted (e.g. a Domino Effect
+    # freebie, stamped into crit_mult) - same "child inherits the parent's
+    # crit_mult" convention a rocket's own blast AoE already uses.
+    pool = ProjectilePool(size=64)
+    creature = CreatureState(active=True, hp=100.0, pos=Vec2(), size=50.0)
+    runtime_state = GameplayState()
+    runtime_state.bonus_spawn_guard = True
+
+    proj_id = pool.spawn(
+        pos=Vec2(),
+        angle=0.0,
+        type_id=ProjectileTemplateId.PLASMA_CANNON,
+        owner=OwnerRef.from_local_player(1),
+        travel_budget=10.0,
+    )
+    pool.entries[proj_id].crit_mult = 0.25
+
+    pool.step(
+        PrimaryStepCtx(
+            dt=0.016,
+            creatures=[creature],
+            options=make_projectile_update_options(
+                world_size=4096.0,
+                detail_preset=5,
+                rng=ScriptedCrand(0, fallback=ScriptedCrand.Fallback.REPEAT_LAST),
+                runtime_state=runtime_state,
+            ),
+        ),
+    )
+
+    spawned = [p for p in pool.entries if p.active and int(p.type_id) == int(ProjectileTemplateId.PLASMA_RIFLE)]
+    assert len(spawned) == 12
+    for ring_bolt in spawned:
+        assert ring_bolt.owner.player_index() == 1
+        assert_float_close(ring_bolt.crit_mult, 0.25)
+
+
 def test_splitter_gun_hit_spawns_split_projectiles_and_sparks() -> None:
     pool = ProjectilePool(size=64)
     creature = CreatureState(active=True, hp=100.0, pos=Vec2(), size=50.0)

@@ -171,6 +171,32 @@ def test_ion_bolt_and_its_cloud_pay_the_penalty(monkeypatch: pytest.MonkeyPatch)
     assert with_relic == pytest.approx(plain * 0.7, rel=1e-4)
 
 
+def _ion_rifle_total_damage_with_crit_mult(crit_mult: float) -> float:
+    creature = _creature(pos=Vec2(400.0, 512.0), hp=1.0e9)
+    pool = ProjectilePool(size=0x60)
+    idx = pool.spawn(
+        pos=Vec2(110.0, 512.0),
+        angle=math.pi / 2,
+        type_id=ProjectileTemplateId.ION_RIFLE,
+        owner=OwnerRef.from_local_player(0),
+    )
+    pool.entries[idx].crit_mult = float(crit_mult)
+    _step(pool, (creature,), ticks=120)
+    return 1.0e9 - creature.hp
+
+
+def test_ion_bolt_and_its_cloud_pay_the_same_crit_mult() -> None:
+    # Regression: the lingering cloud's DoT ticks used to ignore crit_mult
+    # entirely - a real crit or a Domino Effect freebie's discount applied
+    # only to the bolt's direct hit, never to the cloud that followed it.
+    from crimson.creatures.runtime import MOMENTUM_DAMAGE_MULT
+
+    plain = _ion_rifle_total_damage_with_crit_mult(1.0)
+    discounted = _ion_rifle_total_damage_with_crit_mult(MOMENTUM_DAMAGE_MULT)
+    assert plain > 0.0
+    assert discounted == pytest.approx(plain * MOMENTUM_DAMAGE_MULT, rel=1e-4)
+
+
 def test_non_projectile_damage_is_not_penalized() -> None:
     # Nuke, Man Bomb, Radioactive, flamethrower/ignite, ... all resolve through
     # creature_apply_damage directly - no projectile, so no penalty.

@@ -25,7 +25,7 @@ from crimson.creatures.damage_runtime import DirectCreatureDamageRuntime
 from crimson.gameplay import GameplayState
 from crimson.sim.state_types import BladeOrbitState, PlayerState
 from grim.geom import Vec2
-from tests.support.factories import make_creature_state
+from tests.support.factories import RecordingCreatureDamageRuntime, make_creature_state
 
 
 def _active_orbit(theta0: float = 0.0) -> BladeOrbitState:
@@ -166,6 +166,24 @@ def test_inactive_orbit_produces_no_offsets_and_no_damage() -> None:
     assert blade_orbit_offsets(player.blade_orbit) == []
     update_blade_orbits([player], [creature], 0.5, creature_damage_runtime=runtime)
     assert creature.hp == 100.0
+
+
+def test_damage_is_credited_to_whichever_player_owns_the_orbit() -> None:
+    # Regression: owner used to be hardcoded to player 0 regardless of whose
+    # blade orbit was active - wrong kill/XP credit in co-op whenever
+    # player 2+ owned the orbit.
+    player0 = PlayerState(index=0, pos=Vec2(500.0, 500.0))
+    player1 = PlayerState(index=1, pos=Vec2(0.0, 0.0))
+    player1.blade_orbit = _active_orbit()
+    creature = make_creature_state(pos=Vec2(BLADE_RADIUS, 0.0), hp=1e9, size=30.0)
+    runtime = RecordingCreatureDamageRuntime(creatures=[creature], apply_damage=True)
+
+    update_blade_orbits([player0, player1], [creature], 0.016, creature_damage_runtime=runtime)
+
+    assert runtime.calls
+    for call in runtime.calls:
+        owner = call[4]
+        assert owner.player_index() == 1
 
 
 def test_sound_loop_index_advances_once_per_loop_period() -> None:

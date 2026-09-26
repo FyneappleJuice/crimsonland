@@ -119,6 +119,16 @@ def _linger_ion_aoe(
     decay = x87_pc24_mul(ctx.dt, f32(life_decay_scale))
     proj.life_timer = _life_timer_sub_f32(proj.life_timer, decay)
     damage = x87_pc24_mul(ctx.dt, f32(damage_per_second))
+    # Not native: the cloud is the ion bolt's own child, so it pays whatever
+    # multiplier the bolt's own direct hit did - a real crit or a Domino
+    # Effect freebie's discount, both stamped into crit_mult when the bolt
+    # was fired (see the direct-hit damage calc a few hundred lines away in
+    # projectile_pool.py), previously only applied to the direct hit and
+    # never to this DoT tick.
+    if proj.crit_mult != 1.0:
+        damage = float(f32(float(damage) * float(proj.crit_mult)))
+    if proj.perk_damage_mult != 1.0:
+        damage = float(f32(float(damage) * float(proj.perk_damage_mult)))
     # Not native: Pact of Ricochet's penalty - the cloud is the ion bolt's own
     # child, so it pays the same penalty the bolt's hit did.
     ricochet_mult = relic_ricochet.projectile_damage_mult(proj.owner)
@@ -279,13 +289,27 @@ def _post_hit_plasma_cannon(ctx: _ProjectileUpdateCtx, hit: _ProjectileHitInfo) 
         for ring_idx in range(12):
             ring_angle = float(ring_idx) * (math.pi / 6.0)
             ring_offset = Vec2.from_angle(ring_angle) * ring_radius
-            ctx.pool.spawn(
+            ring_id = ctx.pool.spawn(
                 pos=hit.proj.pos + ring_offset,
                 angle=ring_angle,
                 type_id=ProjectileTemplateId.PLASMA_RIFLE,
-                owner=OwnerRef.from_local_player(0),
+                # Not native: was hardcoded to player 0 regardless of who
+                # actually fired the shot - wrong shooter (and wrong kill/XP
+                # attribution) in co-op whenever player 2+ fired this. Inherit
+                # the real owner instead, which also makes Pact of Ricochet's
+                # own penalty apply correctly to each ring bolt's own hit,
+                # same as any other bullet.
+                owner=hit.proj.owner,
                 travel_budget=plasma_meta,
             )
+            # Not native: the ring is a direct consequence of this specific
+            # hit - inherit whatever multiplier applied to it (Domino
+            # Effect's 25%, Perk Efficacy scaling, ...) instead of always
+            # dealing full, undiscounted damage regardless of how the
+            # triggering shot itself was discounted. Same "child inherits the
+            # parent's crit_mult" convention rockets' own blast AoE already
+            # uses.
+            ctx.pool.entries[ring_id].crit_mult = float(hit.proj.crit_mult)
     finally:
         if runtime_state is not None:
             runtime_state.bonus_spawn_guard = False

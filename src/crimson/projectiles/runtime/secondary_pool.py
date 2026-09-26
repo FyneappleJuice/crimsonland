@@ -116,6 +116,12 @@ class SecondarySpawnSpec(msgspec.Struct, frozen=True):
     time_to_live: float = 2.0
     target_hint: Vec2 | None = None
     creatures: Sequence[CreatureState] | None = None
+    # Not native: lets a caller stamp a new entry as a direct consequence of a
+    # specific already-resolved hit (Explosive Payload's bonus detonation) so
+    # it inherits whatever multiplier applied to that hit - a real crit or a
+    # Domino Effect freebie's discount - instead of always defaulting to 1.0
+    # and dealing full, undiscounted damage regardless.
+    crit_mult: float = 1.0
 
 
 class SecondaryStepCtx(msgspec.Struct, frozen=True):
@@ -175,7 +181,7 @@ class SecondaryProjectilePool:
         entry.vel = Vec2()
         entry.detonation_t = 0.0
         entry.detonation_scale = 1.0
-        entry.crit_mult = 1.0
+        entry.crit_mult = float(spec.crit_mult)
         entry.did_crit = False
         # Reset every rewrite-only per-shot flag - a reused pool slot must not
         # carry over a previous occupant's Fork Shot / Explosive Payload /
@@ -365,6 +371,11 @@ class SecondaryProjectilePool:
                     type_id=SecondaryProjectileTypeId.DETONATION,
                     owner=entry.owner,
                     time_to_live=_ROCKET_EXPLOSIVE_PAYLOAD_BLAST_SCALE,
+                    # Not native: inherit whatever multiplier applied to the
+                    # rocket hit that triggered this bonus blast (a real crit,
+                    # a Domino Effect freebie's discount) instead of always
+                    # dealing full, undiscounted damage regardless.
+                    crit_mult=float(entry.crit_mult),
                 ),
             )
             self._entries[det_index].barrel_greaser_rocket = entry.barrel_greaser_rocket
@@ -416,7 +427,13 @@ class SecondaryProjectilePool:
                     creatures=creatures,
                 ),
             )
-            self._entries[bonus_index].crit_mult = float(shooter.stats.perk_efficacy)
+            # Not native: Perk Efficacy scales this freebie rocket the same
+            # way a canned perk-proc bolt would - compounded with whatever
+            # multiplier the triggering rocket hit itself already carried (a
+            # real crit, a Domino Effect freebie's discount), not replacing
+            # it. A no-op (1.0) for the ordinary case where the triggering
+            # hit wasn't itself discounted or boosted.
+            self._entries[bonus_index].crit_mult = float(shooter.stats.perk_efficacy) * float(entry.crit_mult)
             self._entries[bonus_index].barrel_greaser_rocket = entry.barrel_greaser_rocket
 
         def _rocket_on_direct_hit(entry: SecondaryProjectile, hit_idx: int) -> None:

@@ -149,7 +149,10 @@ def update_arc_gun(
             arc.bolt_timer = ARC_BOLT_LIFETIME
             continue
 
-        owner = OwnerRef.from_local_player(0)
+        # Not native: was hardcoded to player 0 regardless of which player's
+        # Arc Gun actually fired - wrong kill/XP credit in co-op whenever
+        # player 2+ triggered it.
+        owner = OwnerRef.from_local_player(int(player.index))
         used: set[int] = set()
         cur = primary
         prev_x, prev_y = float(muzzle.x), float(muzzle.y)

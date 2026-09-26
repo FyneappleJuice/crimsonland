@@ -175,7 +175,10 @@ def update_scythe_swings(
             hi = max(prev_rel, curr_rel) + SCYTHE_EDGE_PAD
             px = float(player.pos.x)
             py = float(player.pos.y)
-            owner = OwnerRef.from_local_player(0)
+            # Not native: was hardcoded to player 0 regardless of whose
+            # scythe was swinging - wrong kill/XP credit in co-op whenever
+            # player 2+ owned this swing.
+            owner = OwnerRef.from_local_player(int(player.index))
 
             for idx, creature in enumerate(creatures):
                 if not creature.active or float(creature.hp) <= 0.0:

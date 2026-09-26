@@ -526,6 +526,11 @@ class ProjectilePool:
                     type_id=SecondaryProjectileTypeId.DETONATION,
                     owner=proj.owner,
                     time_to_live=blast_scale,
+                    # Not native: inherit whatever multiplier applied to the
+                    # hit that triggered this blast (a real crit, a Domino
+                    # Effect freebie's discount) instead of always dealing
+                    # full, undiscounted damage regardless.
+                    crit_mult=float(proj.crit_mult),
                 ),
             )
             if effects is not None:
@@ -975,9 +980,18 @@ class ProjectilePool:
                                             creatures=creatures,
                                         ),
                                     )
+                                    # Not native: Perk Efficacy scales this
+                                    # freebie rocket the same way a canned
+                                    # perk-proc bolt would - compounded with
+                                    # whatever multiplier the triggering hit
+                                    # itself already carried (a real crit, a
+                                    # Domino Effect freebie's discount), not
+                                    # replacing it. A no-op (1.0) for the
+                                    # ordinary case where the triggering hit
+                                    # wasn't itself discounted or boosted.
                                     runtime_state.secondary_projectiles.entries[rocket_idx].crit_mult = float(
                                         shooter.stats.perk_efficacy,
-                                    )
+                                    ) * float(proj.crit_mult)
                             if proj.did_crit:
                                 # Harvester's Scythe is unrelated to Overdue's
                                 # window and always heals on a real crit hit.

@@ -25,7 +25,7 @@ from crimson.weapon_runtime.scythe_sweep import (
 )
 from crimson.weapons import WeaponId
 from grim.geom import Vec2
-from tests.support.factories import make_creature_state
+from tests.support.factories import RecordingCreatureDamageRuntime, make_creature_state
 
 
 def _player_with_scythe(state: GameplayState) -> PlayerState:
@@ -69,6 +69,26 @@ def test_a_creature_in_the_cone_takes_scythe_damage_once() -> None:
 
     assert (100000.0 - creature.hp) == pytest.approx(SCYTHE_DAMAGE)
     assert not player.scythe_swing.active
+
+
+def test_damage_is_credited_to_whichever_player_actually_swung() -> None:
+    # Regression: owner used to be hardcoded to player 0 regardless of whose
+    # Evil Scythe was resolving - wrong kill/XP credit in co-op whenever
+    # player 2+ owned the swing.
+    player0 = PlayerState(index=0, pos=Vec2(0.0, 0.0))
+    player1 = PlayerState(index=1, pos=Vec2(0.0, 0.0))
+    creature = make_creature_state(pos=Vec2(SCYTHE_REACH * 0.6, 0.0), hp=1e9, size=30.0)
+    runtime = RecordingCreatureDamageRuntime(creatures=[creature], apply_damage=True)
+
+    start_scythe_swing(player1, Vec2(200.0, 0.0), shots_fired_this_clip=0)
+    steps = int(SCYTHE_SWING_DURATION_S / 0.016) + 2
+    for _ in range(steps):
+        update_scythe_swings([player0, player1], [creature], 0.016, creature_damage_runtime=runtime)
+
+    assert runtime.calls
+    for call in runtime.calls:
+        owner = call[4]
+        assert owner.player_index() == 1
 
 
 def test_a_creature_behind_the_player_is_not_touched() -> None:

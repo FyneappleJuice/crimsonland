@@ -72,6 +72,7 @@ def _fire_rocket_and_step_to_first_hit(
     explosive_payload_timer: float,
     target_pos: Vec2 = Vec2(60.0, 0.0),
     max_steps: int = 300,
+    crit_mult: float = 1.0,
 ):
     state = GameplayState()
     player = PlayerState(index=0, pos=Vec2(0.0, 0.0))
@@ -88,6 +89,13 @@ def _fire_rocket_and_step_to_first_hit(
             creatures=(creature,),
         ),
     )
+    if crit_mult != 1.0:
+        for entry in state.secondary_projectiles.entries:
+            if entry.active and entry.type_id in (
+                SecondaryProjectileTypeId.ROCKET,
+                SecondaryProjectileTypeId.HOMING_ROCKET,
+            ):
+                entry.crit_mult = float(crit_mult)
     for _ in range(max_steps):
         was_detonation = any(
             e.active and e.type_id == SecondaryProjectileTypeId.DETONATION
@@ -128,6 +136,25 @@ def test_rocket_launcher_gets_only_one_detonation_without_explosive_payload() ->
         if e.active and e.type_id == SecondaryProjectileTypeId.DETONATION
     ]
     assert len(detonations) == 1
+
+
+def test_rocket_bonus_detonation_inherits_the_rockets_crit_mult() -> None:
+    # Regression: the rocket-path bonus detonation (secondary_pool.py's
+    # _maybe_rocket_explosive_payload_on_hit) used to always stamp
+    # crit_mult=1.0, same class of bug as the bullet path above.
+    from crimson.creatures.runtime import MOMENTUM_DAMAGE_MULT
+    from crimson.projectiles.runtime.secondary_pool import _ROCKET_EXPLOSIVE_PAYLOAD_BLAST_SCALE
+
+    active_state = _fire_rocket_and_step_to_first_hit(
+        WeaponId.ROCKET_LAUNCHER, explosive_payload_timer=5.0, crit_mult=MOMENTUM_DAMAGE_MULT,
+    )
+    bonus_detonations = [
+        e for e in active_state.secondary_projectiles.entries
+        if e.active and e.type_id == SecondaryProjectileTypeId.DETONATION
+        and float(e.detonation_scale) == pytest.approx(_ROCKET_EXPLOSIVE_PAYLOAD_BLAST_SCALE)
+    ]
+    assert bonus_detonations
+    assert bonus_detonations[0].crit_mult == pytest.approx(MOMENTUM_DAMAGE_MULT)
 
 
 def test_mini_rocket_swarmers_flags_exactly_one_rocket_per_volley() -> None:
@@ -189,7 +216,7 @@ def test_mini_rocket_swarmers_volley_only_procs_one_bonus_detonation_total() -> 
 
 
 def _step_and_hit(
-    *, is_rocket: bool, type_id: ProjectileTemplateId = ProjectileTemplateId.PISTOL,
+    *, is_rocket: bool, type_id: ProjectileTemplateId = ProjectileTemplateId.PISTOL, crit_mult: float = 1.0,
 ) -> tuple[ProjectilePool, GameplayState, int]:
     pool = ProjectilePool(size=4)
     creature = _creature(pos=Vec2(100.0, 100.0))
@@ -204,6 +231,7 @@ def _step_and_hit(
         travel_budget=100.0,
     )
     pool.entries[idx].is_rocket = is_rocket
+    pool.entries[idx].crit_mult = float(crit_mult)
     pool.step(
         PrimaryStepCtx(
             dt=0.06,
@@ -225,6 +253,18 @@ def test_flagged_pellet_detonates_on_hit_and_consumes_the_flag() -> None:
     # Pistol IS the anchor weapon, so its blast is (within f32 rounding) the
     # reference scale.
     assert detonations[0].detonation_scale == pytest.approx(_EXPLOSIVE_PAYLOAD_DETONATION_SCALE, abs=1e-6)
+
+
+def test_detonation_inherits_the_hitting_bullets_crit_mult() -> None:
+    # Regression: the bonus detonation used to always stamp crit_mult=1.0,
+    # ignoring whatever multiplier the bullet that triggered it actually hit
+    # with - a real crit or a Domino Effect freebie's discount.
+    from crimson.creatures.runtime import MOMENTUM_DAMAGE_MULT
+
+    pool, state, idx = _step_and_hit(is_rocket=True, crit_mult=MOMENTUM_DAMAGE_MULT)
+    detonations = [s for s in state.secondary_projectiles.entries if s.active]
+    assert len(detonations) == 1
+    assert detonations[0].crit_mult == pytest.approx(MOMENTUM_DAMAGE_MULT)
 
 
 def test_unflagged_pellet_does_not_detonate() -> None:

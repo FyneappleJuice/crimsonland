@@ -130,7 +130,10 @@ def update_blade_orbits(
         if creature_damage_runtime is None or not creatures:
             continue
 
-        owner = OwnerRef.from_local_player(0)
+        # Not native: was hardcoded to player 0 regardless of whose blade
+        # orbit was active - wrong kill/XP credit in co-op whenever player 2+
+        # owned this orbit.
+        owner = OwnerRef.from_local_player(int(player.index))
         for offset in blade_orbit_offsets(orbit):
             bx = float(player.pos.x) + float(offset.x)
             by = float(player.pos.y) + float(offset.y)
