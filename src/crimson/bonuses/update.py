@@ -33,7 +33,7 @@ _TEST_MODE_WEAPON_DROPS: tuple[tuple[float, WeaponId], ...] = (
 # Only safe for perks with no apply_handler (pure stat/effects-step perks) -
 # this sets perk_counts directly, skipping whatever an apply_handler would
 # normally do on a real pick (e.g. Infernal Contract's health drop).
-_TEST_MODE_STARTING_PERKS: tuple[PerkId, ...] = ()
+_TEST_MODE_STARTING_PERKS: tuple[PerkId, ...] = (PerkId.HARVESTER_SCYTHE,)
 
 
 def update_test_mode_fork_spawner(

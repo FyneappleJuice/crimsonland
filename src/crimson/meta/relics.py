@@ -274,9 +274,17 @@ def init_relics(base_dir: Path | str) -> RelicSave:
         # Top up to one of each - counting placed relics too, so a relic
         # sitting in the grid isn't handed out again as a duplicate.
         have = set(_STATE.owned) | {int(p.relic_id) for p in _STATE.placements}
+        added = False
         for relic_id in _TEST_MODE_SEED_OWNED_RELICS:
             if int(relic_id) not in have:
                 _STATE.owned.append(int(relic_id))
+                added = True
+        if added:
+            # Not native: without this, the seed only ever lives in memory -
+            # relic_inventory.py's own open() calls init_relics() again right
+            # before the screen shows, which reloads straight from disk and
+            # wipes out anything not saved here.
+            save_relics()
     return _STATE
 
 

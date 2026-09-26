@@ -161,22 +161,18 @@ def draw_player_status(
             rl.Color(60, 150, 255, int(210 * a)),
         )
 
-    # Not native: Harvester's Scythe - a small green glow at the player's
-    # center on every crit heal. The heal itself is only 0.5 HP, invisible
-    # against a 100-HP ring on its own, so this is the only feedback the
-    # player gets that the perk actually did something.
+    # Not native: Harvester's Scythe - a small green dot at the player's
+    # center mass on every crit heal. The heal itself is only 0.5 HP,
+    # invisible against a 100-HP ring on its own, so this is the only
+    # feedback the player gets that the perk actually did something. Plain
+    # solid circle, not a gradient - the previous gradient version kept
+    # crashing across raylib version mismatches (Vector2 vs int center args),
+    # not worth the risk for a one-off proc flash.
     flash = float(player.harvester_scythe_flash_timer)
     if flash > 0.0:
         flash_t = clamp(flash / HARVESTER_SCYTHE_FLASH_DURATION, 0.0, 1.0)
-        glow_r = 10.0 * float(scale) * flash_t
-        # raylib 5.5's DrawCircleGradient takes int centerX/centerY, not a
-        # Vector2 (that's raylib 6) - the Vector2 form crashed the game on
-        # every crit heal.
-        rl.draw_circle_gradient(
-            int(center.x), int(center.y), glow_r,
-            rl.Color(140, 255, 170, int(200 * flash_t * a)),
-            rl.Color(90, 235, 130, 0),
-        )
+        dot_r = max(1.5, 3.0 * float(scale))
+        rl.draw_circle_v(center, dot_r, rl.Color(90, 235, 130, int(220 * flash_t * a)))
 
     # Not native: Overdue - a pulsing gold glow for the whole bonus-crit-
     # damage window (player.overdue_window_timer > 0), not just a proc flash.

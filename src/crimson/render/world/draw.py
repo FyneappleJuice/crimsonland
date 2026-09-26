@@ -118,7 +118,7 @@ def draw_world(
             # Not native: The Hit List's marked-Apex indicator.
             draw_hit_list_marker(render_ctx, ctx=draw_ctx)
             # Not native: Pact of the Impaler's per-creature Impale count.
-            draw_impale_pips(render_ctx, ctx=draw_ctx)
+            draw_impale_tally(render_ctx, ctx=draw_ctx)
             # Not native: Pact of the First Strike's not-yet-hit creatures.
             draw_first_strike_marks(render_ctx, ctx=draw_ctx)
         with profile_pass("freeze_overlay"):
@@ -488,7 +488,7 @@ def draw_creatures(render_ctx: WorldRenderCtx, *, ctx: WorldDrawContext) -> None
         )
 
 
-_IMPALE_PIP_COLOR = (225, 225, 235)
+_IMPALE_TALLY_COLOR = (225, 225, 235)
 _FIRST_STRIKE_MARK_COLOR = (235, 60, 50)
 _FIRST_STRIKE_MARK_ALPHA = 110
 
@@ -512,27 +512,76 @@ def draw_first_strike_marks(render_ctx: WorldRenderCtx, *, ctx: WorldDrawContext
         rl.draw_ring(c, radius - 1.0, radius + 1.0, 0.0, 360.0, 32, color)
 
 
-def draw_impale_pips(render_ctx: WorldRenderCtx, *, ctx: WorldDrawContext) -> None:
-    """Not native: one small pip per Impale (up to 5) in a row under each
-    impaled creature, so the Pact of the Impaler stack can be read at a glance."""
+def _draw_tally_group(
+    *,
+    x_start: float,
+    base_y: float,
+    stroke_gap: float,
+    stroke_h: float,
+    thickness: float,
+    color: rl.Color,
+    outline: rl.Color,
+    n_verticals: int,
+    slash: bool,
+) -> None:
+    """One tally group: `n_verticals` vertical strokes (1-5), plus a diagonal
+    slash through all of them once a group reaches 5 (the classic |||| /)."""
+
+    for i in range(n_verticals):
+        x = x_start + stroke_gap * i
+        top = rl.Vector2(x, base_y - stroke_h * 0.5)
+        bot = rl.Vector2(x, base_y + stroke_h * 0.5)
+        rl.draw_line_ex(top, bot, thickness + 1.0, outline)
+        rl.draw_line_ex(top, bot, thickness, color)
+    if slash and n_verticals > 0:
+        pad = stroke_gap * 0.35
+        p0 = rl.Vector2(x_start - pad, base_y + stroke_h * 0.5)
+        p1 = rl.Vector2(x_start + stroke_gap * (n_verticals - 1) + pad, base_y - stroke_h * 0.5)
+        rl.draw_line_ex(p0, p1, thickness + 1.0, outline)
+        rl.draw_line_ex(p0, p1, thickness, color)
+
+
+def draw_impale_tally(render_ctx: WorldRenderCtx, *, ctx: WorldDrawContext) -> None:
+    """Not native: a tally mark (groups of four strokes + a diagonal fifth)
+    above each impaled creature, one group per 5 Impales, so the Pact of the
+    Impaler stack can be read at a glance."""
 
     alpha = int(clamp(ctx.entity_alpha, 0.0, 1.0) * 230.0)
-    fill = rl.Color(*_IMPALE_PIP_COLOR, alpha)
+    color = rl.Color(*_IMPALE_TALLY_COLOR, alpha)
     outline = rl.Color(20, 20, 24, alpha)
-    radius = max(2.0, 2.5 * ctx.scale)
-    spacing = radius * 2.6
+    stroke_h = max(4.0, 5.0 * ctx.scale)
+    stroke_gap = max(1.5, 2.2 * ctx.scale)
+    group_gap = stroke_gap * 1.8
+    thickness = max(1.0, 1.4 * ctx.scale)
     for creature in render_ctx.frame.creatures.entries:
         count = len(creature.impale_stored)
         if count <= 0 or not creature.active or float(creature.hp) <= 0.0:
             continue
         screen = render_ctx._world_to_screen_with(creature.pos, camera=ctx.camera, view_scale=ctx.view_scale)
         size = float(creature.size) * ctx.scale
-        y = float(screen.y) + size * 0.5 + radius + 2.0
-        x0 = float(screen.x) - spacing * (count - 1) * 0.5
-        for i in range(count):
-            c = rl.Vector2(x0 + spacing * i, y)
-            rl.draw_circle_v(c, radius + 1.0, outline)
-            rl.draw_circle_v(c, radius, fill)
+        base_y = float(screen.y) - size * 0.5 - stroke_h * 0.5 - 4.0
+
+        full_groups, remainder = divmod(count, 5)
+        group_sizes = [4] * full_groups
+        if remainder:
+            group_sizes.append(remainder)
+        group_widths = [stroke_gap * (n - 1) for n in group_sizes]
+        total_width = sum(group_widths) + group_gap * max(0, len(group_sizes) - 1)
+
+        x_cursor = float(screen.x) - total_width * 0.5
+        for i, n in enumerate(group_sizes):
+            _draw_tally_group(
+                x_start=x_cursor,
+                base_y=base_y,
+                stroke_gap=stroke_gap,
+                stroke_h=stroke_h,
+                thickness=thickness,
+                color=color,
+                outline=outline,
+                n_verticals=n,
+                slash=n >= 5,
+            )
+            x_cursor += group_widths[i] + group_gap
 
 
 def draw_hit_list_marker(render_ctx: WorldRenderCtx, *, ctx: WorldDrawContext) -> None:
