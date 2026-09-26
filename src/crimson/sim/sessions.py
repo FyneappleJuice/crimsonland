@@ -10,7 +10,7 @@ from grim.sfx_map import SfxId
 from ..bonuses.blade_orbit import blade_sound_loop_index
 from ..creatures.spawn import advance_survival_spawn_stage, tick_rush_mode_spawns, tick_survival_wave_spawns
 from ..game_modes import GameMode
-from ..gameplay import survival_update_weapon_handouts
+from ..gameplay import LATE_LEVEL_XP_STEEPEN_AT, survival_level_threshold, survival_update_weapon_handouts
 from ..perks.availability import prepare_perk_availability
 from ..perks.selection import (
     perk_selection_open_choices,
@@ -116,20 +116,60 @@ def enforce_rush_loadout(world: WorldState) -> None:
         player.weapon.ammo = float(RUSH_FORCED_AMMO)
 
 
-# Not native: past this point, tick_survival_wave_spawns' own native spawn-
-# cooldown formula (creatures/spawn.py) is fed an accelerated effective dt
-# instead of the real one, so its native shape (interval shrink, then
-# burst-extra spawns past 15 real minutes) is completely untouched up to
-# here - only how fast we drive it speeds up, exponentially, afterward.
-SURVIVAL_SPAWN_RAMP_START_MS = 10 * 60 * 1000
-SURVIVAL_SPAWN_RAMP_PER_MINUTE = 1.15  # +15% effective spawn rate per minute past the start, compounding
+# Not native: past this level (the same LATE_LEVEL_XP_STEEPEN_AT gameplay.py
+# steepens the XP curve at), three things ramp together for the rest of a
+# long run instead of flattening into "the same formulas forever":
+#
+# 1. tick_survival_wave_spawns' own native spawn-cooldown formula
+#    (creatures/spawn.py) is fed an accelerated effective dt instead of the
+#    real one, so its native shape (interval shrink, then burst-extra spawns
+#    past 15 real minutes) is completely untouched up to here - only how
+#    fast we drive it speeds up, exponentially, afterward.
+# 2. Each wave-spawned monster's HP scales up by the same shape.
+# 3. Each wave-spawned monster's XP reward scales up too, by exactly the
+#    amount needed to cancel out #1: since total XP earned per real second
+#    is (spawn rate) x (reward per kill), and we want that to keep pace with
+#    the XP curve's own growth if the player can actually keep killing
+#    everything that spawns, reward growth is solved for directly against
+#    survival_level_threshold's *real* per-level XP delta - not a clean
+#    GROWTH**p shortcut, which drifts hard from the real curve (the
+#    threshold's own polynomial term keeps growing too, so the shortcut
+#    under-delivers by ~2.3x by level 50).
+SURVIVAL_SPAWN_RAMP_START_LEVEL = LATE_LEVEL_XP_STEEPEN_AT
+SURVIVAL_SPAWN_RAMP_PER_LEVEL = 1.15  # +15% effective spawn rate per level past the start, compounding
+SURVIVAL_MONSTER_HP_GROWTH_PER_LEVEL = 1.15  # +15% monster HP per level past the start, compounding
 
 
-def _survival_spawn_dt_mult(elapsed_ms: float) -> float:
-    if elapsed_ms <= SURVIVAL_SPAWN_RAMP_START_MS:
+def _survival_late_game_levels_past_ramp(player_level: int) -> float:
+    return max(0.0, float(int(player_level) - SURVIVAL_SPAWN_RAMP_START_LEVEL))
+
+
+def _survival_spawn_dt_mult(player_level: int) -> float:
+    return SURVIVAL_SPAWN_RAMP_PER_LEVEL ** _survival_late_game_levels_past_ramp(player_level)
+
+
+def _survival_monster_hp_mult(player_level: int) -> float:
+    return SURVIVAL_MONSTER_HP_GROWTH_PER_LEVEL ** _survival_late_game_levels_past_ramp(player_level)
+
+
+def _survival_xp_delta_growth(player_level: int) -> float:
+    """How much harder the *next* level is to reach right now, relative to
+    how hard level (start+1) was to reach from level `start` - the exact
+    per-level XP delta ratio from the real threshold formula, so reward
+    scaling can compensate for it precisely instead of approximately."""
+    start = SURVIVAL_SPAWN_RAMP_START_LEVEL
+    baseline_delta = survival_level_threshold(start + 1) - survival_level_threshold(start)
+    if baseline_delta <= 0:
         return 1.0
-    minutes_past = (elapsed_ms - SURVIVAL_SPAWN_RAMP_START_MS) / 60_000.0
-    return SURVIVAL_SPAWN_RAMP_PER_MINUTE**minutes_past
+    level = max(start, int(player_level))
+    current_delta = survival_level_threshold(level + 1) - survival_level_threshold(level)
+    return current_delta / baseline_delta
+
+
+def _survival_reward_mult(player_level: int) -> float:
+    if int(player_level) <= SURVIVAL_SPAWN_RAMP_START_LEVEL:
+        return 1.0
+    return _survival_xp_delta_growth(player_level) / _survival_spawn_dt_mult(player_level)
 
 
 def survival_mid_step(ctx: MidStepContext, spawn: SurvivalSpawnState) -> None:
@@ -152,7 +192,7 @@ def survival_mid_step(ctx: MidStepContext, spawn: SurvivalSpawnState) -> None:
         )
 
     player_xp = ctx.world.players[0].experience if ctx.world.players else 0
-    spawn_dt_ms = ctx.dt_sim_ms * _survival_spawn_dt_mult(ctx.elapsed_before_ms)
+    spawn_dt_ms = ctx.dt_sim_ms * _survival_spawn_dt_mult(player_level)
     cooldown, wave_spawns = tick_survival_wave_spawns(
         spawn.spawn_cooldown_ms,
         spawn_dt_ms,
@@ -164,6 +204,18 @@ def survival_mid_step(ctx: MidStepContext, spawn: SurvivalSpawnState) -> None:
         terrain_height=int(ctx.world_size),
     )
     spawn.spawn_cooldown_ms = cooldown
+
+    hp_mult = _survival_monster_hp_mult(player_level)
+    reward_mult = _survival_reward_mult(player_level)
+    if hp_mult != 1.0 or reward_mult != 1.0:
+        for creature_init in wave_spawns:
+            if creature_init.health is not None:
+                creature_init.health = float(creature_init.health) * hp_mult
+            if creature_init.max_health is not None:
+                creature_init.max_health = float(creature_init.max_health) * hp_mult
+            if creature_init.reward_value is not None:
+                creature_init.reward_value = float(creature_init.reward_value) * reward_mult
+
     ctx.world.creatures.spawn_inits(wave_spawns)
 
 

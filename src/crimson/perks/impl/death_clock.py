@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from ...math_parity import f32, x87_pc24_mul, x87_pc24_sub
+from ...sim.state_types import PlayerState
 from ..helpers import perk_active, perk_count_get
 from ..ids import PerkId
 from ..runtime.apply_context import PerkApplyCtx
@@ -23,6 +24,10 @@ def apply_death_clock(ctx: PerkApplyCtx) -> None:
     for player in ctx.players:
         if player.health > 0.0:
             player.health = 100.0
+        # Not native: strip any banked Rainy Day Fund shield outright - the
+        # 30s clock is meant to be an unavoidable, ticking floor. See
+        # blocks_health_change below for why nothing can rebuild it either.
+        player.soul_tether_shield = 0.0
 
 
 def update_death_clock(ctx: PerksUpdateEffectsCtx) -> None:
@@ -43,6 +48,17 @@ def update_death_clock(ctx: PerksUpdateEffectsCtx) -> None:
             player.health = 0.0
         else:
             player.health = x87_pc24_sub(f32(float(player.health)), drain)
+
+
+def blocks_health_change(player: PlayerState) -> bool:
+    """True while Death Clock is active - every OTHER system that would move
+    player.health (heals, shield gain/absorb, external hits on the thinner
+    projectile-damage path) has to no-op instead, so the perk's own drain
+    (update_death_clock, above) is the only thing that can ever move it.
+    Without this, Leech/Harvester's Scythe healing faster than the fixed
+    drain rate turns "guaranteed death in 30s" into free permanent
+    invincibility - the exact opposite of what picking this perk means."""
+    return perk_active(player, PerkId.DEATH_CLOCK)
 
 
 HOOKS = PerkHooks(

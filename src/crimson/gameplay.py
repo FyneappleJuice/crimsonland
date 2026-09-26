@@ -278,7 +278,7 @@ def award_experience_from_reward(state: GameplayState, player: PlayerState, rewa
 # more XP than the last, compounding - a deliberate wall so the back half of
 # a long run doesn't just keep riding the same power curve forever. Below
 # this level the formula is untouched.
-LATE_LEVEL_XP_STEEPEN_AT = 25
+LATE_LEVEL_XP_STEEPEN_AT = 30
 LATE_LEVEL_XP_GROWTH = 1.25  # +25% required XP per level past LATE_LEVEL_XP_STEEPEN_AT
 
 

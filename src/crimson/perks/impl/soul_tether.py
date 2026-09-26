@@ -15,6 +15,7 @@ from ..helpers import perk_active
 from ..ids import PerkId
 from ..runtime.effects_context import PerksUpdateEffectsCtx
 from ..runtime.hook_types import PerkHooks
+from .death_clock import blocks_health_change as _death_clock_blocks_health_change
 
 SOUL_TETHER_DECAY_DELAY = 5.0
 SOUL_TETHER_DECAY_RATE = 20.0
@@ -24,7 +25,14 @@ SOUL_TETHER_MAX_SHIELD = 100.0
 def soul_tether_clamp_and_gain(player: PlayerState, raw_new_health: float) -> float:
     """Clamp a heal result to 100, same as every existing heal call site, but
     redirect any overflow into the shield instead of discarding it when Soul
-    Tether is active. Callers pass the *unclamped* would-be health."""
+    Tether is active. Callers pass the *unclamped* would-be health.
+
+    Not native: this is the shared choke point for every heal in the game
+    (Leech, Harvester's Scythe, Bandage, Regeneration, the Health bonus
+    pickup) - Death Clock blocking it here, once, is what makes its own
+    drain the only thing that can ever move health while it's active."""
+    if _death_clock_blocks_health_change(player):
+        return float(player.health)
     if perk_active(player, PerkId.SOUL_TETHER) and raw_new_health > 100.0:
         overflow = raw_new_health - 100.0
         player.soul_tether_shield = min(SOUL_TETHER_MAX_SHIELD, float(player.soul_tether_shield) + overflow)
@@ -35,7 +43,14 @@ def soul_tether_clamp_and_gain(player: PlayerState, raw_new_health: float) -> fl
 
 def soul_tether_absorb(player: PlayerState, damage: float) -> float:
     """Take `damage` off the shield first, returning whatever's left to hit
-    health. A no-op (returns damage unchanged) without the perk or shield."""
+    health. A no-op (returns damage unchanged) without the perk or shield.
+
+    Not native: also a no-op while Death Clock is active - the shield was
+    already stripped to 0 and can't be rebuilt (soul_tether_clamp_and_gain),
+    so this matters only in the edge case where health itself somehow still
+    needs blocking from this specific path; kept for consistency/safety."""
+    if _death_clock_blocks_health_change(player):
+        return damage
     if not perk_active(player, PerkId.SOUL_TETHER):
         return damage
     shield = float(player.soul_tether_shield)

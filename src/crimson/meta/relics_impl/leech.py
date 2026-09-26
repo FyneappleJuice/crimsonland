@@ -17,6 +17,7 @@ reward" shape as every other pact relic, so High always beats Low.
 """
 
 from ...math_parity import f32, x87_pc24_add, x87_pc24_mul, x87_pc24_sub
+from ...perks.impl.death_clock import blocks_health_change as _death_clock_blocks_health_change
 from ...perks.impl.soul_tether import soul_tether_clamp_and_gain
 from ...sim.state_types import PlayerState
 from ..relics import RelicId, relic_owned
@@ -52,6 +53,13 @@ def heal_on_hit(player: PlayerState, damage_dealt: float) -> None:
 def hp_cost_on_kill(player: PlayerState) -> None:
     """Called from creatures/runtime.py's kill-confirmation hook."""
     if _active_relic_id() is None:
+        return
+    if _death_clock_blocks_health_change(player):
+        # Not native: this is a direct subtraction, not routed through
+        # soul_tether_clamp_and_gain like the heal above - Death Clock has to
+        # guard it separately so its own drain stays the only thing moving
+        # health while it's active (a "lifeloss not from Death Clock" is
+        # exactly what it's meant to block, same as a lifegain).
         return
     cost = float(x87_pc24_mul(f32(float(player.health)), LEECH_HP_COST_PER_KILL))
     player.health = max(0.0, float(x87_pc24_sub(f32(float(player.health)), cost)))
