@@ -3,6 +3,32 @@
 Notes for alpha testers, newest first. This tracks what's changed between
 handed-off alpha builds (not every internal commit).
 
+## v0.0.6
+
+- **Added - Auto-fire:** new keybind (default **T**) toggles a mode where
+  the fire button clicks instead of holds - click once to start firing
+  continuously, click again to stop. Holding the fire button still works
+  normally at any time, mode on or off. Rebindable per-player in the
+  Controls menu.
+- **Added - build panel:** a new panel slides in from the right edge of
+  the screen during level-up, listing every perk you've picked this run
+  plus a summary of your current stat bonuses (damage, fire rate, crit,
+  move speed, etc.) at the bottom.
+- **Fixed - level-up flow:** picking a perk now chains straight into the
+  next one if you have several queued, instead of needing to re-open the
+  menu for every single one. Cancel on either the main or secondary perk
+  panel now backs you out of the whole level-up instead of leaving the
+  other one stranded open; and once you've picked one side, the other
+  side can no longer be cancelled out from under it - you have to also
+  resolve it.
+- **Added:** a fill indicator (green, growing from the tail) on the
+  direction arrow for Full Steam Ahead (Kinetic Discipline), showing how
+  close you are to the full damage bonus.
+- **Performance:** meaningfully reduced lag from piercing weapons (Fire
+  Bullets, Gauss Gun, Blade Gun, WPU pierce) in dense late-game hordes -
+  a hot collision check was doing expensive precise math on targets that
+  were nowhere near hit range; it now fast-rejects those first.
+
 ## v0.0.5
 
 - **Fixed:** Ricochet-chained shots and Fork Shot could double up on
