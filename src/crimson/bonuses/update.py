@@ -10,7 +10,7 @@ from ..math_parity import f32, x87_pc24_sub
 from ..perks.helpers import perk_active
 from ..perks.ids import PerkId
 from ..sim.state_types import BonusPickupEvent, GameplayState, PlayerState
-from ..test_mode import test_mode_enabled
+from ..test_mode import alpha_build_enabled, test_mode_enabled
 from ..weapons import WeaponId
 from .apply import bonus_apply
 from .hud import bonus_hud_update
@@ -56,20 +56,24 @@ def update_test_mode_fork_spawner(
 
     # One-time: drop a couple of test weapons near the world-centre start spot
     # so a fresh run has something better than the pistol to try things with.
+    # Local dev only - the packaged alpha build shouldn't hand testers a
+    # weapon/perk we just happened to be debugging with.
     if not state.test_mode_shotgun_dropped:
         state.test_mode_shotgun_dropped = True
-        cx, cy = world_width * 0.5, world_height * 0.5
-        for offset, weapon_id in _TEST_MODE_WEAPON_DROPS:
-            drop = state.bonus_pool.spawn_forced_at_pos(Vec2(cx, cy - offset), bonus_id=BonusId.WEAPON)
-            drop.amount = int(weapon_id)
+        if not alpha_build_enabled():
+            cx, cy = world_width * 0.5, world_height * 0.5
+            for offset, weapon_id in _TEST_MODE_WEAPON_DROPS:
+                drop = state.bonus_pool.spawn_forced_at_pos(Vec2(cx, cy - offset), bonus_id=BonusId.WEAPON)
+                drop.amount = int(weapon_id)
 
     # One-time: hand every player the test perks outright, so a fresh run
-    # doesn't need to level up into them first.
+    # doesn't need to level up into them first. Local dev only, same reasoning.
     if not state.test_mode_starting_perks_granted:
         state.test_mode_starting_perks_granted = True
-        for player in players:
-            for perk_id in _TEST_MODE_STARTING_PERKS:
-                player.perk_counts[int(perk_id)] = 1
+        if not alpha_build_enabled():
+            for player in players:
+                for perk_id in _TEST_MODE_STARTING_PERKS:
+                    player.perk_counts[int(perk_id)] = 1
 
     if not _TEST_MODE_BONUS_CYCLE:
         return

@@ -71,6 +71,28 @@ def test_reused_pool_slot_does_not_inherit_the_chained_flag() -> None:
     assert pool.entries[reused].ricochet_ignore_idx == -1
 
 
+def test_stop_on_hit_false_weapon_still_only_chains_once() -> None:
+    # Regression: Fire Bullets / Gauss Gun / Blade Gun don't stop on hit (they
+    # pierce via damage_pool depletion, not pierce_left, so the pierce_left <
+    # 1.0 chain-eligibility check doesn't exclude them). The chained flag used
+    # to only be set on the spawned bounce, never on the original bolt itself -
+    # so a single bolt that went on to hit several more creatures in the same
+    # flight re-chained on every one of them instead of just the first.
+    pool = ProjectilePool(size=0x60)
+    creatures = tuple(_creature(pos=Vec2(400.0 + 60.0 * i, 512.0), size=10.0, hp=1.0) for i in range(5))
+    pool.spawn(
+        pos=Vec2(100.0, 512.0),
+        angle=math.pi / 2,
+        type_id=ProjectileTemplateId.FIRE_BULLETS,
+        owner=OwnerRef.from_local_player(0),
+    )
+    _step(pool, creatures, ticks=80)
+
+    assert sum(1 for c in creatures if c.hp <= 0.0) >= 2, "test setup: the bolt should pierce through multiple creatures"
+    bounces = [e for e in pool.entries if e.ricochet_ignore_idx != -1]
+    assert len(bounces) == 1
+
+
 def test_every_shot_in_sustained_fire_chains() -> None:
     struck = _creature(pos=Vec2(400.0, 512.0), hp=1.0e9)
     other = _creature(pos=Vec2(400.0, 650.0), hp=1.0e9)

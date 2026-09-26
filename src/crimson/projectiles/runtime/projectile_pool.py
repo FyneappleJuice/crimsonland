@@ -894,6 +894,15 @@ class ProjectilePool:
                                     self._entries[chain_id].ricochet_chained = True
                                     self._entries[chain_id].ricochet_ignore_idx = int(hit_idx)
                                     self._entries[chain_id].ricochet_damage = float(damage_amount)
+                                    # Not native: mark the *original* bolt too,
+                                    # not just the bounce it just spawned - a
+                                    # stop_on_hit=False weapon (Fire Bullets,
+                                    # Gauss Gun, Blade Gun) can hit several
+                                    # creatures in one flight via damage_pool
+                                    # depletion, independent of pierce_left,
+                                    # and without this it re-chained on every
+                                    # single one of those hits instead of once.
+                                    proj.ricochet_chained = True
 
                     # Not native: Pact of Ricochet's penalty - every
                     # projectile hit (bounces included) pays it.
