@@ -88,6 +88,17 @@ _FREE_ROUNDS_RNG = _random.Random(0xF6EED5)
 # only to rockets spawned from this weapon's own fire branch (see the DPS
 # comparison this was tuned against; brought down from an initial +50% by feel).
 _MINI_ROCKET_SWARMERS_DAMAGE_MULT = 1.2
+# Not native: Barrel Greaser - the four dedicated rocket weapons its damage/
+# speed bonus extends to (secondary_pool.py stamps SecondaryProjectile.
+# barrel_greaser_rocket from this set at spawn, below).
+_BARREL_GREASER_ROCKET_WEAPON_IDS = frozenset(
+    {
+        WeaponId.ROCKET_LAUNCHER,
+        WeaponId.SEEKER_ROCKETS,
+        WeaponId.ROCKET_MINIGUN,
+        WeaponId.MINI_ROCKET_SWARMERS,
+    },
+)
 # Not native: Mini-Rocket Swarmers is treated like a shotgun for Explosive
 # Payload - one whole volley is "one shot", so only a single, randomly chosen
 # rocket out of it procs the bonus detonation, not all five. Private RNG, same
@@ -649,6 +660,7 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
             secondary_entry.fork_shot_eligible = float(player.projectile_fork_timer) > 0.0
             # Not native: Seeker Rounds dedup token - see SecondaryProjectile.shot_seq.
             secondary_entry.shot_seq = int(player.shot_seq)
+            secondary_entry.barrel_greaser_rocket = weapon_id in _BARREL_GREASER_ROCKET_WEAPON_IDS
         case ParticleStreamMode(style=style, slow=slow):
             counts_accuracy_shots = False
             # WPU for a stream weapon is +30% per-particle damage (fire rate is a
@@ -782,6 +794,7 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
                 )
                 swarmer_entry.fork_shot_eligible = fork_shot_active
                 swarmer_entry.shot_seq = int(player.shot_seq)
+                swarmer_entry.barrel_greaser_rocket = weapon_id in _BARREL_GREASER_ROCKET_WEAPON_IDS
                 angle = angle + step
             # Native subtracts the full clip value, zeroing the ammo even when
             # the clip was fractional or negative.

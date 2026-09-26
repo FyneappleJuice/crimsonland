@@ -257,6 +257,14 @@ class SecondaryProjectile(msgspec.Struct):
     ricochet_chained: bool = False
     ricochet_ignore_idx: int = -1
     ricochet_damage: float = 0.0
+    # Rewrite-only: Barrel Greaser - True only for a rocket spawned by one of
+    # the four dedicated rocket weapons (Rocket Launcher/Seeker Rockets/Rocket
+    # Minigun/Mini-Rocket Swarmers), stamped at spawn (weapon_runtime/fire.py)
+    # and carried onto its own Fork Shot children / Ricochet bounces /
+    # Explosive Payload bonus blast / Seeker Rounds bonus rocket
+    # (secondary_pool.py). Left False on a Seeker Rounds bonus rocket fired
+    # from some *other* weapon, so the bonus stays scoped to these four.
+    barrel_greaser_rocket: bool = False
 
 
 __all__ = [

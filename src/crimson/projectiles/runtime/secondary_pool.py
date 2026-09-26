@@ -35,6 +35,7 @@ from ...owner_ref import OwnerRef
 from ...perks.helpers import perk_active
 from ...perks.ids import PerkId
 from ...perks.impl.harvester_scythe import harvester_scythe_on_crit
+from ...progression import resolve_team_stats
 from ...rng_caller_static import RngCallerStatic
 from ..types import (
     SECONDARY_PROJECTILE_POOL_SIZE,
@@ -84,6 +85,11 @@ _ROCKET_FORK_CHILD_DAMAGE_MULT_ROCKET_LAUNCHER = 0.75
 # formula/anchor bullets use, just with that shared 1.0 baked in instead of
 # looking up a per-weapon damage_scale that rocket damage doesn't otherwise use.
 _ROCKET_EXPLOSIVE_PAYLOAD_BLAST_SCALE = _explosive_payload_blast_scale(1.0)
+# Not native: ceiling on how much any combination of speed bonuses (Barrel
+# Greaser, the Projectile Speed run mod) may scale a rocket's per-tick
+# movement - see the move_mult comment in step() for why an uncapped stack
+# risks tunneling through a creature instead of hitting it.
+_ROCKET_SPEED_MOVE_MULT_CAP = 1.5
 
 
 _SECONDARY_PRE_HIT_DECAL_CALLERS = (
@@ -181,6 +187,7 @@ class SecondaryProjectilePool:
         entry.ricochet_chained = False
         entry.ricochet_ignore_idx = -1
         entry.ricochet_damage = 0.0
+        entry.barrel_greaser_rocket = False
 
         rule = secondary_rule_for_type_id(type_id)
         match rule:
@@ -243,6 +250,24 @@ class SecondaryProjectilePool:
 
         if dt <= 0.0:
             return 0
+
+        # Not native: Barrel Greaser for rocket weapons - mirrors
+        # projectile_pool.py's own team_stats read. damage_mult_projectile
+        # only ever gets applied to a rocket entry stamped
+        # barrel_greaser_rocket (see fire.py) - never to Man Bomb/Nuke/mines,
+        # which also deal EXPLOSION damage but aren't rockets at all.
+        team_stats = resolve_team_stats(players)
+        barrel_greaser_active = team_stats.has("projectile_double_steps")
+        barrel_greaser_damage_mult = float(team_stats.damage_mult_projectile)
+        # Not native: run mods' Projectile Speed pick (projectile_speed_mult)
+        # only ever touched bullets (projectile_pool.py) - same "rockets
+        # silently excluded" gap as Barrel Greaser had. Composes with Barrel
+        # Greaser's own factor below, then both get clamped by
+        # _ROCKET_SPEED_MOVE_MULT_CAP together - stacking enough picks of the
+        # run mod alone can already reach the same tunneling risk Barrel
+        # Greaser can on its own, so the cap has to cover the combination,
+        # not just Barrel Greaser in isolation.
+        projectile_speed_mult = float(team_stats.projectile_speed_mult)
 
         def _apply_secondary_damage(
             creature_index: int,
@@ -316,6 +341,7 @@ class SecondaryProjectilePool:
                 # parent's own crit_mult - matches the bullet fork children's
                 # "plain/uncritted" convention (weapon_runtime/fire.py).
                 child.crit_mult = float(child_mult)
+                child.barrel_greaser_rocket = entry.barrel_greaser_rocket
 
         def _maybe_rocket_explosive_payload_on_hit(entry: SecondaryProjectile) -> None:
             """Explosive Payload bonus (not native): an extra, separate
@@ -332,7 +358,7 @@ class SecondaryProjectilePool:
 
             if not entry.explosive_payload_eligible:
                 return
-            self.spawn_from_spec(
+            det_index = self.spawn_from_spec(
                 SecondarySpawnSpec(
                     pos=entry.pos,
                     angle=0.0,
@@ -341,6 +367,7 @@ class SecondaryProjectilePool:
                     time_to_live=_ROCKET_EXPLOSIVE_PAYLOAD_BLAST_SCALE,
                 ),
             )
+            self._entries[det_index].barrel_greaser_rocket = entry.barrel_greaser_rocket
             if effects is not None:
                 effects.spawn_explosion_burst(pos=entry.pos, scale=0.5, rng=rng, detail_preset=int(detail_preset))
             if runtime_state is not None:
@@ -390,6 +417,7 @@ class SecondaryProjectilePool:
                 ),
             )
             self._entries[bonus_index].crit_mult = float(shooter.stats.perk_efficacy)
+            self._entries[bonus_index].barrel_greaser_rocket = entry.barrel_greaser_rocket
 
         def _rocket_on_direct_hit(entry: SecondaryProjectile, hit_idx: int) -> None:
             """Crit-reactive perks on a rocket's direct hit - mirrors the bullet
@@ -447,6 +475,7 @@ class SecondaryProjectilePool:
             bounce.ricochet_chained = True
             bounce.ricochet_ignore_idx = int(hit_idx)
             bounce.ricochet_damage = float(damage)
+            bounce.barrel_greaser_rocket = entry.barrel_greaser_rocket
             if entry.type_id == SecondaryProjectileTypeId.HOMING_ROCKET:
                 bounce.target_id = int(chain_idx)
 
@@ -492,6 +521,15 @@ class SecondaryProjectilePool:
                     # Crit compensation/multiplier, stamped on the rocket when it was
                     # fired - carries through into its detonation AoE tick.
                     damage = x87_pc24_mul(damage, float(entry.crit_mult))
+                # Not native: Barrel Greaser's damage bonus - the direct-hit
+                # half of a rocket's damage already gets this via the shared
+                # creature-damage pipeline (is_projectile_hit=True, below); the
+                # blast tick has no equivalent gate there (AoE/DoT ticks are
+                # deliberately excluded from that bucket, same as Fire/Ion's
+                # lingers), so it's applied here instead, scoped to an actual
+                # rocket weapon's own blast via barrel_greaser_rocket.
+                if entry.barrel_greaser_rocket and barrel_greaser_damage_mult != 1.0:
+                    damage = x87_pc24_mul(damage, barrel_greaser_damage_mult)
                 # Not native: Pact of Ricochet's penalty - every detonation is a
                 # projectile's child (a rocket's, or Explosive Payload's off a
                 # bullet or rocket hit).
@@ -532,9 +570,30 @@ class SecondaryProjectilePool:
                 continue
 
             # Move. Native keeps pos/vel as f32 fields: `pos += f32(dt * vel)`.
+            # Not native: Barrel Greaser doubles a bullet's per-tick travel
+            # distance (projectile_pool.py's steps *= 2); a rocket has no
+            # steps-count to double (its accel-toward-speed_cap / homing math
+            # is a genuinely different movement model, and touching that
+            # directly would risk the native-parity flight tuning), so a
+            # similar "cover more ground per tick" effect is layered on top of
+            # the native f32(dt * vel) term here instead, without touching the
+            # vel/accel/homing computation below at all.
+            #
+            # Capped at _ROCKET_SPEED_MOVE_MULT_CAP regardless of source - the
+            # hit check below only samples position once per tick (no
+            # bullet-style sub-stepping), and a rocket at/near its speed_cap
+            # can already cover close to a whole hit-radius per tick.
+            # Uncapped, either Barrel Greaser alone or enough stacked
+            # Projectile Speed run-mod picks alone (let alone both together)
+            # could push it past that and tunnel clean through a creature
+            # instead of registering the hit.
+            barrel_greaser_factor = 1.5 if (entry.barrel_greaser_rocket and barrel_greaser_active) else 1.0
+            move_mult = min(barrel_greaser_factor * projectile_speed_mult, _ROCKET_SPEED_MOVE_MULT_CAP)
+            step_dx = float(f32(float(dt) * float(entry.vel.x)))
+            step_dy = float(f32(float(dt) * float(entry.vel.y)))
             entry.pos = Vec2(
-                float(f32(float(entry.pos.x) + float(f32(float(dt) * float(entry.vel.x))))),
-                float(f32(float(entry.pos.y) + float(f32(float(dt) * float(entry.vel.y))))),
+                float(f32(float(entry.pos.x) + step_dx * move_mult)),
+                float(f32(float(entry.pos.y) + step_dy * move_mult)),
             )
 
             # Update velocity + countdown.
