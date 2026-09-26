@@ -14,7 +14,7 @@ def _equip(monkeypatch: pytest.MonkeyPatch, *relic_ids: RelicId) -> None:
 
 
 def test_slayer_buff_remaining_is_the_third_newest_kill(monkeypatch: pytest.MonkeyPatch) -> None:
-    _equip(monkeypatch, RelicId.SLAYER_PACT_HIGH)
+    _equip(monkeypatch, RelicId.SLAYER_PACT_LOW)
     player = PlayerState(index=0, pos=Vec2())
     player.slayer_pact_kill_window = [4.5, 1.2, 3.0]
     assert slayer_pact.buff_remaining(player) == pytest.approx(1.2)
@@ -28,14 +28,14 @@ def test_slayer_buff_remaining_is_the_third_newest_kill(monkeypatch: pytest.Monk
 def test_slayer_buff_remaining_is_zero_without_a_streak_or_relic(monkeypatch: pytest.MonkeyPatch) -> None:
     player = PlayerState(index=0, pos=Vec2())
     player.slayer_pact_kill_window = [4.0, 3.0]
-    _equip(monkeypatch, RelicId.SLAYER_PACT_HIGH)
+    _equip(monkeypatch, RelicId.SLAYER_PACT_LOW)
     assert slayer_pact.buff_remaining(player) == 0.0
     player.slayer_pact_kill_window = [4.0, 3.0, 2.0]
     _equip(monkeypatch)
     assert slayer_pact.buff_remaining(player) == 0.0
 
 
-@pytest.mark.parametrize("relic", [RelicId.DEADEYE_PACT_LOW, RelicId.DEADEYE_PACT_MEDIUM, RelicId.DEADEYE_PACT_HIGH])
+@pytest.mark.parametrize("relic", [RelicId.DEADEYE_PACT_LOW])
 def test_deadeye_neutral_distance_is_where_damage_is_unchanged(monkeypatch: pytest.MonkeyPatch, relic: RelicId) -> None:
     _equip(monkeypatch, relic)
     distance = deadeye_pact.neutral_distance()
@@ -44,7 +44,7 @@ def test_deadeye_neutral_distance_is_where_damage_is_unchanged(monkeypatch: pyte
 
 
 def test_deadeye_neutral_distance_values(monkeypatch: pytest.MonkeyPatch) -> None:
-    expected = {RelicId.DEADEYE_PACT_LOW: 210.8, RelicId.DEADEYE_PACT_MEDIUM: 158.1, RelicId.DEADEYE_PACT_HIGH: 125.6}
+    expected = {RelicId.DEADEYE_PACT_LOW: 210.8}
     for relic, distance in expected.items():
         _equip(monkeypatch, relic)
         assert deadeye_pact.neutral_distance() == pytest.approx(distance, abs=0.1)
@@ -52,10 +52,7 @@ def test_deadeye_neutral_distance_values(monkeypatch: pytest.MonkeyPatch) -> Non
     assert deadeye_pact.neutral_distance() is None
 
 
-@pytest.mark.parametrize(
-    ("relic", "far_mult"),
-    [(RelicId.DEADEYE_PACT_LOW, 1.12), (RelicId.DEADEYE_PACT_MEDIUM, 1.20), (RelicId.DEADEYE_PACT_HIGH, 1.30)],
-)
+@pytest.mark.parametrize(("relic", "far_mult"), [(RelicId.DEADEYE_PACT_LOW, 1.12)])
 def test_deadeye_curve_endpoints_unchanged(monkeypatch: pytest.MonkeyPatch, relic: RelicId, far_mult: float) -> None:
     _equip(monkeypatch, relic)
     assert deadeye_pact.distance_damage_mult(10.0) == pytest.approx(0.80)

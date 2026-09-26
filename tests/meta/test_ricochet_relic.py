@@ -26,7 +26,7 @@ from tests.support.factories import make_projectile_update_options
 
 @pytest.fixture(autouse=True)
 def _ricochet_equipped(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(relics, "_ACTIVE_RELIC_IDS", (int(RelicId.RICOCHET_HIGH),))
+    monkeypatch.setattr(relics, "_ACTIVE_RELIC_IDS", (int(RelicId.RICOCHET_LOW),))
 
 
 def _fire(pool: ProjectilePool) -> None:
@@ -146,7 +146,7 @@ def _without_relic(monkeypatch: pytest.MonkeyPatch, fn):
 def test_bullet_hit_and_its_bounce_pay_the_penalty(monkeypatch: pytest.MonkeyPatch) -> None:
     first, bounce = _damage_dealt()
     plain, _ = _without_relic(monkeypatch, _damage_dealt)
-    assert first == pytest.approx(plain * 0.7, rel=1e-5)  # High tier: 30% less
+    assert first == pytest.approx(plain * 0.52, rel=1e-5)  # 48% less
     assert bounce == pytest.approx(first)
 
 
@@ -168,7 +168,7 @@ def test_ion_bolt_and_its_cloud_pay_the_penalty(monkeypatch: pytest.MonkeyPatch)
     with_relic = _ion_rifle_total_damage()
     plain = _without_relic(monkeypatch, _ion_rifle_total_damage)
     assert plain > 0.0
-    assert with_relic == pytest.approx(plain * 0.7, rel=1e-4)
+    assert with_relic == pytest.approx(plain * 0.52, rel=1e-4)
 
 
 def _ion_rifle_total_damage_with_crit_mult(crit_mult: float) -> float:
@@ -281,4 +281,4 @@ def test_rocket_hit_and_explosion_pay_the_penalty(monkeypatch: pytest.MonkeyPatc
     with_relic = _struck_total()
     plain = _without_relic(monkeypatch, _struck_total)
     assert plain > 0.0
-    assert with_relic == pytest.approx(plain * 0.7, rel=1e-3)
+    assert with_relic == pytest.approx(plain * 0.52, rel=1e-3)

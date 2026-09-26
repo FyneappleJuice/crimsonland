@@ -26,7 +26,7 @@ def _level_up_at(state: GameplayState, player: PlayerState, pos: Vec2) -> None:
     assert survival_check_level_up(player, state.perk_selection) == 1
 
 
-@pytest.mark.parametrize(("relic", "r"), [(RelicId.WARBANNER_LOW, 75.0), (RelicId.WARBANNER_MEDIUM, 125.0), (RelicId.WARBANNER_HIGH, 175.0)])
+@pytest.mark.parametrize(("relic", "r"), [(RelicId.WARBANNER_LOW, 75.0)])
 def test_level_ups_plant_banners_that_buff_inside_their_radius(monkeypatch: pytest.MonkeyPatch, relic: RelicId, r: float) -> None:
     _equip(monkeypatch, relic)
     state = GameplayState()
@@ -44,7 +44,7 @@ def test_level_ups_plant_banners_that_buff_inside_their_radius(monkeypatch: pyte
 
 
 def test_overlapping_banners_do_not_stack(monkeypatch: pytest.MonkeyPatch) -> None:
-    _equip(monkeypatch, RelicId.WARBANNER_HIGH)
+    _equip(monkeypatch, RelicId.WARBANNER_LOW)
     player = PlayerState(index=0, pos=Vec2())
     player.warbanner_positions = [Vec2(), Vec2(10.0, 0.0), Vec2(0.0, 10.0)]
     assert warbanner.attack_speed_mult(player) == pytest.approx(1.30)
@@ -60,7 +60,7 @@ def test_no_banners_without_the_relic(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_banner_speeds_up_shot_cooldown(monkeypatch: pytest.MonkeyPatch) -> None:
-    _equip(monkeypatch, RelicId.WARBANNER_HIGH)
+    _equip(monkeypatch, RelicId.WARBANNER_LOW)
     state = GameplayState()
 
     def _after(in_banner: bool) -> float:

@@ -8,15 +8,15 @@ of the flat opening-damage bonus below.
 
 The opposite shape to Pact of the Impaler: the *opening* hit on each creature
 is the big one. The first direct projectile hit (bullet, bounce, rocket
-impact) you land on a creature deals +60%/+100%/+150% - only that one hit: a
-shotgun blast's other pellets, and every later shot, deal normal damage - and
-the creature is then Struck. Averaged over a typical ~5-hit kill that's the
-tier's +12%/+20%/+30%; it's huge against hordes you tag once and negligible
-against a single tanky target.
+impact) you land on a creature deals +60% - only that one hit: a shotgun
+blast's other pellets, and every later shot, deal normal damage - and the
+creature is then Struck. Averaged over a typical ~5-hit kill that's +12%;
+it's huge against hordes you tag once and negligible against a single tanky
+target.
 
-The cost is fixed at every tier: a creature you haven't hit yet deals
-FIRST_STRIKE_DANGER_MULT (+40%) damage to you - contact, its projectiles and
-its death explosion - until you hit it.
+The cost: a creature you haven't hit yet deals FIRST_STRIKE_DANGER_MULT
+(+40%) damage to you - contact, its projectiles and its death explosion -
+until you hit it.
 """
 
 from typing import TYPE_CHECKING
@@ -27,12 +27,10 @@ if TYPE_CHECKING:
     from ...creatures.runtime import CreatureState
     from ...owner_ref import OwnerRef
 
-FIRST_STRIKE_DANGER_MULT = 1.40  # fixed at every tier: unstruck creatures hit you +40%
+FIRST_STRIKE_DANGER_MULT = 1.40  # unstruck creatures hit you +40%
 
 _OPENER_BONUS_BY_RELIC: dict[int, float] = {
     RelicId.FIRST_STRIKE_LOW: 0.60,
-    RelicId.FIRST_STRIKE_MEDIUM: 1.00,
-    RelicId.FIRST_STRIKE_HIGH: 1.50,
 }
 
 

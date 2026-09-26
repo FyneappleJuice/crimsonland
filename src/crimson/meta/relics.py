@@ -31,174 +31,84 @@ class RelicId(IntEnum):
     # 1 (+1 Clip Size) and 2 (+5% Fire Rate) were the original placeholder
     # test relics - removed; _normalize() strips them out of old saves.
 
-    # Deadeye pacts (meta/relics_impl/deadeye_pact.py, ricochet.py,
-    # gathering_winds.py) - each drops at one of 3 fixed strengths instead of
-    # the low/medium/high grid-tier system being rolled per-instance; see
-    # each impl module's TIER_* tables for the numbers.
+    # The Low/Medium/High grid-tier system (each pact droppable at one of 3
+    # fixed strengths) was removed - every pact now exists at exactly one
+    # strength, its old Low-tier numbers (see each impl module's own table).
+    # _MEDIUM/_HIGH ids (11/12, 14/15, 17/18, 20/21, 23/24, 26/27, 29/30,
+    # 32/33, 35/36, 38/39) no longer exist; _normalize() strips them out of
+    # old saves the same way it already did for the removed placeholder ids.
     DEADEYE_PACT_LOW = 10
-    DEADEYE_PACT_MEDIUM = 11
-    DEADEYE_PACT_HIGH = 12
     RICOCHET_LOW = 13
-    RICOCHET_MEDIUM = 14
-    RICOCHET_HIGH = 15
     GATHERING_WINDS_LOW = 16
-    GATHERING_WINDS_MEDIUM = 17
-    GATHERING_WINDS_HIGH = 18
 
-    # Slayer pacts (meta/relics_impl/slayer_pact.py, critical_mass.py, leech.py)
     SLAYER_PACT_LOW = 19
-    SLAYER_PACT_MEDIUM = 20
-    SLAYER_PACT_HIGH = 21
     CRITICAL_MASS_LOW = 22
-    CRITICAL_MASS_MEDIUM = 23
-    CRITICAL_MASS_HIGH = 24
     LEECH_LOW = 25
-    LEECH_MEDIUM = 26
-    LEECH_HIGH = 27
 
-    # Champion pacts (meta/relics_impl/impaler.py)
     IMPALER_LOW = 28
-    IMPALER_MEDIUM = 29
-    IMPALER_HIGH = 30
-    # Champion pacts (meta/relics_impl/first_strike.py)
     FIRST_STRIKE_LOW = 31
-    FIRST_STRIKE_MEDIUM = 32
-    FIRST_STRIKE_HIGH = 33
-    # Champion pacts (meta/relics_impl/fortify.py)
     FORTIFY_LOW = 34
-    FORTIFY_MEDIUM = 35
-    FORTIFY_HIGH = 36
-    # meta/relics_impl/warbanner.py
     WARBANNER_LOW = 37
-    WARBANNER_MEDIUM = 38
-    WARBANNER_HIGH = 39
 
 
 # Not native: with --test-mode, init_relics tops the inventory up so exactly
-# one of each of these exists (owned or placed) - every pact at every tier,
-# ready to try. Counts what's already placed, so it never creates duplicates.
+# one of each of these exists (owned or placed) - every pact ready to try.
+# Counts what's already placed, so it never creates duplicates.
 # Shelved relics: fully implemented but out of play for now - never seeded,
 # and stripped from saves on load (like removed ids) so they can't be placed.
 # Pact of the First Strike is waiting on a rework (opening hit always crits
 # instead of a flat damage bonus) - see meta/relics_impl/first_strike.py.
-SHELVED_RELIC_IDS: frozenset[int] = frozenset(
-    {
-        int(RelicId.FIRST_STRIKE_LOW),
-        int(RelicId.FIRST_STRIKE_MEDIUM),
-        int(RelicId.FIRST_STRIKE_HIGH),
-    },
-)
+SHELVED_RELIC_IDS: frozenset[int] = frozenset({int(RelicId.FIRST_STRIKE_LOW)})
 
 _TEST_MODE_SEED_OWNED_RELICS: tuple[int, ...] = tuple(r for r in RelicId if int(r) not in SHELVED_RELIC_IDS)
 
-# Pact family (the pact itself, regardless of tier). Only one relic per
-# family can be placed at a time - see _family_conflict.
+# Pact family (the pact itself). Only one relic per family can be placed at a
+# time - see _family_conflict. Each family now has exactly one member, but the
+# lookup stays in place since a family can still be owned in duplicate (two
+# drops of the same relic) and only one copy may be placed at once.
 RELIC_FAMILY: dict[int, str] = {
     RelicId.DEADEYE_PACT_LOW: "deadeye",
-    RelicId.DEADEYE_PACT_MEDIUM: "deadeye",
-    RelicId.DEADEYE_PACT_HIGH: "deadeye",
     RelicId.RICOCHET_LOW: "ricochet",
-    RelicId.RICOCHET_MEDIUM: "ricochet",
-    RelicId.RICOCHET_HIGH: "ricochet",
     RelicId.GATHERING_WINDS_LOW: "gathering_winds",
-    RelicId.GATHERING_WINDS_MEDIUM: "gathering_winds",
-    RelicId.GATHERING_WINDS_HIGH: "gathering_winds",
     RelicId.SLAYER_PACT_LOW: "slayer",
-    RelicId.SLAYER_PACT_MEDIUM: "slayer",
-    RelicId.SLAYER_PACT_HIGH: "slayer",
     RelicId.CRITICAL_MASS_LOW: "critical_mass",
-    RelicId.CRITICAL_MASS_MEDIUM: "critical_mass",
-    RelicId.CRITICAL_MASS_HIGH: "critical_mass",
     RelicId.LEECH_LOW: "leech",
-    RelicId.LEECH_MEDIUM: "leech",
-    RelicId.LEECH_HIGH: "leech",
     RelicId.IMPALER_LOW: "impaler",
-    RelicId.IMPALER_MEDIUM: "impaler",
-    RelicId.IMPALER_HIGH: "impaler",
     RelicId.FIRST_STRIKE_LOW: "first_strike",
-    RelicId.FIRST_STRIKE_MEDIUM: "first_strike",
-    RelicId.FIRST_STRIKE_HIGH: "first_strike",
     RelicId.FORTIFY_LOW: "fortify",
-    RelicId.FORTIFY_MEDIUM: "fortify",
-    RelicId.FORTIFY_HIGH: "fortify",
     RelicId.WARBANNER_LOW: "warbanner",
-    RelicId.WARBANNER_MEDIUM: "warbanner",
-    RelicId.WARBANNER_HIGH: "warbanner",
 }
 
-_TIER_SUFFIX = {"Low": " (Low)", "Medium": " (Medium)", "High": " (High)"}
-
 RELIC_NAME: dict[int, str] = {
-    RelicId.DEADEYE_PACT_LOW: "Pact of the Deadeye (Low)",
-    RelicId.DEADEYE_PACT_MEDIUM: "Pact of the Deadeye (Medium)",
-    RelicId.DEADEYE_PACT_HIGH: "Pact of the Deadeye (High)",
-    RelicId.RICOCHET_LOW: "Pact of Ricochet (Low)",
-    RelicId.RICOCHET_MEDIUM: "Pact of Ricochet (Medium)",
-    RelicId.RICOCHET_HIGH: "Pact of Ricochet (High)",
-    RelicId.GATHERING_WINDS_LOW: "Pact of Gathering Winds (Low)",
-    RelicId.GATHERING_WINDS_MEDIUM: "Pact of Gathering Winds (Medium)",
-    RelicId.GATHERING_WINDS_HIGH: "Pact of Gathering Winds (High)",
-    RelicId.SLAYER_PACT_LOW: "Pact of the Slayer (Low)",
-    RelicId.SLAYER_PACT_MEDIUM: "Pact of the Slayer (Medium)",
-    RelicId.SLAYER_PACT_HIGH: "Pact of the Slayer (High)",
-    RelicId.CRITICAL_MASS_LOW: "Critical Mass (Low)",
-    RelicId.CRITICAL_MASS_MEDIUM: "Critical Mass (Medium)",
-    RelicId.CRITICAL_MASS_HIGH: "Critical Mass (High)",
-    RelicId.LEECH_LOW: "Leech (Low)",
-    RelicId.LEECH_MEDIUM: "Leech (Medium)",
-    RelicId.LEECH_HIGH: "Leech (High)",
-    RelicId.IMPALER_LOW: "Pact of the Impaler (Low)",
-    RelicId.IMPALER_MEDIUM: "Pact of the Impaler (Medium)",
-    RelicId.IMPALER_HIGH: "Pact of the Impaler (High)",
-    RelicId.FIRST_STRIKE_LOW: "Pact of the First Strike (Low)",
-    RelicId.FIRST_STRIKE_MEDIUM: "Pact of the First Strike (Medium)",
-    RelicId.FIRST_STRIKE_HIGH: "Pact of the First Strike (High)",
-    RelicId.FORTIFY_LOW: "Pact of Fortification (Low)",
-    RelicId.FORTIFY_MEDIUM: "Pact of Fortification (Medium)",
-    RelicId.FORTIFY_HIGH: "Pact of Fortification (High)",
-    RelicId.WARBANNER_LOW: "War Banner (Low)",
-    RelicId.WARBANNER_MEDIUM: "War Banner (Medium)",
-    RelicId.WARBANNER_HIGH: "War Banner (High)",
+    RelicId.DEADEYE_PACT_LOW: "Pact of the Deadeye",
+    RelicId.RICOCHET_LOW: "Pact of Ricochet",
+    RelicId.GATHERING_WINDS_LOW: "Pact of Gathering Winds",
+    RelicId.SLAYER_PACT_LOW: "Pact of the Slayer",
+    RelicId.CRITICAL_MASS_LOW: "Critical Mass",
+    RelicId.LEECH_LOW: "Leech",
+    RelicId.IMPALER_LOW: "Pact of the Impaler",
+    RelicId.FIRST_STRIKE_LOW: "Pact of the First Strike",
+    RelicId.FORTIFY_LOW: "Pact of Fortification",
+    RelicId.WARBANNER_LOW: "War Banner",
 }
 
 # Short label drawn inside a placed relic's grid cells.
 RELIC_LABEL: dict[int, str] = {
-    RelicId.DEADEYE_PACT_LOW: "Far L",
-    RelicId.DEADEYE_PACT_MEDIUM: "Far M",
-    RelicId.DEADEYE_PACT_HIGH: "Far H",
-    RelicId.RICOCHET_LOW: "Chain L",
-    RelicId.RICOCHET_MEDIUM: "Chain M",
-    RelicId.RICOCHET_HIGH: "Chain H",
-    RelicId.GATHERING_WINDS_LOW: "Wind L",
-    RelicId.GATHERING_WINDS_MEDIUM: "Wind M",
-    RelicId.GATHERING_WINDS_HIGH: "Wind H",
-    RelicId.SLAYER_PACT_LOW: "Slay L",
-    RelicId.SLAYER_PACT_MEDIUM: "Slay M",
-    RelicId.SLAYER_PACT_HIGH: "Slay H",
-    RelicId.CRITICAL_MASS_LOW: "Crit L",
-    RelicId.CRITICAL_MASS_MEDIUM: "Crit M",
-    RelicId.CRITICAL_MASS_HIGH: "Crit H",
-    RelicId.LEECH_LOW: "Leech L",
-    RelicId.LEECH_MEDIUM: "Leech M",
-    RelicId.LEECH_HIGH: "Leech H",
-    RelicId.IMPALER_LOW: "Imp L",
-    RelicId.IMPALER_MEDIUM: "Imp M",
-    RelicId.IMPALER_HIGH: "Imp H",
-    RelicId.FIRST_STRIKE_LOW: "1st L",
-    RelicId.FIRST_STRIKE_MEDIUM: "1st M",
-    RelicId.FIRST_STRIKE_HIGH: "1st H",
-    RelicId.FORTIFY_LOW: "Fort L",
-    RelicId.FORTIFY_MEDIUM: "Fort M",
-    RelicId.FORTIFY_HIGH: "Fort H",
-    RelicId.WARBANNER_LOW: "Bnr L",
-    RelicId.WARBANNER_MEDIUM: "Bnr M",
-    RelicId.WARBANNER_HIGH: "Bnr H",
+    RelicId.DEADEYE_PACT_LOW: "Far",
+    RelicId.RICOCHET_LOW: "Chain",
+    RelicId.GATHERING_WINDS_LOW: "Wind",
+    RelicId.SLAYER_PACT_LOW: "Slay",
+    RelicId.CRITICAL_MASS_LOW: "Crit",
+    RelicId.LEECH_LOW: "Leech",
+    RelicId.IMPALER_LOW: "Imp",
+    RelicId.FIRST_STRIKE_LOW: "1st",
+    RelicId.FORTIFY_LOW: "Fort",
+    RelicId.WARBANNER_LOW: "Bnr",
 }
 
 # (width, height) in grid cells. Unlisted ids default to 1x1. The pact
-# relics are all 1x1 for now - the 3x4 grid + polyomino low/medium/high
-# footprint (2/3/4 cells) is a separate, not-yet-built rework; see the
-# relics_impl modules' own docstrings.
+# relics are all 1x1 for now - the 3x4 grid + polyomino footprint rework is
+# a separate, not-yet-built idea; see the relics_impl modules' own docstrings.
 RELIC_SHAPE: dict[int, tuple[int, int]] = {}
 
 
@@ -327,8 +237,9 @@ def _fits(
 
 
 def _family_conflict(state: RelicSave, relic_id: int) -> bool:
-    """True if a relic of the same pact family (any tier) is already placed -
-    only one of each pact can be equipped at a time."""
+    """True if a relic of the same pact family is already placed - only one
+    of each pact can be equipped at a time (relevant when a duplicate drop of
+    the same relic is owned)."""
     family = RELIC_FAMILY.get(int(relic_id))
     if family is None:
         return False

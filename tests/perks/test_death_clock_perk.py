@@ -91,7 +91,7 @@ def test_death_clock_blocks_leech_heal_on_hit(monkeypatch: pytest.MonkeyPatch) -
     # Regression: this is the actual bug report - Leech's heal-per-hit easily
     # outpaces Death Clock's fixed ~3.33 HP/s drain on any real weapon's DPS,
     # turning "guaranteed death in 30s" into free permanent invincibility.
-    monkeypatch.setattr(relics_mod, "_ACTIVE_RELIC_IDS", (int(RelicId.LEECH_HIGH),))
+    monkeypatch.setattr(relics_mod, "_ACTIVE_RELIC_IDS", (int(RelicId.LEECH_LOW),))
     player = PlayerState(index=0, pos=Vec2(), health=50.0)
     player.perk_counts[int(PerkId.DEATH_CLOCK)] = 1
 
@@ -101,7 +101,7 @@ def test_death_clock_blocks_leech_heal_on_hit(monkeypatch: pytest.MonkeyPatch) -
 
 
 def test_death_clock_blocks_leech_kill_cost(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(relics_mod, "_ACTIVE_RELIC_IDS", (int(RelicId.LEECH_HIGH),))
+    monkeypatch.setattr(relics_mod, "_ACTIVE_RELIC_IDS", (int(RelicId.LEECH_LOW),))
     player = PlayerState(index=0, pos=Vec2(), health=50.0)
     player.perk_counts[int(PerkId.DEATH_CLOCK)] = 1
 

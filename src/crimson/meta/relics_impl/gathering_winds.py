@@ -2,11 +2,10 @@ from __future__ import annotations
 
 """Pact of Gathering Winds relic (not native).
 
-Fixed floor of -20% move speed / +20% damage taken at every tier. Each shot
-that *lands a hit* grants a stack of Tailwind (max GATHERING_WINDS_MAX_STACKS);
-each stack moves you toward a tier-scaled ceiling (+12/+20/+30% speed,
--12/-20/-30% damage taken). Getting hit removes GATHERING_WINDS_STACKS_LOST_PER_HIT
-(5) stacks - half the climb, not all of it.
+Fixed floor of -20% move speed / +20% damage taken. Each shot that *lands a
+hit* grants a stack of Tailwind (max GATHERING_WINDS_MAX_STACKS); each stack
+moves you toward a +12% speed / -12% damage taken ceiling. Getting hit removes
+GATHERING_WINDS_STACKS_LOST_PER_HIT (5) stacks - half the climb, not all of it.
 
 Stacks are read directly by their consumption points (gameplay.py's
 movement-speed calc, player_damage.py's damage-taken calc) instead of going
@@ -27,13 +26,11 @@ from ..relics import RelicId, relic_owned
 
 GATHERING_WINDS_MAX_STACKS = 10
 GATHERING_WINDS_STACKS_LOST_PER_HIT = 5
-GATHERING_WINDS_FLOOR_SPEED = -0.20  # fixed at every tier
-GATHERING_WINDS_FLOOR_DAMAGE_TAKEN = 0.20  # fixed at every tier (a penalty, so positive)
+GATHERING_WINDS_FLOOR_SPEED = -0.20
+GATHERING_WINDS_FLOOR_DAMAGE_TAKEN = 0.20  # a penalty, so positive
 
 _CEILING_BY_RELIC: dict[int, float] = {
     RelicId.GATHERING_WINDS_LOW: 0.12,
-    RelicId.GATHERING_WINDS_MEDIUM: 0.20,
-    RelicId.GATHERING_WINDS_HIGH: 0.30,
 }
 
 

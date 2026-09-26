@@ -3,9 +3,9 @@ from __future__ import annotations
 """War Banner relic (not native, modelled on Risk of Rain 2's Warbanner).
 
 Every level up plants a banner where the player stands; banners stay for the
-rest of the run. While inside any of their banners' radius (75/125/175 for
-Low/Medium/High) the player gets +30% attack speed and +30% movement speed,
-each its own multiplicative bucket. Overlapping banners don't stack.
+rest of the run. While inside any of their banners' radius (75) the player
+gets +30% attack speed and +30% movement speed, each its own multiplicative
+bucket. Overlapping banners don't stack.
 
 No downside: the upside is only worth anything while you hold ground next to
 your banners, which is the cost.
@@ -31,8 +31,6 @@ WARBANNER_MOVE_SPEED_MULT = 1.30
 
 _RADIUS_BY_RELIC: dict[int, float] = {
     RelicId.WARBANNER_LOW: 75.0,
-    RelicId.WARBANNER_MEDIUM: 125.0,
-    RelicId.WARBANNER_HIGH: 175.0,
 }
 
 

@@ -18,7 +18,7 @@ from tests.support.factories import make_creature_state as _creature
 
 @pytest.fixture(autouse=True)
 def _critical_mass_equipped(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(relics, "_ACTIVE_RELIC_IDS", (int(RelicId.CRITICAL_MASS_HIGH),))
+    monkeypatch.setattr(relics, "_ACTIVE_RELIC_IDS", (int(RelicId.CRITICAL_MASS_LOW),))
 
 
 def _crowd(count: int, *, distance: float) -> list:
@@ -27,7 +27,7 @@ def _crowd(count: int, *, distance: float) -> list:
 
 def test_radius_counts_enemies_out_to_400() -> None:
     assert critical_mass.CRITICAL_MASS_RADIUS == 400.0
-    assert critical_mass.crit_bonus_chance(Vec2(), _crowd(7, distance=380.0)) == pytest.approx(0.36)
+    assert critical_mass.crit_bonus_chance(Vec2(), _crowd(7, distance=380.0)) == pytest.approx(0.144)
     assert critical_mass.crit_bonus_chance(Vec2(), _crowd(7, distance=420.0)) == 0.0
 
 
@@ -44,10 +44,7 @@ def _rifle_damage_vs_no_relic(monkeypatch: pytest.MonkeyPatch, relic: RelicId, e
     return (1.0 + chance * (mult - 1.0)) / (1.0 + base * (CRIT_MULTIPLIER - 1.0))
 
 
-@pytest.mark.parametrize(
-    ("relic", "gain"),
-    [(RelicId.CRITICAL_MASS_LOW, 0.12), (RelicId.CRITICAL_MASS_MEDIUM, 0.20), (RelicId.CRITICAL_MASS_HIGH, 0.30)],
-)
+@pytest.mark.parametrize(("relic", "gain"), [(RelicId.CRITICAL_MASS_LOW, 0.12)])
 def test_rifle_gains_the_tier_value_at_seven_enemies(monkeypatch: pytest.MonkeyPatch, relic: RelicId, gain: float) -> None:
     assert _rifle_damage_vs_no_relic(monkeypatch, relic, 7) == pytest.approx(1.0 + gain)
     # Keeps growing to the 10-enemy cap, then stops.

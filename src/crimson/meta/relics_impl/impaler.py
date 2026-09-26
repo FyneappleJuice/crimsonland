@@ -3,19 +3,19 @@ from __future__ import annotations
 """Pact of the Impaler relic (not native, modelled on Path of Exile's Impale).
 
 Every direct projectile hit (bullet, bounce, rocket impact) deals
-IMPALER_DIRECT_MULT (-20%, fixed at every tier) of its normal damage, and
-leaves an Impale on the target that stores a tier-scaled fraction of that
-hit's (post-penalty) damage. Every later hit on the same target also deals
-the stored amount of *every* Impale on it, as a separate burst, and uses up
-one of each Impale's IMPALER_MAX_HITS hits. Applying a fresh Impale refreshes
-the whole stack's IMPALER_DURATION timer, so one shared timer per creature
-is enough: the stack only drops if the target goes that long unhit.
+IMPALER_DIRECT_MULT (-20%) of its normal damage, and leaves an Impale on the
+target that stores a fraction of that hit's (post-penalty) damage. Every
+later hit on the same target also deals the stored amount of *every* Impale
+on it, as a separate burst, and uses up one of each Impale's IMPALER_MAX_HITS
+hits. Applying a fresh Impale refreshes the whole stack's IMPALER_DURATION
+timer, so one shared timer per creature is enough: the stack only drops if
+the target goes that long unhit.
 
 At steady state (5 Impales up, from the 6th hit onward) a hit deals
-0.8 * (1 + 5 * stored) = 1.12 / 1.20 / 1.30 of normal - the relic's tier
-value. One-shot kills only ever pay the -20%; focused fire on tough targets
-is where it pays off. Ticking damage (explosion blast, ion cloud, ignite)
-never applies or triggers Impales - it would burn the hit counts in frames.
+0.8 * (1 + 5 * stored) = 1.12 of normal. One-shot kills only ever pay the
+-20%; focused fire on tough targets is where it pays off. Ticking damage
+(explosion blast, ion cloud, ignite) never applies or triggers Impales - it
+would burn the hit counts in frames.
 
 The burst is recorded before the target's own mitigation and released
 through creature_apply_damage once, so the shooter's damage bonuses and the
@@ -31,14 +31,12 @@ if TYPE_CHECKING:
     from ...creatures.runtime import CreatureState
     from ...owner_ref import OwnerRef
 
-IMPALER_DIRECT_MULT = 0.80  # fixed at every tier: -20% direct hit damage
+IMPALER_DIRECT_MULT = 0.80  # -20% direct hit damage
 IMPALER_MAX_HITS = 5
 IMPALER_DURATION = 8.0
 
 _STORED_FRACTION_BY_RELIC: dict[int, float] = {
     RelicId.IMPALER_LOW: 0.08,  # 0.8 * (1 + 5 * 0.08) = 1.12
-    RelicId.IMPALER_MEDIUM: 0.10,  # 0.8 * (1 + 5 * 0.10) = 1.20
-    RelicId.IMPALER_HIGH: 0.125,  # 0.8 * (1 + 5 * 0.125) = 1.30
 }
 
 

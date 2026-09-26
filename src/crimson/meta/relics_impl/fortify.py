@@ -4,19 +4,17 @@ from __future__ import annotations
 Fortification).
 
 Each direct projectile hit you land (bullet, bounce, rocket impact) grants
-Fortification stacks; each stack is 1% less damage taken from hits, up to
-12/20/30 stacks for Low/Medium/High. Each hit is worth
-FORTIFY_STACKS_PER_MAX_HP * damage / target max HP * rarity_mult stacks
-(fractional, capped at FORTIFY_STACKS_PER_HIT_MAX), so the sustained total
-tracks damage output against the targets' health: roughly
-FORTIFY_STACKS_PER_MAX_HP * FORTIFY_DURATION * DPS / max_hp - holding the
-cap takes ~1.5x / 2.5x / 3.75x a normal target's HP per second.
+Fortification stacks; each stack is 1% less damage taken from hits, up to 12
+stacks. Each hit is worth FORTIFY_STACKS_PER_MAX_HP * damage / target max HP *
+rarity_mult stacks (fractional, capped at FORTIFY_STACKS_PER_HIT_MAX), so the
+sustained total tracks damage output against the targets' health: roughly
+FORTIFY_STACKS_PER_MAX_HP * FORTIFY_DURATION * DPS / max_hp - holding the cap
+takes ~1.5x a normal target's HP per second.
 
 Gains diminish near the cap: each is scaled by
 1 - (tracked / cap) ** FORTIFY_DIMINISH_EXPONENT, so the first stacks come
 at full rate but the last few need sustained effort - a fast killer like the
-Rocket Minigun settles around ~96%/92%/87% of the Low/Medium/High cap rather
-than pinning it.
+Rocket Minigun settles around ~96% of the cap rather than pinning it.
 
 Everything gained within one FORTIFY_GAIN_INTERVAL is pooled into a single
 instance (so fast weapons and shotgun pellets lose nothing), and each
@@ -25,8 +23,8 @@ keep being tracked past the cap (up to FORTIFY_MAX_INSTANCES), so losing an
 old one while over the cap doesn't drop you below it. The displayed stack
 count is the pooled total rounded down.
 
-The cost is fixed at every tier: FORTIFY_MOVE_SPEED_MULT (-10%) movement
-speed - heavier, but slower to kite.
+The cost: FORTIFY_MOVE_SPEED_MULT (-10%) movement speed - heavier, but
+slower to kite.
 
 "Hits" taken means creature contact, creature projectiles and the Volatile
 death blast - applied at those call sites, not in player_take_damage, so
@@ -51,15 +49,13 @@ FORTIFY_STACKS_PER_HIT_MAX = 5.0
 # Near-cap diminishing returns: higher = the slowdown bites later/harder.
 FORTIFY_DIMINISH_EXPONENT = 8.0
 FORTIFY_DAMAGE_REDUCTION_PER_STACK = 0.01
-FORTIFY_MOVE_SPEED_MULT = 0.90  # fixed at every tier: -10% movement speed
+FORTIFY_MOVE_SPEED_MULT = 0.90  # -10% movement speed
 
 # Stack gain bonus by creatures/rarity.py's MonsterRarity (Normal/Tainted/Mutated/Apex).
 _RARITY_GAIN_MULT: dict[int, float] = {0: 1.0, 1: 1.5, 2: 2.0, 3: 3.0}
 
 _MAX_STACKS_BY_RELIC: dict[int, int] = {
     RelicId.FORTIFY_LOW: 12,
-    RelicId.FORTIFY_MEDIUM: 20,
-    RelicId.FORTIFY_HIGH: 30,
 }
 
 

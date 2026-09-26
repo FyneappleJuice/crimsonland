@@ -15,9 +15,9 @@ right before roll_primary_crit/roll_crit_mult is called.
 The bonus is a flat crit chance per nearby enemy, added on top of the
 weapon's own (not an "increased%" of it), growing up to
 CRITICAL_MASS_CAP_ENEMY_COUNT enemies. Tuned so a Rifle (20% base, 2.0x)
-gains exactly the relic's tier value in average damage at
-CRITICAL_MASS_TUNING_ENEMY_COUNT enemies: +12%/+20%/+30%. Below CRITICAL_MASS_LOW_ENEMY_THRESHOLD enemies
-the crit multiplier is also docked.
+gains exactly +12% average damage at CRITICAL_MASS_TUNING_ENEMY_COUNT
+enemies. Below CRITICAL_MASS_LOW_ENEMY_THRESHOLD enemies the crit multiplier
+is also docked.
 CRITICAL_MASS_RADIUS was widened from a first-guess 200 to 400 by playtest.
 
 Rockets read this too (weapon_runtime/fire.py's _rocket_crit_mult_with_powerups),
@@ -36,16 +36,14 @@ if TYPE_CHECKING:
 
 CRITICAL_MASS_RADIUS = 400.0
 CRITICAL_MASS_CAP_ENEMY_COUNT = 10
-CRITICAL_MASS_TUNING_ENEMY_COUNT = 7  # where the tier value lands exactly
+CRITICAL_MASS_TUNING_ENEMY_COUNT = 7  # where +12% lands exactly
 CRITICAL_MASS_LOW_ENEMY_THRESHOLD = 5  # fewer than this -> crit mult penalty
-CRITICAL_MASS_MULT_PENALTY = 0.25  # fixed at every tier: -25% crit mult when thin
+CRITICAL_MASS_MULT_PENALTY = 0.25  # -25% crit mult when thin
 
-# Flat crit chance per nearby enemy. A Rifle (EV 1.2) needs +14.4/+24/+36
-# points at 7 enemies to average 1.344/1.44/1.56 (+12%/+20%/+30%).
+# Flat crit chance per nearby enemy. A Rifle (EV 1.2) needs +14.4 points at
+# 7 enemies to average 1.344 (+12%).
 _CHANCE_PER_ENEMY_BY_RELIC: dict[int, float] = {
     RelicId.CRITICAL_MASS_LOW: 0.144 / CRITICAL_MASS_TUNING_ENEMY_COUNT,
-    RelicId.CRITICAL_MASS_MEDIUM: 0.24 / CRITICAL_MASS_TUNING_ENEMY_COUNT,
-    RelicId.CRITICAL_MASS_HIGH: 0.36 / CRITICAL_MASS_TUNING_ENEMY_COUNT,
 }
 
 
@@ -88,7 +86,7 @@ def crit_bonus_chance(player_pos: Vec2, creatures: Sequence[CreatureState] | Non
 
 def crit_mult_penalty_mult(player_pos: Vec2, creatures: Sequence[CreatureState] | None) -> float:
     """Multiplier to apply to the base crit_mult - 1.0 normally, (1 -
-    CRITICAL_MASS_MULT_PENALTY) when the crowd's thin. Fixed at every tier."""
+    CRITICAL_MASS_MULT_PENALTY) when the crowd's thin."""
     if _active_relic_id() is None:
         return 1.0
     count = _nearby_enemy_count(player_pos, creatures)

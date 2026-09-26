@@ -44,7 +44,7 @@ def test_stacks_per_hit(damage: float, max_hp: float, rarity: int, stacks: float
     assert fortify.stacks_for_hit(_target(max_hp, rarity), damage) == pytest.approx(stacks)
 
 
-@pytest.mark.parametrize(("relic", "cap"), [(RelicId.FORTIFY_LOW, 12), (RelicId.FORTIFY_MEDIUM, 20), (RelicId.FORTIFY_HIGH, 30)])
+@pytest.mark.parametrize(("relic", "cap"), [(RelicId.FORTIFY_LOW, 12)])
 def test_capped_per_tier_at_1_percent_per_stack(monkeypatch: pytest.MonkeyPatch, relic: RelicId, cap: int) -> None:
     _equip(monkeypatch, relic)
     player = PlayerState(index=0, pos=Vec2())
@@ -56,7 +56,7 @@ def test_capped_per_tier_at_1_percent_per_stack(monkeypatch: pytest.MonkeyPatch,
 
 
 def test_partial_stacks_add_up_and_display_rounds_down(monkeypatch: pytest.MonkeyPatch) -> None:
-    _equip(monkeypatch, RelicId.FORTIFY_HIGH)
+    _equip(monkeypatch, RelicId.FORTIFY_LOW)
     player = PlayerState(index=0, pos=Vec2())
     for _ in range(7):
         _gain(player, _target(), 20.0)  # 0.4 each
@@ -65,29 +65,31 @@ def test_partial_stacks_add_up_and_display_rounds_down(monkeypatch: pytest.Monke
 
 
 def test_hits_within_a_tenth_of_a_second_pool_into_one_instance(monkeypatch: pytest.MonkeyPatch) -> None:
-    _equip(monkeypatch, RelicId.FORTIFY_HIGH)
+    _equip(monkeypatch, RelicId.FORTIFY_LOW)
     player = PlayerState(index=0, pos=Vec2())
     for _ in range(8):  # a shotgun blast's pellets, same frame
         fortify.gain_from_hit(player, _target(), 25.0)
     assert len(player.fortify_stacks) == 1
-    assert player.fortify_stacks[0] == pytest.approx(4.0)  # nothing lost
+    assert player.fortify_stacks[0] == pytest.approx(4.0, rel=1e-4)  # nothing lost (bar a hair of diminishing)
     fortify.tick(player, 0.1)
     fortify.gain_from_hit(player, _target(), 25.0)
     assert len(player.fortify_stacks) == 2
 
 
 def test_sustained_stacks_track_damage_per_second_over_target_hp(monkeypatch: pytest.MonkeyPatch) -> None:
-    _equip(monkeypatch, RelicId.FORTIFY_HIGH)
+    _equip(monkeypatch, RelicId.FORTIFY_LOW)
     player = PlayerState(index=0, pos=Vec2())
     # 150 damage/s against 100-HP targets, as 3 hits/s, for 10s.
     for _ in range(30):
         _gain(player, _target(), 50.0, then=1.0 / 3.0)
-    # ~ 2 * 4s * 1.5 = 12, minus the partial window since the last hit.
-    assert 10 <= fortify.current_stacks(player) <= 12
+    # Uncapped/undiminished steady state would be 3 stacks/s * 4s = 12 - right
+    # at the cap, so diminishing returns pull the real steady state a bit
+    # below it (~9.4).
+    assert 8 <= fortify.current_stacks(player) <= 11
 
 
 def test_instances_expire_independently(monkeypatch: pytest.MonkeyPatch) -> None:
-    _equip(monkeypatch, RelicId.FORTIFY_HIGH)
+    _equip(monkeypatch, RelicId.FORTIFY_LOW)
     player = PlayerState(index=0, pos=Vec2())
     _gain(player, _target(), 250.0)  # 5 at t=0
     fortify.tick(player, 1.0)
@@ -103,8 +105,6 @@ def test_instances_expire_independently(monkeypatch: pytest.MonkeyPatch) -> None
     ("relic", "cap", "low", "high"),
     [
         (RelicId.FORTIFY_LOW, 12, 0.90, 0.98),
-        (RelicId.FORTIFY_MEDIUM, 20, 0.87, 0.96),
-        (RelicId.FORTIFY_HIGH, 30, 0.80, 0.92),
     ],
 )
 def test_fast_killer_settles_near_but_below_the_cap(
@@ -124,7 +124,7 @@ def test_fast_killer_settles_near_but_below_the_cap(
 
 
 def test_gains_are_barely_slowed_far_from_the_cap(monkeypatch: pytest.MonkeyPatch) -> None:
-    _equip(monkeypatch, RelicId.FORTIFY_HIGH)
+    _equip(monkeypatch, RelicId.FORTIFY_LOW)
     player = PlayerState(index=0, pos=Vec2())
     _gain(player, _target(), 250.0)  # 5 of 30
     fortify.gain_from_hit(player, _target(), 250.0)  # pooled into the next window
@@ -132,7 +132,7 @@ def test_gains_are_barely_slowed_far_from_the_cap(monkeypatch: pytest.MonkeyPatc
 
 
 def test_cost_and_nothing_without_the_relic(monkeypatch: pytest.MonkeyPatch) -> None:
-    _equip(monkeypatch, RelicId.FORTIFY_MEDIUM)
+    _equip(monkeypatch, RelicId.FORTIFY_LOW)
     assert fortify.speed_mult() == pytest.approx(0.90)
     _equip(monkeypatch)
     assert fortify.speed_mult() == 1.0
@@ -143,7 +143,7 @@ def test_cost_and_nothing_without_the_relic(monkeypatch: pytest.MonkeyPatch) -> 
 
 
 def test_bullet_hits_build_fortification(monkeypatch: pytest.MonkeyPatch) -> None:
-    _equip(monkeypatch, RelicId.FORTIFY_HIGH)
+    _equip(monkeypatch, RelicId.FORTIFY_LOW)
     player = PlayerState(index=0, pos=Vec2(100.0, 512.0), weapon=WeaponSlot(weapon_id=WeaponId.PISTOL))
     creature = _creature(pos=Vec2(400.0, 512.0), hp=1000.0)
     pool = ProjectilePool(size=0x60)

@@ -7,9 +7,7 @@ tier, with a harder-earned payoff. The perk opens its +30% window on *any*
 single kill; this relic instead needs a real kill streak (SLAYER_PACT_
 KILL_THRESHOLD kills within SLAYER_PACT_WINDOW_SECONDS) before its bonus
 kicks in - and the bonus is tuned so the net multiplier while active is
-exactly the relic's own tier value (1.12/1.20/1.30), not just "less bad than
-usual" - see [[project-relic-system]]. The -20% baseline is identical at
-every tier; only the streak payoff scales, so High always strictly beats Low.
+exactly 1.12, not just "less bad than usual".
 """
 
 from ..relics import RelicId, relic_owned
@@ -20,11 +18,9 @@ SLAYER_PACT_KILL_THRESHOLD = 3
 SLAYER_PACT_BASELINE_MULT = 0.8
 
 # Active-window bonus (added on top of the baseline): 0.8 * (1 + bonus) lands
-# on exactly 1.12 / 1.20 / 1.30.
+# on exactly 1.12.
 _ACTIVE_BONUS_BY_RELIC: dict[int, float] = {
     RelicId.SLAYER_PACT_LOW: 0.40,
-    RelicId.SLAYER_PACT_MEDIUM: 0.50,
-    RelicId.SLAYER_PACT_HIGH: 0.625,
 }
 
 

@@ -12,7 +12,7 @@ from grim.geom import Vec2
 
 @pytest.fixture(autouse=True)
 def _leech_equipped(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(relics, "_ACTIVE_RELIC_IDS", (int(RelicId.LEECH_HIGH),))
+    monkeypatch.setattr(relics, "_ACTIVE_RELIC_IDS", (int(RelicId.LEECH_LOW),))
 
 
 def _kill_cost(player: PlayerState) -> float:
@@ -36,10 +36,10 @@ def test_kill_cost_is_a_straight_hp_loss_not_damage_taken() -> None:
     assert player.adrenaline_rush_window_timer == 0.0
 
 
-def test_heal_per_hit_high_tier() -> None:
+def test_heal_per_hit() -> None:
     player = PlayerState(index=0, pos=Vec2(), health=50.0)
     leech.heal_on_hit(player, 100.0)
-    assert float(player.health) == pytest.approx(50.0 + 100.0 * 0.0189, rel=1e-5)
+    assert float(player.health) == pytest.approx(50.0 + 100.0 * 0.00756, rel=1e-5)
 
 
 def test_nothing_happens_without_the_relic(monkeypatch: pytest.MonkeyPatch) -> None:

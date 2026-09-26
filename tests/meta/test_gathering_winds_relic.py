@@ -13,7 +13,7 @@ from grim.geom import Vec2
 
 @pytest.fixture(autouse=True)
 def _gathering_winds_equipped(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(relics, "_ACTIVE_RELIC_IDS", (int(RelicId.GATHERING_WINDS_HIGH),))
+    monkeypatch.setattr(relics, "_ACTIVE_RELIC_IDS", (int(RelicId.GATHERING_WINDS_LOW),))
 
 
 @pytest.mark.parametrize(("before", "after"), [(10, 5), (7, 2), (3, 0), (0, 0)])

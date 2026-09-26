@@ -4,11 +4,9 @@ from __future__ import annotations
 
 Projectile damage scales with how far the shot has traveled when it lands:
 a fixed -20% penalty at point-blank range, climbing logarithmically (fast up
-close, flattening out further away) to a tier-scaled bonus (+12%/+20%/+30%)
-at DEADEYE_PACT_FAR_DISTANCE, clamped there beyond it. Break-even (no bonus)
-falls out of the curve: ~211/158/126 units for Low/Medium/High. The near-side penalty is
-identical at every tier - only the far-side payoff scales - so High always
-strictly beats Low (same cost, bigger reward), never a bigger drawback.
+close, flattening out further away) to +12% at DEADEYE_PACT_FAR_DISTANCE,
+clamped there beyond it. Break-even (no bonus) falls out of the curve:
+~211 units.
 
 Hooked directly into projectile_pool.py's damage_amount computation (the
 `dist` value is already computed there for the plain formula) rather than
@@ -22,12 +20,10 @@ from ..relics import RelicId, relic_owned
 
 DEADEYE_PACT_NEAR_DISTANCE = 50.0  # matches the base damage formula's own distance floor
 DEADEYE_PACT_FAR_DISTANCE = 500.0
-DEADEYE_PACT_NEAR_MULT = 0.80  # fixed at every tier: -20% at point-blank
+DEADEYE_PACT_NEAR_MULT = 0.80  # -20% at point-blank
 
 _FAR_MULT_BY_RELIC: dict[int, float] = {
     RelicId.DEADEYE_PACT_LOW: 1.12,
-    RelicId.DEADEYE_PACT_MEDIUM: 1.20,
-    RelicId.DEADEYE_PACT_HIGH: 1.30,
 }
 
 

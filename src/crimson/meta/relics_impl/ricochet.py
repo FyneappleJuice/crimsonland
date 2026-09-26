@@ -3,12 +3,10 @@ from __future__ import annotations
 """Pact of Ricochet relic (not native).
 
 Each non-piercing projectile chains once, to a *random* nearby enemy (not
-the closest) - both the original hit and the chained bounce deal
-(60 - tier%) less damage, so a full trigger-pull only ever deals 80%/60%/... of
-its normal single-target damage in total, split across two different
-targets instead of concentrated in one. The damage penalty shrinks as tier
-goes up (48% -> 40% -> 30%); the "chains once" rule itself never changes -
-so High always strictly beats Low.
+the closest) - both the original hit and the chained bounce deal 48% less
+damage, so a full trigger-pull only ever deals 104% of its normal
+single-target damage in total, split across two different targets instead of
+concentrated in one.
 
 RICOCHET_SEARCH_RADIUS is a first guess for how far the bounce can reach,
 not measured against real gameplay - retune by feel.
@@ -32,8 +30,6 @@ RICOCHET_SEARCH_RADIUS = 300.0
 # Both the original and the bounce hit deal (1 - penalty) of normal damage.
 _PENALTY_BY_RELIC: dict[int, float] = {
     RelicId.RICOCHET_LOW: 0.48,
-    RelicId.RICOCHET_MEDIUM: 0.40,
-    RelicId.RICOCHET_HIGH: 0.30,
 }
 
 # Private RNG for the chain-target pick only (cosmetic build variance, same

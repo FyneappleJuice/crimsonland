@@ -24,10 +24,7 @@ def _equip(monkeypatch: pytest.MonkeyPatch, *relic_ids: RelicId) -> None:
     monkeypatch.setattr(relics, "_ACTIVE_RELIC_IDS", tuple(int(r) for r in relic_ids))
 
 
-@pytest.mark.parametrize(
-    ("relic", "opener"),
-    [(RelicId.FIRST_STRIKE_LOW, 1.60), (RelicId.FIRST_STRIKE_MEDIUM, 2.00), (RelicId.FIRST_STRIKE_HIGH, 2.50)],
-)
+@pytest.mark.parametrize(("relic", "opener"), [(RelicId.FIRST_STRIKE_LOW, 1.60)])
 def test_only_the_very_first_hit_gets_the_bonus(monkeypatch: pytest.MonkeyPatch, relic: RelicId, opener: float) -> None:
     _equip(monkeypatch, relic)
     creature = CreatureState(active=True, hp=100.0, max_hp=100.0)
@@ -39,7 +36,7 @@ def test_only_the_very_first_hit_gets_the_bonus(monkeypatch: pytest.MonkeyPatch,
 
 
 def test_only_player_hits_strike(monkeypatch: pytest.MonkeyPatch) -> None:
-    _equip(monkeypatch, RelicId.FIRST_STRIKE_HIGH)
+    _equip(monkeypatch, RelicId.FIRST_STRIKE_LOW)
     creature = CreatureState(active=True, hp=100.0, max_hp=100.0)
     assert first_strike.opening_hit_mult(creature, OwnerRef.from_creature(4)) == 1.0
     assert first_strike.opening_hit_mult(creature, msgspec.structs.replace(PLAYER, via_impale=True)) == 1.0
@@ -79,8 +76,8 @@ def test_bullets_open_big_then_deal_normal_damage(monkeypatch: pytest.MonkeyPatc
 
     _equip(monkeypatch)
     plain = _per_hit_damage()
-    _equip(monkeypatch, RelicId.FIRST_STRIKE_HIGH)
+    _equip(monkeypatch, RelicId.FIRST_STRIKE_LOW)
     struck = _per_hit_damage()
-    assert struck[0] == pytest.approx(plain[0] * 2.5, rel=1e-4)
+    assert struck[0] == pytest.approx(plain[0] * 1.60, rel=1e-4)
     assert struck[1] == pytest.approx(plain[1], rel=1e-4)
     assert struck[2] == pytest.approx(plain[2], rel=1e-4)
