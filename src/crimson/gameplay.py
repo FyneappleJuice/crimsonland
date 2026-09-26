@@ -274,11 +274,22 @@ def award_experience_from_reward(state: GameplayState, player: PlayerState, rewa
     return int(gained)
 
 
+# Not native: past this level, every further level costs LATE_LEVEL_XP_GROWTH
+# more XP than the last, compounding - a deliberate wall so the back half of
+# a long run doesn't just keep riding the same power curve forever. Below
+# this level the formula is untouched.
+LATE_LEVEL_XP_STEEPEN_AT = 25
+LATE_LEVEL_XP_GROWTH = 1.25  # +25% required XP per level past LATE_LEVEL_XP_STEEPEN_AT
+
+
 def survival_level_threshold(level: int) -> int:
     """Return the XP threshold for advancing past the given level."""
 
     level = max(1, int(level))
-    return int(1000.0 + (math.pow(float(level), 1.8) * 1000.0))
+    threshold = 1000.0 + (math.pow(float(level), 1.8) * 1000.0)
+    if level > LATE_LEVEL_XP_STEEPEN_AT:
+        threshold *= LATE_LEVEL_XP_GROWTH ** (level - LATE_LEVEL_XP_STEEPEN_AT)
+    return int(threshold)
 
 
 def survival_check_level_up(

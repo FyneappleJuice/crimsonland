@@ -116,6 +116,22 @@ def enforce_rush_loadout(world: WorldState) -> None:
         player.weapon.ammo = float(RUSH_FORCED_AMMO)
 
 
+# Not native: past this point, tick_survival_wave_spawns' own native spawn-
+# cooldown formula (creatures/spawn.py) is fed an accelerated effective dt
+# instead of the real one, so its native shape (interval shrink, then
+# burst-extra spawns past 15 real minutes) is completely untouched up to
+# here - only how fast we drive it speeds up, exponentially, afterward.
+SURVIVAL_SPAWN_RAMP_START_MS = 10 * 60 * 1000
+SURVIVAL_SPAWN_RAMP_PER_MINUTE = 1.15  # +15% effective spawn rate per minute past the start, compounding
+
+
+def _survival_spawn_dt_mult(elapsed_ms: float) -> float:
+    if elapsed_ms <= SURVIVAL_SPAWN_RAMP_START_MS:
+        return 1.0
+    minutes_past = (elapsed_ms - SURVIVAL_SPAWN_RAMP_START_MS) / 60_000.0
+    return SURVIVAL_SPAWN_RAMP_PER_MINUTE**minutes_past
+
+
 def survival_mid_step(ctx: MidStepContext, spawn: SurvivalSpawnState) -> None:
     state = ctx.world.state
     survival_update_weapon_handouts(
@@ -136,9 +152,10 @@ def survival_mid_step(ctx: MidStepContext, spawn: SurvivalSpawnState) -> None:
         )
 
     player_xp = ctx.world.players[0].experience if ctx.world.players else 0
+    spawn_dt_ms = ctx.dt_sim_ms * _survival_spawn_dt_mult(ctx.elapsed_before_ms)
     cooldown, wave_spawns = tick_survival_wave_spawns(
         spawn.spawn_cooldown_ms,
-        ctx.dt_sim_ms,
+        spawn_dt_ms,
         state.rng,
         player_count=len(ctx.world.players),
         survival_elapsed_ms=ctx.elapsed_before_ms,
