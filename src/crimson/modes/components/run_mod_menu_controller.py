@@ -70,6 +70,14 @@ class RunModMenuController:
     def timeline_ms(self) -> float:
         return float(self._timeline_ms)
 
+    @property
+    def cancel_activated(self) -> bool:
+        """True for exactly the frame the Cancel button was just clicked -
+        distinct from a picked choice (also closes the panel, but isn't a
+        cancel) and from the panel simply already being closed."""
+
+        return bool(self._cancel_button.activated)
+
     def reset(self) -> None:
         self._layout = RunModMenuLayout()
         self._cancel_button = UiButtonState(self._cancel_label)
@@ -88,6 +96,14 @@ class RunModMenuController:
             return
         self._open = True
         self._selected_index = 0
+        self._cancel_button.enabled = True
+
+    def disable_cancel(self) -> None:
+        """Not native: once a pick lands on the *other* panel this round,
+        this one can no longer be cancelled out from under it - see
+        PerkMenuController.disable_cancel's full explanation."""
+
+        self._cancel_button.enabled = False
 
     def tick_timeline(self, dt_ui_ms: float, *, hold: bool = False) -> None:
         """`hold=True` freezes the timeline (used to delay sliding in until

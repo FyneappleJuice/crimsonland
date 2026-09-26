@@ -92,6 +92,14 @@ class PerkMenuController:
     def active(self) -> bool:
         return bool(self._open) or self._timeline_ms > 1e-3
 
+    @property
+    def cancel_activated(self) -> bool:
+        """True for exactly the frame the Cancel button was just clicked -
+        distinct from a picked choice (also closes the panel, but isn't a
+        cancel) and from the panel simply already being closed."""
+
+        return bool(self._cancel_button.activated)
+
     def reset(self) -> None:
         self._layout = PerkMenuLayout()
         self._cancel_button = UiButtonState(self._cancel_label)
@@ -168,6 +176,17 @@ class PerkMenuController:
         self._runtime.play_sfx(SfxId.UI_PANELCLICK)
         self._open = True
         self._selected_index = 0
+        self._cancel_button.enabled = True
+
+    def disable_cancel(self) -> None:
+        """Not native: once a pick lands on the *other* panel this round,
+        this one can no longer be cancelled out from under it - the player
+        has to also resolve (pick) this side instead of backing out of just
+        it, so a half-pick/half-cancel round can't reopen a fresh round with
+        one side already spent. Escape still force-closes both regardless -
+        this only disables the Cancel button."""
+
+        self._cancel_button.enabled = False
 
     def tick_timeline(self, dt_ui_ms: float, *, hold: bool = False) -> None:
         """`hold=True` freezes the timeline in place (used to keep this panel

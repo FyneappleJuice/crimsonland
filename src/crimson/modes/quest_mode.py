@@ -52,6 +52,7 @@ from ..ui.overlays.quest_run import (
     draw_quest_complete_banner_overlay,
     draw_quest_title_timer_overlay,
 )
+from ..ui.perk_history_panel import draw_perk_history_panel
 from ..ui.perk_menu import PERK_MENU_TRANSITION_MS
 from ..weapon_runtime import most_used_weapon_id_for_player, weapon_assign_player
 from ..weapon_runtime.fire_recipes import fireable_weapon_ids
@@ -137,6 +138,25 @@ class QuestMode(BaseGameplayMode):
         self._perk_prompt = PerkPromptState()
         self._perk_menu = PerkMenuController(runtime=self._perk_menu_runtime())
         self._run_mod_menu = RunModMenuController(runtime=self._run_mod_menu_runtime())
+        # Not native: chain straight into the next pending level-up once both
+        # panels finish closing, instead of making the player re-open the
+        # menu by hand for every queued pick - see the auto-reopen check at
+        # the end of _update_perk_ui. Only set on an actual pick (never on
+        # Cancel/Escape), so backing out of a pending level-up still just
+        # waits for the passive prompt, exactly as before.
+        self._perk_round_had_pick = False
+        # Reopening has to wait one extra frame past _perk_round_had_pick:
+        # the recorded PerkPickCommand/RunModPickCommand only gets processed
+        # by the deterministic session while sim_dt > 0, and sim_dt is forced
+        # to 0 for as long as _level_up_menu_active reads True (see update()
+        # below) - reopening in the very same tick the menu reports closed
+        # would flip it back active before the caller ever computes a
+        # nonzero sim_dt, so the queued pick would never actually apply and
+        # the same choices would just resurface every time. Setting this
+        # flag instead of reopening immediately leaves one real tick with
+        # the menu genuinely closed, letting that tick's command go through
+        # before the next round opens.
+        self._perk_menu_reopen_pending = False
         self._quest_spawn_state = QuestSpawnState()
         self._sim_session: DeterministicSession | None = None
         self._replay_recorder: ReplayRecorder | None = None
@@ -201,6 +221,20 @@ class QuestMode(BaseGameplayMode):
         self._perk_prompt.reset_if_pending(pending_count=int(self.state.perk_selection.pending_count))
 
     def _update_perk_ui(self, *, dt_ui_ms: float) -> None:
+        # Runs first, before anything else this tick: the deferred reopen
+        # from last tick's pick (see __init__'s comment) needs to fire while
+        # the menu is still observably closed, so the caller's sim_dt for
+        # *this* tick is computed against that closed state and the queued
+        # command already got its one genuinely-closed tick to apply.
+        if self._perk_menu_reopen_pending and not self._level_up_menu_active:
+            self._perk_menu_reopen_pending = False
+            if (
+                int(self.state.perk_selection.pending_count) > 0
+                and self._any_player_alive()
+                and not self._paused
+            ):
+                self._try_open_perk_menu()
+
         perk_ctx = self._perk_menu_ui_context()
         pending_count = int(self.state.perk_selection.pending_count)
         choices = perk_selection_prepared_choices(self.sim_world.players, self.state.perk_selection)
@@ -214,6 +248,17 @@ class QuestMode(BaseGameplayMode):
             )
             if choice_index is not None:
                 self.record_perk_pick_command(int(choice_index), player_index=0)
+                self._perk_round_had_pick = True
+                # Not native: once this side is spent, the other side can no
+                # longer be cancelled out from under it - it has to also be
+                # resolved (picked), not backed out of on its own.
+                self._run_mod_menu.disable_cancel()
+            elif self._perk_menu.cancel_activated:
+                # Not native: Cancel on either panel now backs out of the
+                # whole level-up, not just its own list - closing one side
+                # only left the other one stranded, open and waiting for a
+                # pick the player had already decided to skip.
+                self._run_mod_menu.close()
         if self._run_mod_menu.open:
             run_mod_choice_index = self._run_mod_menu.handle_input(
                 perk_ctx,
@@ -222,6 +267,10 @@ class QuestMode(BaseGameplayMode):
             )
             if run_mod_choice_index is not None:
                 self.record_run_mod_pick_command(int(run_mod_choice_index), player_index=0)
+                self._perk_round_had_pick = True
+                self._perk_menu.disable_cancel()
+            elif self._run_mod_menu.cancel_activated:
+                self._perk_menu.close()
         if self._perk_prompt.poll_open_request(
             ctx=perk_ctx,
             config=self.config,
@@ -255,6 +304,13 @@ class QuestMode(BaseGameplayMode):
             float(dt_ui_ms),
             hold=(not self._perk_menu.open) and not run_mod_fully_closed,
         )
+        # Not native: once both panels have fully finished sliding away after
+        # a real pick (not a Cancel/Escape back-out), chain straight into the
+        # next pending level-up instead of leaving the player to re-trigger
+        # the prompt by hand for every queued perk.
+        if self._perk_round_had_pick and not self._level_up_menu_active:
+            self._perk_round_had_pick = False
+            self._perk_menu_reopen_pending = True
 
     def _replay_checkpoint_elapsed_ms(self) -> float:
         return float(self._quest_spawn_state.spawn_timeline_ms)
@@ -717,6 +773,13 @@ class QuestMode(BaseGameplayMode):
         self._run_mod_menu.draw(
             self._perk_menu_ui_context(),
             run_mod_selection_prepared_choices(self.state.run_mod_selection),
+        )
+        draw_perk_history_panel(
+            resources=self.render_resources.resources,
+            player=self.player,
+            timeline_ms=self._perk_menu.timeline_ms,
+            violence_disabled=self.config.display.violence_disabled,
+            shadows_enabled=self.config.display.shadows_enabled,
         )
 
         if perk_menu_active:
