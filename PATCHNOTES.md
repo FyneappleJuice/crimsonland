@@ -23,6 +23,14 @@ handed-off alpha builds (not every internal commit).
   the players who fall behind who'll feel the squeeze.
 - **Added:** a visual indicator (cyan arc) for Pact of Gathering Winds'
   Tailwind stacks, so you can actually see them building.
+- **Fixed:** Ricochet could chain off a shot fired from a weapon that
+  already pierces (Fire Bullets, Gauss Gun, Blade Gun) - piercing weapons
+  are now excluded from chaining entirely, same rule Fork Shot already
+  follows.
+- **Changed - Barrel Greaser:** its damage and fire-rate/speed bonus now
+  also apply to all four rocket weapons (Rocket Launcher, Seeker Rockets,
+  Rocket Minigun, Mini-Rocket Swarmers) - previously it did nothing for
+  rockets at all.
 
 ## v0.0.4
 
