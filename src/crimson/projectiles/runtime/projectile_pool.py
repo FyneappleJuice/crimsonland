@@ -858,7 +858,22 @@ class ProjectilePool:
                         # multiple targets on its own). The bounce carries
                         # this hit's pre-penalty damage; the penalty is
                         # applied below, once per hit, to both.
-                        if relic_ricochet.active_relic_id() is not None and proj.pierce_left < 1.0:
+                        #
+                        # "Piercing" has to cover the same two cases Fork
+                        # Shot's own gate does, above: a WPU pierce charge
+                        # (pierce_left), and a stop_on_hit=False weapon's
+                        # native damage_pool piercing (Fire Bullets/Gauss
+                        # Gun/Blade Gun) - the latter isn't visible in
+                        # pierce_left at all, which is exactly how one bolt
+                        # used to chain off several creatures in a single
+                        # flight before this check existed.
+                        profile = _PROJECTILE_COLLISION_PROFILE_BY_TYPE_ID.get(proj.type_id)
+                        already_pierces = profile is not None and profile.initial_damage_pool > 1.0
+                        if (
+                            relic_ricochet.active_relic_id() is not None
+                            and proj.pierce_left < 1.0
+                            and not already_pierces
+                        ):
                             if not proj.ricochet_chained:
                                 chain_idx = relic_ricochet.pick_chain_target(proj.pos, int(hit_idx), creatures)
                                 if chain_idx is not None:
