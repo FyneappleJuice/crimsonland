@@ -35,7 +35,7 @@ from .context import WorldRenderCtx
 from .creatures import draw_creature_sprite
 from .monster_tooltip import draw_monster_rarity_tooltip
 from .effects import draw_effect_pool, draw_particle_pool, draw_sprite_effect_pool
-from .overlays import draw_aim_circle, draw_clock_gauge, draw_direction_arrows
+from .overlays import draw_aim_circle, draw_clock_gauge, draw_direction_arrows, draw_kinetic_discipline_fill
 from .player_status import draw_players_status
 from .profile_hooks import profile_pass
 from .projectiles import draw_projectile, draw_secondary_projectile, draw_sharpshooter_laser_sight
@@ -943,6 +943,13 @@ def draw_bonus_and_ui(
 
     with profile_pass("direction_arrows"):
         draw_direction_arrows(
+            render_ctx,
+            camera=ctx.camera,
+            view_scale=ctx.view_scale,
+            scale=ctx.scale,
+            alpha=ctx.entity_alpha,
+        )
+        draw_kinetic_discipline_fill(
             render_ctx,
             camera=ctx.camera,
             view_scale=ctx.view_scale,

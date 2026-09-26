@@ -804,6 +804,42 @@ def test_kinetic_discipline_damage_scales_with_charge() -> None:
     assert_float_close(100.0 - creature.hp, 10.0 * (1.0 + KINETIC_DISCIPLINE_MAX_BONUS * 0.5))
 
 
+def test_kinetic_discipline_fill_fraction_is_zero_without_the_perk() -> None:
+    from crimson.perks.impl.kinetic_discipline import fill_fraction
+
+    player = PlayerState(index=0, pos=Vec2(), kinetic_charge=1.0)
+    assert fill_fraction(player) == 0.0
+
+
+def test_kinetic_discipline_fill_fraction_matches_charge_at_default_efficacy() -> None:
+    from crimson.perks.impl.kinetic_discipline import fill_fraction
+
+    player = PlayerState(index=0, pos=Vec2(), kinetic_charge=0.5)
+    player.perk_counts[int(PerkId.KINETIC_DISCIPLINE)] = 1
+    assert player.stats.perk_efficacy == 1.0  # sanity: default, not perturbed by other stacks
+    assert fill_fraction(player) == pytest.approx(0.5)
+
+    player.kinetic_charge = 1.0
+    assert fill_fraction(player) == pytest.approx(1.0)
+
+    player.kinetic_charge = 0.0
+    assert fill_fraction(player) == 0.0
+
+
+def test_kinetic_discipline_fill_fraction_scales_with_perk_efficacy_and_clamps() -> None:
+    # The arrow should read "full" exactly when the *bonus* hits its cap, not
+    # only when raw charge does - a stacked-efficacy build reaching the same
+    # 30% bonus at half charge should still show a fully-filled arrow.
+    import msgspec
+
+    from crimson.perks.impl.kinetic_discipline import fill_fraction
+
+    player = PlayerState(index=0, pos=Vec2(), kinetic_charge=0.5)
+    player.perk_counts[int(PerkId.KINETIC_DISCIPLINE)] = 1
+    player.stats = msgspec.structs.replace(player.stats, perk_efficacy=2.0)
+    assert fill_fraction(player) == pytest.approx(1.0)  # 0.5 * 2.0 clamped, not 1.0
+
+
 # --- Free Rounds ---------------------------------------------------------
 
 

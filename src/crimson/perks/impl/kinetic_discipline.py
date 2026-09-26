@@ -11,12 +11,16 @@ line near a horde is the actual risk being paid for it.
 """
 
 import math
+from typing import TYPE_CHECKING
 
 from ...math_parity import f32
 from ..helpers import perk_active
 from ..ids import PerkId
 from ..runtime.effects_context import PerksUpdateEffectsCtx
 from ..runtime.hook_types import PerkHooks
+
+if TYPE_CHECKING:
+    from ...sim.state_types import PlayerState
 
 MOVE_EPSILON = 0.05
 TURN_RATE_LIMIT = math.radians(120.0)  # faster pivots than this break the ramp
@@ -43,6 +47,20 @@ def update_kinetic_discipline(ctx: PerksUpdateEffectsCtx) -> None:
         else:
             player.kinetic_charge = max(0.0, float(player.kinetic_charge) - dt / RAMP_DOWN_SECONDS)
         player.kinetic_charge = float(f32(player.kinetic_charge))
+
+
+def fill_fraction(player: PlayerState) -> float:
+    """0.0..1.0 of the max damage bonus, for the direction-arrow overlay.
+
+    Not raw charge - Perk Efficacy scales the actual bonus too
+    (creatures/damage.py), so a stacked-efficacy build reaching the full 30%
+    bonus at a lower charge should still read as a fully-filled arrow.
+    """
+
+    if not perk_active(player, PerkId.KINETIC_DISCIPLINE):
+        return 0.0
+    fraction = float(player.kinetic_charge) * float(player.stats.perk_efficacy)
+    return max(0.0, min(1.0, fraction))
 
 
 HOOKS = PerkHooks(
