@@ -58,8 +58,12 @@ def lose_stack(player: PlayerState) -> None:
     player.gathering_winds_stacks = max(0, int(player.gathering_winds_stacks) - GATHERING_WINDS_STACKS_LOST_PER_HIT)
 
 
-def _fraction(player: PlayerState) -> float:
-    """0.0 at 0 stacks, 1.0 at GATHERING_WINDS_MAX_STACKS stacks."""
+def stack_fraction(player: PlayerState) -> float:
+    """0.0 at 0 stacks, 1.0 at GATHERING_WINDS_MAX_STACKS stacks - 0.0 if the
+    relic isn't equipped. Public so the renderer can draw a fill toward the
+    cap the same way Fortify's own arc does."""
+    if _active_relic_id() is None:
+        return 0.0
     raw = float(player.gathering_winds_stacks) / GATHERING_WINDS_MAX_STACKS
     return min(1.0, max(0.0, raw))
 
@@ -72,7 +76,7 @@ def speed_mult(player: PlayerState) -> float:
         return 1.0
     ceiling = _CEILING_BY_RELIC[relic_id]
     floor = GATHERING_WINDS_FLOOR_SPEED
-    pct = floor + _fraction(player) * (ceiling - floor)
+    pct = floor + stack_fraction(player) * (ceiling - floor)
     return 1.0 + pct
 
 
@@ -84,7 +88,7 @@ def damage_taken_mult(player: PlayerState) -> float:
         return 1.0
     ceiling = -_CEILING_BY_RELIC[relic_id]
     floor = GATHERING_WINDS_FLOOR_DAMAGE_TAKEN
-    pct = floor + _fraction(player) * (ceiling - floor)
+    pct = floor + stack_fraction(player) * (ceiling - floor)
     return 1.0 + pct
 
 
@@ -95,4 +99,5 @@ __all__ = [
     "gain_stack",
     "lose_stack",
     "speed_mult",
+    "stack_fraction",
 ]

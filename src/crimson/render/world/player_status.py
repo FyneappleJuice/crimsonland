@@ -23,6 +23,7 @@ from grim.raylib_api import rl
 
 from ...bonuses.ids import BonusId
 from ...meta.relics_impl import fortify as relic_fortify
+from ...meta.relics_impl import gathering_winds as relic_gathering_winds
 from ...perks.helpers import perk_active
 from ...perks.ids import PerkId
 from ...perks.impl.delicate_watch import DELICATE_WATCH_BREAK_THRESHOLD
@@ -133,6 +134,19 @@ def draw_player_status(
         rl.draw_ring(
             center, f_in, f_out, -90.0, -90.0 + 360.0 * fortify_fill, _RING_SEGMENTS,
             rl.Color(185, 188, 196, int(210 * a)),
+        )
+
+    # Not native: Pact of Gathering Winds - a thin pale-cyan arc one ring
+    # further out than Fortify's own (so both can be read at once if a build
+    # has both equipped), filling clockwise from 12 o'clock toward the
+    # Tailwind stack cap.
+    tailwind_fill = relic_gathering_winds.stack_fraction(player)
+    if tailwind_fill > 0.0:
+        t_in = r_out + 4.5 * float(scale)
+        t_out = t_in + max(1.5, 2.0 * float(scale))
+        rl.draw_ring(
+            center, t_in, t_out, -90.0, -90.0 + 360.0 * tailwind_fill, _RING_SEGMENTS,
+            rl.Color(140, 220, 235, int(210 * a)),
         )
 
     # Not native: threshold ticks for perks whose behavior flips at a specific
