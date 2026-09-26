@@ -1816,3 +1816,88 @@ def test_player_update_held_reload_key_starts_reload_without_edge() -> None:
 
     assert player.weapon.reload_active is True
     assert player.weapon.reload_timer > 0.0
+
+
+# --- Auto-fire -----------------------------------------------------------
+
+
+def _pistol_player() -> PlayerState:
+    return PlayerState(
+        index=0,
+        pos=Vec2(50.0, 50.0),
+        weapon=WeaponSlot(weapon_id=WeaponId.PISTOL, ammo=10.0, shot_cooldown=0.0),
+    )
+
+
+def test_auto_fire_keybind_toggles_mode_without_firing() -> None:
+    state = GameplayState()
+    player = _pistol_player()
+
+    player_update(player, PlayerInput(aim=Vec2(51.0, 50.0), auto_fire_pressed=True), 0.016, state)
+
+    assert player.auto_fire_mode_enabled is True
+    assert player.auto_fire_active is False
+    # The keybind press itself must never fire the gun.
+    assert player.weapon.shot_cooldown == 0.0
+    assert player.weapon.ammo == 10.0
+
+
+def test_auto_fire_keybind_press_again_disables_mode_and_clears_active() -> None:
+    state = GameplayState()
+    player = _pistol_player()
+    player.auto_fire_mode_enabled = True
+    player.auto_fire_active = True
+
+    player_update(player, PlayerInput(aim=Vec2(51.0, 50.0), auto_fire_pressed=True), 0.016, state)
+
+    assert player.auto_fire_mode_enabled is False
+    assert player.auto_fire_active is False
+
+
+def test_fire_click_does_nothing_special_while_auto_fire_mode_is_off() -> None:
+    # Default behavior is untouched: a fire-key press with the mode off is
+    # just a normal shot, not a toggle - holding still works exactly as today.
+    state = GameplayState()
+    player = _pistol_player()
+
+    player_update(player, PlayerInput(aim=Vec2(51.0, 50.0), fire_down=True, fire_pressed=True), 0.016, state)
+
+    assert player.auto_fire_active is False
+    assert player.weapon.ammo == 9.0  # the held/clicked press still fired normally
+
+
+def test_fire_click_toggles_auto_fire_active_while_mode_is_on() -> None:
+    state = GameplayState()
+    player = _pistol_player()
+    player.auto_fire_mode_enabled = True
+
+    # A bare click (press this tick, not held) with auto-fire mode on should
+    # start continuous fire without the button needing to stay down.
+    player_update(player, PlayerInput(aim=Vec2(51.0, 50.0), fire_pressed=True, fire_down=False), 0.016, state)
+
+    assert player.auto_fire_active is True
+    assert player.weapon.ammo == 9.0  # fired this same tick, simulating a held LMB
+
+    # Next tick (long enough for the pistol's own cooldown to clear): LMB is
+    # not held and not pressed again - the gun should keep firing on its own
+    # because auto_fire_active is still on.
+    player_update(player, PlayerInput(aim=Vec2(51.0, 50.0), fire_pressed=False, fire_down=False), 1.0, state)
+
+    assert player.auto_fire_active is True
+    assert player.weapon.ammo == 8.0
+
+    # Clicking again toggles it back off; the gun stops on the next tick.
+    player_update(player, PlayerInput(aim=Vec2(51.0, 50.0), fire_pressed=True, fire_down=False), 0.016, state)
+    assert player.auto_fire_active is False
+
+
+def test_holding_fire_still_works_while_auto_fire_mode_is_on() -> None:
+    # Auto-fire mode doesn't take away the ability to just hold the button.
+    state = GameplayState()
+    player = _pistol_player()
+    player.auto_fire_mode_enabled = True
+
+    player_update(player, PlayerInput(aim=Vec2(51.0, 50.0), fire_down=True), 0.016, state)
+
+    assert player.auto_fire_active is False  # no press edge, so no toggle
+    assert player.weapon.ammo == 9.0  # but the held button still fires

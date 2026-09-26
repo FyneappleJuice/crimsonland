@@ -104,6 +104,7 @@ def test_controls_rebind_plan_keyboard_static_player1() -> None:
     assert misc_rows == (
         RebindRowSpec("Level Up:", RebindTarget.GLOBAL_PICK_PERK_CODE),
         RebindRowSpec("Reload:", RebindTarget.GLOBAL_RELOAD_CODE),
+        RebindRowSpec("Auto-fire:", RebindTarget.PLAYER_AUTO_FIRE_CODE),
     )
 
 
@@ -119,4 +120,4 @@ def test_controls_rebind_plan_dualpad_mouse_cursor_player2() -> None:
         RebindRowSpec("Fire:", RebindTarget.PLAYER_FIRE_CODE),
     )
     assert move_rows == (RebindRowSpec("Move to cursor:", RebindTarget.GLOBAL_RELOAD_CODE),)
-    assert misc_rows == ()
+    assert misc_rows == (RebindRowSpec("Auto-fire:", RebindTarget.PLAYER_AUTO_FIRE_CODE),)

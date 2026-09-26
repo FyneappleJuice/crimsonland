@@ -17,6 +17,10 @@ class PlayerInput(msgspec.Struct, frozen=True):
     fire_pressed: bool = False
     reload_pressed: bool = False
     reload_down: bool = False
+    # Not native: Auto-fire toggle keybind (default T) - a discrete press
+    # edge only, no held/down state needed (see gameplay.py's player_update,
+    # which flips PlayerState.auto_fire_mode_enabled on each press).
+    auto_fire_pressed: bool = False
     move_to_cursor_pressed: bool = False
     move_forward_pressed: bool | None = None
     move_backward_pressed: bool | None = None

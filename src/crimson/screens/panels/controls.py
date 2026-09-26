@@ -65,6 +65,8 @@ def _row_binding_code(row: RebindRowSpec, *, player_index: int, controls) -> int
         case RebindTarget.PLAYER_MOVE_AXIS_CODES:
             assert row.target_index is not None
             return int(player_controls.move_axis_codes[row.target_index])
+        case RebindTarget.PLAYER_AUTO_FIRE_CODE:
+            return int(player_controls.auto_fire_code)
         case RebindTarget.GLOBAL_PICK_PERK_CODE:
             return int(controls.pick_perk_code)
         case RebindTarget.GLOBAL_RELOAD_CODE:
@@ -97,6 +99,8 @@ def _set_row_binding_code(row: RebindRowSpec, value: int, *, player_index: int, 
             values = list(player_controls.move_axis_codes)
             values[row.target_index] = code
             player_controls.move_axis_codes = tuple(values)
+        case RebindTarget.PLAYER_AUTO_FIRE_CODE:
+            player_controls.auto_fire_code = code
         case RebindTarget.GLOBAL_PICK_PERK_CODE:
             controls.pick_perk_code = code
         case RebindTarget.GLOBAL_RELOAD_CODE:

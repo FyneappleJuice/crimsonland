@@ -38,6 +38,7 @@ def pack_player_input(inp: PlayerInput, *, quant: InputQuantization = "f32") -> 
         fire_pressed=bool(inp.fire_pressed),
         reload_pressed=bool(inp.reload_pressed),
         reload_down=bool(inp.reload_down),
+        auto_fire_pressed=bool(inp.auto_fire_pressed),
         move_mode=inp.move_mode,
         aim_scheme=inp.aim_scheme,
         move_forward_pressed=inp.move_forward_pressed,
@@ -50,7 +51,7 @@ def pack_player_input(inp: PlayerInput, *, quant: InputQuantization = "f32") -> 
 
 def unpack_player_input(packed: PackedPlayerInput) -> PlayerInput:
     mx, my, ax, ay, flags = unpack_packed_player_input(packed)
-    fire_down, fire_pressed, reload_pressed, reload_down = unpack_input_flags(int(flags))
+    fire_down, fire_pressed, reload_pressed, reload_down, auto_fire_pressed = unpack_input_flags(int(flags))
     move_mode, aim_scheme = unpack_input_mode_flags(int(flags))
     move_forward_pressed, move_backward_pressed, turn_left_pressed, turn_right_pressed = unpack_input_move_key_flags(
         int(flags),
@@ -64,6 +65,7 @@ def unpack_player_input(packed: PackedPlayerInput) -> PlayerInput:
         fire_pressed=bool(fire_pressed),
         reload_pressed=bool(reload_pressed),
         reload_down=bool(reload_down),
+        auto_fire_pressed=bool(auto_fire_pressed),
         move_forward_pressed=move_forward_pressed,
         move_backward_pressed=move_backward_pressed,
         turn_left_pressed=turn_left_pressed,

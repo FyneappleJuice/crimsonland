@@ -15,6 +15,7 @@ class RebindTarget(Enum):
     PLAYER_KEYBOARD_AIM_CODES = auto()
     PLAYER_AIM_AXIS_CODES = auto()
     PLAYER_MOVE_AXIS_CODES = auto()
+    PLAYER_AUTO_FIRE_CODE = auto()
     GLOBAL_PICK_PERK_CODE = auto()
     GLOBAL_RELOAD_CODE = auto()
 
@@ -132,5 +133,9 @@ def controls_rebind_plan(
         misc_rows.append(RebindRowSpec("Level Up:", RebindTarget.GLOBAL_PICK_PERK_CODE))
         if move_mode is not MovementControlType.MOUSE_POINT_CLICK:
             misc_rows.append(RebindRowSpec("Reload:", RebindTarget.GLOBAL_RELOAD_CODE))
+
+    # Not native: Auto-fire toggle - per-player (unlike Reload/Level Up,
+    # which are shared globals), so every player slot gets its own row.
+    misc_rows.append(RebindRowSpec("Auto-fire:", RebindTarget.PLAYER_AUTO_FIRE_CODE))
 
     return tuple(aim_rows), tuple(move_rows), tuple(misc_rows)

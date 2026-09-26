@@ -198,6 +198,11 @@ class CrimsonPlayerControls(msgspec.Struct):
     keyboard_aim_codes: tuple[int, int]
     aim_axis_codes: tuple[int, int]
     move_axis_codes: tuple[int, int]
+    # Not native: Auto-fire toggle keybind. Wire storage repurposes this
+    # player's first `reserved_keys` slot (see PLAYER_BIND_BLOCK_STRUCT) -
+    # always written as KEYBIND_UNBOUND_CODE by the native game and never
+    # read into anything, so this is free space with no compatibility cost.
+    auto_fire_code: int
 
 
 _DEFAULT_PLAYER_CONTROL_TEMPLATES: tuple[CrimsonPlayerControls, ...] = (
@@ -210,6 +215,7 @@ _DEFAULT_PLAYER_CONTROL_TEMPLATES: tuple[CrimsonPlayerControls, ...] = (
         keyboard_aim_codes=(0x10, 0x12),
         aim_axis_codes=(0x13F, 0x140),
         move_axis_codes=(0x141, 0x153),
+        auto_fire_code=0x14,
     ),
     CrimsonPlayerControls(
         movement=MovementControlType.STATIC,
@@ -220,6 +226,7 @@ _DEFAULT_PLAYER_CONTROL_TEMPLATES: tuple[CrimsonPlayerControls, ...] = (
         keyboard_aim_codes=(0xD3, 0xD1),
         aim_axis_codes=(0x13F, 0x140),
         move_axis_codes=(0x141, 0x153),
+        auto_fire_code=0x14,
     ),
     CrimsonPlayerControls(
         movement=MovementControlType.STATIC,
@@ -230,6 +237,7 @@ _DEFAULT_PLAYER_CONTROL_TEMPLATES: tuple[CrimsonPlayerControls, ...] = (
         keyboard_aim_codes=(0x16, 0x18),
         aim_axis_codes=(0x17E, 0x17E),
         move_axis_codes=(0x17E, 0x17E),
+        auto_fire_code=0x14,
     ),
     CrimsonPlayerControls(
         movement=MovementControlType.STATIC,
@@ -240,6 +248,7 @@ _DEFAULT_PLAYER_CONTROL_TEMPLATES: tuple[CrimsonPlayerControls, ...] = (
         keyboard_aim_codes=(0x17E, 0x17E),
         aim_axis_codes=(0x140, 0x13F),
         move_axis_codes=(0x153, 0x154),
+        auto_fire_code=0x14,
     ),
 )
 
@@ -321,6 +330,7 @@ def _player_controls_from_parsed_bind_block(
             keyboard_aim_codes=defaults.keyboard_aim_codes,
             aim_axis_codes=defaults.aim_axis_codes,
             move_axis_codes=defaults.move_axis_codes,
+            auto_fire_code=defaults.auto_fire_code,
         )
     return CrimsonPlayerControls(
         movement=movement,
@@ -336,6 +346,21 @@ def _player_controls_from_parsed_bind_block(
         keyboard_aim_codes=(raw_block["aim_left"], raw_block["aim_right"]),
         aim_axis_codes=(raw_block["axis_aim_y"], raw_block["axis_aim_x"]),
         move_axis_codes=(raw_block["axis_move_y"], raw_block["axis_move_x"]),
+        # Not native: repurposes this player's first `reserved_keys` slot -
+        # see CrimsonPlayerControls.auto_fire_code. A save written before this
+        # feature existed always has KEYBIND_UNBOUND_CODE here (that slot was
+        # always written unbound natively) - back-fill the default (T) in
+        # that case so existing saves pick up the feature automatically,
+        # rather than silently landing on an unbound key nobody asked to
+        # clear. The one tradeoff: a player who deliberately unbinds
+        # Auto-fire via the controls menu will see it revert to T on the
+        # next load too, since both cases produce the same stored value -
+        # an acceptable rough edge for a convenience toggle like this one.
+        auto_fire_code=(
+            raw_block["reserved_keys"][0]
+            if raw_block["reserved_keys"][0] != KEYBIND_UNBOUND_CODE
+            else _default_player_controls(player_index).auto_fire_code
+        ),
     )
 
 
@@ -346,7 +371,7 @@ def _encode_player_bind_block(player: CrimsonPlayerControls) -> dict[str, object
         "turn_left": player.move_codes[2],
         "turn_right": player.move_codes[3],
         "fire": player.fire_code,
-        "reserved_keys": [int(_DEFAULT_WIRE_RESERVED_KEYS[0]), int(_DEFAULT_WIRE_RESERVED_KEYS[1])],
+        "reserved_keys": [int(player.auto_fire_code), int(_DEFAULT_WIRE_RESERVED_KEYS[1])],
         "aim_left": player.keyboard_aim_codes[0],
         "aim_right": player.keyboard_aim_codes[1],
         "axis_aim_y": player.aim_axis_codes[0],
@@ -436,6 +461,7 @@ def _default_player_controls(player_index: int) -> CrimsonPlayerControls:
         keyboard_aim_codes=defaults.keyboard_aim_codes,
         aim_axis_codes=defaults.aim_axis_codes,
         move_axis_codes=defaults.move_axis_codes,
+        auto_fire_code=defaults.auto_fire_code,
     )
 
 

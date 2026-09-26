@@ -194,6 +194,8 @@ class TutorialMode(BaseGameplayMode):
         fire_pressed = input_code_is_pressed(fire_key)
         reload_key = self.config.controls.reload_code
         reload_pressed = input_code_is_pressed(reload_key)
+        auto_fire_key = controls.auto_fire_code
+        auto_fire_pressed = input_code_is_pressed(auto_fire_key)
 
         return PlayerInput(
             move=move,
@@ -201,6 +203,7 @@ class TutorialMode(BaseGameplayMode):
             fire_down=bool(fire_down),
             fire_pressed=bool(fire_pressed),
             reload_pressed=bool(reload_pressed),
+            auto_fire_pressed=bool(auto_fire_pressed),
         )
 
     def _build_local_inputs(self, *, dt: float) -> list[PlayerInput]:

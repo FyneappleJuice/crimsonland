@@ -143,6 +143,7 @@ def clear_input_edges(inputs: Sequence[PlayerInput]) -> list[PlayerInput]:
             fire_down=inp.fire_down,
             fire_pressed=False,
             reload_pressed=False,
+            auto_fire_pressed=False,
             move_to_cursor_pressed=False,
             move_forward_pressed=inp.move_forward_pressed,
             move_backward_pressed=inp.move_backward_pressed,
@@ -255,6 +256,7 @@ class LocalInputInterpreter:
         aim_scheme = binds.aim_scheme
         move_mode_type = binds.movement
         reload_key = config.controls.reload_code
+        auto_fire_key = binds.auto_fire_code
 
         move_forward_key, move_backward_key, turn_left_key, turn_right_key = binds.move_codes
         fire_key = binds.fire_code
@@ -466,6 +468,7 @@ class LocalInputInterpreter:
             fire_down = True
         reload_pressed = input_code_is_pressed(reload_key, player_index=idx)
         reload_down = input_code_is_down(reload_key, player_index=idx)
+        auto_fire_pressed = input_code_is_pressed(auto_fire_key, player_index=idx)
 
         return PlayerInput(
             move=move_vec,
@@ -476,6 +479,7 @@ class LocalInputInterpreter:
             fire_pressed=fire_pressed,
             reload_pressed=reload_pressed,
             reload_down=reload_down,
+            auto_fire_pressed=auto_fire_pressed,
             move_to_cursor_pressed=move_to_cursor_pressed,
             move_forward_pressed=move_forward_pressed,
             move_backward_pressed=move_backward_pressed,

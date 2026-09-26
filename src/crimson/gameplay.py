@@ -894,6 +894,23 @@ def player_update(
         )
         return
 
+    # Not native: Auto-fire toggle keybind (default T). Pressing it flips
+    # whether the fire key behaves as a click-to-toggle switch instead of
+    # needing to be held; while that mode is on, a *fresh* fire-key press
+    # (not a raw held-down sample) flips whether it's currently "holding"
+    # the trigger for you. Both only ever look at press edges already
+    # resolved onto PlayerInput, so a perk-menu/UI click - which never
+    # produces a fire-key press edge here in the first place, since the
+    # whole world (and this function) simply doesn't tick while a menu owns
+    # input - can't accidentally toggle either state.
+    if input_state.auto_fire_pressed:
+        player.auto_fire_mode_enabled = not player.auto_fire_mode_enabled
+        player.auto_fire_active = False
+    elif player.auto_fire_mode_enabled and input_state.fire_pressed:
+        player.auto_fire_active = not player.auto_fire_active
+    if player.auto_fire_active and not input_state.fire_down:
+        input_state = msgspec.structs.replace(input_state, fire_down=True)
+
     # Native's player_update perk queries all read the global slot-zero table,
     # even while the overlay-selected player's fields are being updated;
     # perk_player is kept as its own name below since it's threaded through

@@ -274,6 +274,13 @@ class PlayerState(msgspec.Struct):
     scythe_swing: ScytheSwingState = msgspec.field(default_factory=ScytheSwingState)
     # Not native: backs the Arc Gun chain lightning (weapon_runtime/arc_gun.py).
     arc_gun: ArcGunState = msgspec.field(default_factory=ArcGunState)
+    # Not native: Auto-fire toggle (gameplay.py's player_update). While
+    # enabled, a fire-key click toggles auto_fire_active instead of needing
+    # to hold the button down; both flip on PlayerInput's press edges, not
+    # raw button state, so they only ever change during real gameplay ticks
+    # (a perk-menu/UI click never reaches this far).
+    auto_fire_mode_enabled: bool = False
+    auto_fire_active: bool = False
 
 
 class BonusPickupEvent(msgspec.Struct, frozen=True):

@@ -346,6 +346,7 @@ def input_code_name(key_code: int) -> str:
             0x11: "W",
             0x12: "E",
             0x13: "R",
+            0x14: "T",
             0x1C: "Enter",
             0x1D: "LControl",
             0x1E: "A",

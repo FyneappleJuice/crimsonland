@@ -33,6 +33,7 @@ def normalize_input_frame(inputs: Sequence[PlayerInput] | None, *, player_count:
                 fire_pressed=inp.fire_pressed,
                 reload_pressed=inp.reload_pressed,
                 reload_down=inp.reload_down,
+                auto_fire_pressed=inp.auto_fire_pressed,
                 move_to_cursor_pressed=inp.move_to_cursor_pressed,
                 move_forward_pressed=inp.move_forward_pressed,
                 move_backward_pressed=inp.move_backward_pressed,

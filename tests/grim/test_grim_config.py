@@ -75,6 +75,26 @@ def test_crimson_cfg_backfills_zero_keybinds(tmp_path: Path) -> None:
     assert loaded.controls.player(1) == defaults.player(1)
 
 
+def test_auto_fire_backfills_to_default_on_a_pre_existing_save() -> None:
+    # A save written before Auto-fire existed has real keybinds (not a blank
+    # block, so it doesn't hit the whole-block-uninitialized fallback above)
+    # but reserved_keys is always [UNBOUND, UNBOUND] natively - that must
+    # back-fill the default (T), not load as genuinely unbound.
+    cfg = grim_config.default_crimson_cfg(Path("<memory>"))
+    blob = grim_config.encode_crimson_cfg(cfg)
+    data = grim_config.CRIMSON_CFG_STRUCT.parse(blob)
+    data["input_config"][0]["reserved_keys"] = [
+        grim_config.KEYBIND_UNBOUND_CODE,
+        grim_config.KEYBIND_UNBOUND_CODE,
+    ]
+    blob = grim_config.CRIMSON_CFG_STRUCT.build(data)
+
+    loaded = grim_config.decode_crimson_cfg(Path("<memory>"), blob)
+
+    assert loaded.controls.player(0).auto_fire_code == 0x14
+    assert loaded.controls.player(0).move_codes == cfg.controls.player(0).move_codes
+
+
 def test_player_keybind_roundtrip_for_players_three_and_four_uses_source_slots() -> None:
     cfg = grim_config.default_crimson_cfg(Path("<memory>"))
     cfg.controls.player(2).fire_code = 0x120
@@ -84,7 +104,9 @@ def test_player_keybind_roundtrip_for_players_three_and_four_uses_source_slots()
     parsed = grim_config.CRIMSON_CFG_STRUCT.parse(blob)
     assert int(parsed["input_config"][2]["fire"]) == 0x120
     assert int(parsed["input_config"][3]["move_forward"]) == 0x11F
-    assert list(parsed["input_config"][2]["reserved_keys"]) == [0x17E, 0x17E]
+    # reserved_keys[0] now carries the player's Auto-fire keybind (default T,
+    # 0x14) instead of always being unbound - reserved_keys[1] is still free.
+    assert list(parsed["input_config"][2]["reserved_keys"]) == [0x14, 0x17E]
     assert list(parsed["input_config"][2]["padding"]) == [0x17E, 0x17E, 0x17E]
     assert blob[0x2C8:0x448] == bytes(0x180)
 
