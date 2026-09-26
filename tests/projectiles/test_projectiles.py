@@ -233,6 +233,21 @@ def test_within_native_find_radius_uses_strict_boundary() -> None:
     )
 
 
+def test_within_native_find_radius_fast_rejects_a_clearly_far_candidate() -> None:
+    # Regression: the cheap plain-double pre-filter (collision_math.py) has to
+    # agree with the exact x87 PC24 chain it's built to skip past for the
+    # common case of a spatial-hash candidate nowhere near hit range.
+    assert (
+        _within_native_find_radius(
+            origin=Vec2(),
+            target=Vec2(500.0, 0.0),
+            radius=30.0,
+            target_size=50.0,
+        )
+        is False
+    )
+
+
 def test_within_native_find_radius_keeps_x87_pc24_boundary_decisions() -> None:
     origin = Vec2()
 
