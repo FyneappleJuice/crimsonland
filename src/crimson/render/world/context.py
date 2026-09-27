@@ -150,7 +150,15 @@ def build_world_render_ctx(
 
 
 def _is_bullet_trail_type(type_id: int) -> bool:
-    return 0 <= type_id < 8 or type_id == ProjectileTemplateId.SPLITTER_GUN
+    # Not native: Acid Lob affix reuses the plain bullet-trail draw (a small
+    # tinted streak + round sprite) instead of the Ion beam it used to borrow -
+    # deliberately weaker VFX than a real weapon bolt (see _draw_bullet_trail's
+    # green branch and primary_bullet.py's tint override below).
+    return (
+        0 <= type_id < 8
+        or type_id == ProjectileTemplateId.SPLITTER_GUN
+        or type_id == ProjectileTemplateId.ACID_LOB
+    )
 
 
 def _bullet_sprite_size(type_id: int, *, scale: float) -> float:
@@ -204,10 +212,12 @@ def _draw_bullet_trail(
     # Gauss has a distinct blue tint; most other bullet trails are neutral gray.
     if type_id == ProjectileTemplateId.GAUSS_GUN:
         head_rgb = (51, 128, 255)  # (0.2, 0.5, 1.0)
+    elif type_id == ProjectileTemplateId.ACID_LOB:
+        head_rgb = (90, 220, 100)  # not native: Acid Lob affix - green, not a weapon color
     else:
         head_rgb = (128, 128, 128)  # (0.5, 0.5, 0.5)
 
-    tail_rgb = (128, 128, 128)
+    tail_rgb = (90, 220, 100) if type_id == ProjectileTemplateId.ACID_LOB else (128, 128, 128)
     head = rl.Color(head_rgb[0], head_rgb[1], head_rgb[2], alpha)
     tail = rl.Color(tail_rgb[0], tail_rgb[1], tail_rgb[2], 0)
 

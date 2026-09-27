@@ -258,7 +258,6 @@ def test_survival_runner_tick_rng_trace_observer_emits_draw_rows() -> None:
             RngCallerStatic.SURVIVAL_UPDATE_MAIN_SPAWN_TOP_X,
             RngCallerStatic.CREATURE_ALLOC_SLOT_PHASE_SEED,
             RngCallerStatic.SURVIVAL_SPAWN_CREATURE_TYPE_ROLL,
-            RngCallerStatic.SURVIVAL_SPAWN_CREATURE_RARE_OVERRIDE,
             RngCallerStatic.SURVIVAL_SPAWN_CREATURE_SIZE,
             RngCallerStatic.SURVIVAL_SPAWN_CREATURE_HEADING,
             RngCallerStatic.SURVIVAL_SPAWN_CREATURE_HEALTH,

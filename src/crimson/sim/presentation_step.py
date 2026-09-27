@@ -139,7 +139,15 @@ def plan_hit_sfx(
     # uncapped; the per-hit world-step path already matches this.
     sfx: list[SfxId] = []
     for idx in range(len(hits)):
-        if (not demo_mode_active) and game_mode != GameMode.RUSH and (not local_game_tune_started):
+        # Not native: Maps is now the sandbox testing ground - exempted the
+        # same way Rush already is, so plinking a test dummy/monster never
+        # kicks off the combat music track (there's nothing to "start" a
+        # fight against in a sandbox session).
+        if (
+            (not demo_mode_active)
+            and game_mode not in (GameMode.RUSH, GameMode.MAPS)
+            and (not local_game_tune_started)
+        ):
             # Mirrors `projectile_update`: first eligible hit calls
             # `sfx_play_exclusive(music_track_extra_0)` and skips the panned
             # bullet/shock hit sound for that same hit. Native
@@ -408,7 +416,12 @@ def plan_world_presentation_step(
                 violence_disabled=int(violence_disabled),
             )
             if freeze_bonus_active(state=state):
-                if (not bool(demo_mode_active)) and game_mode != GameMode.RUSH and (not bool(game_tune_started)):
+                # Not native: Maps sandbox exemption, same as plan_hit_sfx above.
+                if (
+                    (not bool(demo_mode_active))
+                    and game_mode not in (GameMode.RUSH, GameMode.MAPS)
+                    and (not bool(game_tune_started))
+                ):
                     commands.trigger_game_tune = True
             else:
                 commands.trigger_game_tune, planned_hit_sfx = plan_hit_sfx(

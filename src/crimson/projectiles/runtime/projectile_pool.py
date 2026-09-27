@@ -226,7 +226,17 @@ _PROJECTILE_COLLISION_PROFILE_BY_TYPE_ID: dict[ProjectileTemplateId, ProjectileC
     ProjectileTemplateId.GAUSS_GUN: ProjectileCollisionProfile(hit_radius=1.0, initial_damage_pool=300.0),
     ProjectileTemplateId.FIRE_BULLETS: ProjectileCollisionProfile(hit_radius=1.0, initial_damage_pool=240.0),
     ProjectileTemplateId.BLADE_GUN: ProjectileCollisionProfile(hit_radius=1.0, initial_damage_pool=50.0),
+    # Not native: Acid Lob affix - a bit more forgiving than the default so its
+    # partial homing (see the steering block in step(), below) can actually
+    # connect.
+    ProjectileTemplateId.ACID_LOB: ProjectileCollisionProfile(hit_radius=5.0, initial_damage_pool=1.0),
 }
+
+# Not native: Acid Lob affix - only some homing capability, not a lock-on
+# (the user asked for "only some"), so the turn rate is deliberately modest -
+# it can curve toward a player who's strafing but won't chase one at a hard
+# angle behind it.
+_ACID_LOB_TURN_RATE_RAD_PER_S = 2.2
 
 
 def _projectile_damage_amount_f32(dist: float, damage_scale: float) -> float:
@@ -639,6 +649,34 @@ class ProjectilePool:
             if barrel_greaser_active and proj.owner.is_player():
                 steps *= 2
 
+            if int(proj.type_id) == int(ProjectileTemplateId.ACID_LOB):
+                # Not native: Acid Lob affix - only some homing, not a lock-on.
+                # Steers a little toward the nearest living player each tick
+                # instead of recomputing an exact intercept, and skips
+                # entirely once no player qualifies (so it just flies straight
+                # if it already missed everyone).
+                nearest = None
+                nearest_dist = math.inf
+                for candidate in players:
+                    if float(candidate.health) <= 0.0:
+                        continue
+                    d = candidate.pos.distance_to(proj.pos)
+                    if d < nearest_dist:
+                        nearest_dist = d
+                        nearest = candidate
+                if nearest is not None:
+                    desired = math.atan2(
+                        float(nearest.pos.y) - float(proj.pos.y),
+                        float(nearest.pos.x) - float(proj.pos.x),
+                    ) + NATIVE_HALF_PI
+                    delta = (desired - float(proj.angle) + math.pi) % (2.0 * math.pi) - math.pi
+                    max_turn = _ACID_LOB_TURN_RATE_RAD_PER_S * dt
+                    if delta > max_turn:
+                        delta = max_turn
+                    elif delta < -max_turn:
+                        delta = -max_turn
+                    proj.angle = float(proj.angle) + delta
+
             # Decompile parity (`projectile_update`, 0x00420b90):
             #   local_cc += (float)(cos(angle - pi/2) * frame_dt * 20.0f) * speed_scale * 3.0f
             #   local_c8 += (float)(sin(angle - pi/2) * frame_dt * 20.0f) * speed_scale * 3.0f
@@ -681,27 +719,33 @@ class ProjectilePool:
 
                     hit_idx = None
                     owner_creature_idx = proj.owner.creature_index_in_bounds(len(creatures))
-                    for idx in creature_spatial.candidate_indices(pos=proj.pos, radius=float(proj.hit_radius)):
-                        creature = creatures[idx]
-                        if not _creature_is_collidable(creature):
-                            continue
-                        if proj.ricochet_ignore_idx == idx:
-                            # Not native: a Pact of Ricochet bounce passes
-                            # through the creature it bounced off - see
-                            # Projectile.ricochet_ignore_idx.
-                            continue
-                        if proj.pierce_left >= 1.0 and creature.hp <= 0.0:
-                            # WPU pierce: a corpse we just punched through must not
-                            # count as the hit that stops the bolt.
-                            continue
-                        if _within_native_find_radius(
-                            origin=proj.pos,
-                            target=creature.pos,
-                            radius=float(proj.hit_radius),
-                            target_size=float(creature.size),
-                        ):
-                            hit_idx = idx
-                            break
+                    # Not native: Acid Lob affix phases through every other
+                    # creature (it only ever wants a player), so a packed
+                    # horde can't eat the shot before it gets anywhere near
+                    # its actual target.
+                    phases_through_creatures = int(proj.type_id) == int(ProjectileTemplateId.ACID_LOB)
+                    if not phases_through_creatures:
+                        for idx in creature_spatial.candidate_indices(pos=proj.pos, radius=float(proj.hit_radius)):
+                            creature = creatures[idx]
+                            if not _creature_is_collidable(creature):
+                                continue
+                            if proj.ricochet_ignore_idx == idx:
+                                # Not native: a Pact of Ricochet bounce passes
+                                # through the creature it bounced off - see
+                                # Projectile.ricochet_ignore_idx.
+                                continue
+                            if proj.pierce_left >= 1.0 and creature.hp <= 0.0:
+                                # WPU pierce: a corpse we just punched through must not
+                                # count as the hit that stops the bolt.
+                                continue
+                            if _within_native_find_radius(
+                                origin=proj.pos,
+                                target=creature.pos,
+                                radius=float(proj.hit_radius),
+                                target_size=float(creature.size),
+                            ):
+                                hit_idx = idx
+                                break
 
                     owner_collision = (
                         hit_idx is not None and owner_creature_idx is not None and int(hit_idx) == owner_creature_idx
@@ -743,6 +787,22 @@ class ProjectilePool:
                                 continue
 
                             proj.life_timer = 0.25
+
+                            if int(proj.type_id) == int(ProjectileTemplateId.ACID_LOB):
+                                # Not native: Acid Lob affix deals no direct
+                                # hit damage at all - it queues a damage-over-
+                                # time instance instead (creatures/rarity.py's
+                                # queue_acid_dot), the inverse of the Leech
+                                # relic's heal-over-time instance.
+                                from ...creatures import rarity as monster_rarity
+
+                                monster_rarity.queue_acid_dot(
+                                    players[int(hit_player_idx)],
+                                    monster_rarity.ACID_LOB_DOT_TOTAL_DAMAGE,
+                                )
+                                step += 3
+                                continue
+
                             # Not native: Pact of the First Strike's cost - a shot
                             # from a creature you haven't hit yet hits harder.
                             shooter_creature_idx = proj.owner.creature_index_in_bounds(len(creatures))

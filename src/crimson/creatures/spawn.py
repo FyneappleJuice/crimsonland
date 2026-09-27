@@ -15,6 +15,7 @@ See also: `docs/creatures/spawn_plan.md` (porting model / invariants).
 """
 
 import math
+import random as _random
 from collections.abc import Callable
 
 import msgspec
@@ -71,10 +72,23 @@ __all__ = [
     "SpawnTemplate",
     "SpawnTemplateCall",
     "UnsupportedSpawnTemplateError",
+    "SURVIVAL_BOSS_WAVE_LEVEL_INTERVAL",
+    "SURVIVAL_BOSS_WAVE_START_LEVEL",
+    "SURVIVAL_DEN_BASE_INTERVAL_S",
+    "SURVIVAL_DEN_MIN_INTERVAL_S",
+    "advance_survival_boss_waves",
     "advance_survival_spawn_stage",
     "build_rush_mode_spawn_creature",
     "build_spawn_plan",
+    "build_survival_boss_wave_plan",
+    "build_survival_den_plan",
     "build_survival_spawn_creature",
+    "survival_boss_wave_composition",
+    "survival_boss_wave_rarity_tier",
+    "survival_den_interval_s",
+    "survival_den_pick_position",
+    "survival_den_pick_template",
+    "survival_den_rarity_tier",
     "build_tutorial_stage3_fire_spawns",
     "build_tutorial_stage4_clear_spawns",
     "build_tutorial_stage5_repeat_spawns",
@@ -743,6 +757,10 @@ class CreatureInit(msgspec.Struct):
     affixes: tuple[int, ...] = ()
     damage_taken_mult_by_type: dict[int, float] | None = None
 
+    # Rewrite-only: sandbox mode damage dummy (creatures/dummy.py).
+    is_test_dummy: bool = False
+    sandbox_no_corpse: bool = False
+
 
 class SpawnSlotInit(msgspec.Struct):
     owner_creature: int
@@ -1157,11 +1175,53 @@ def _survival_tint_inverse_bucket(xp: int, divisor: int) -> float:
     return x87_pc24_div(f32(1.0), x87_pc24_add(float(xp // divisor), f32(10.0)))
 
 
-def build_survival_spawn_creature(pos: Vec2, rng: CrandLike, *, player_experience: int) -> CreatureInit:
-    """Pure model of `survival_spawn_creature` (crimsonland.exe 0x00407510).
+def _survival_rarity_divisor(base: int, floor: int, xp: int, *, xp_per_step: int) -> int:
+    """Not native: shrinks a rarity roll's modulo divisor (raising its hit
+    chance, since P(hit) = 1/divisor) as XP climbs, floored at `floor` so the
+    odds never exceed 1/floor and Normal always stays possible."""
+    return max(floor, base - int(xp) // xp_per_step)
 
-    Note: this is not a `creature_spawn_template` spawn id; it picks a `type_id` and stats
-    dynamically based on `player_experience`.
+
+# Not native: replaces the original XP-bracket cascade entirely. Every type
+# (Zombie/Lizard/Alien/Spider_SP1/Spider_SP2) is mixed in from the very start
+# of a run - no more waiting until deep into a run for a type to show up at
+# all - and the mix keeps shifting as XP climbs, settling into an even 5-way
+# spread at very high XP instead of the native's flat forever-mix. Weights
+# are per-type counts out of 10 (they must sum to 10); tuple index lines up
+# with CreatureTypeId's own values (zombie=0, lizard=1, alien=2,
+# spider_sp1=3, spider_sp2=4).
+_SURVIVAL_TYPE_WEIGHT_BRACKETS: tuple[tuple[int, tuple[int, int, int, int, int]], ...] = (
+    (12_000, (3, 2, 3, 1, 1)),
+    (25_000, (2, 2, 3, 2, 1)),
+    (42_000, (1, 2, 3, 2, 2)),
+    (90_000, (1, 1, 3, 2, 3)),
+    (160_000, (2, 2, 2, 2, 2)),
+)
+_SURVIVAL_TYPE_WEIGHTS_STEADY_STATE: tuple[int, int, int, int, int] = (2, 2, 2, 2, 2)
+
+
+def _survival_creature_type_weights(xp: int) -> tuple[int, int, int, int, int]:
+    xp = int(xp)
+    for threshold, weights in _SURVIVAL_TYPE_WEIGHT_BRACKETS:
+        if xp < threshold:
+            return weights
+    return _SURVIVAL_TYPE_WEIGHTS_STEADY_STATE
+
+
+def _survival_weighted_type_pick(weights: tuple[int, int, int, int, int], roll: int) -> int:
+    cumulative = 0
+    for type_id, weight in enumerate(weights):
+        cumulative += weight
+        if roll < cumulative:
+            return type_id
+    return len(weights) - 1
+
+
+def build_survival_spawn_creature(pos: Vec2, rng: CrandLike, *, player_experience: int) -> CreatureInit:
+    """Pure model of `survival_spawn_creature` (crimsonland.exe 0x00407510),
+    with the type-selection cascade replaced (see
+    _survival_creature_type_weights) - everything past that is still the
+    original stat/tint math.
     """
     xp = int(player_experience)
 
@@ -1170,37 +1230,7 @@ def build_survival_spawn_creature(pos: Vec2, rng: CrandLike, *, player_experienc
     c.ai_mode = CreatureAiMode.ORBIT_PLAYER
 
     r10 = rng.rand_tagged(RngCallerStatic.SURVIVAL_SPAWN_CREATURE_TYPE_ROLL) % 10
-
-    if xp < 12000:
-        type_id = 2 if r10 < 9 else 3
-    elif xp < 25000:
-        type_id = 0 if r10 < 4 else 3
-        if 8 < r10:
-            type_id = 2
-    elif xp < 42000:
-        if r10 < 5:
-            type_id = 2
-        else:
-            # Decompiled as a sign-bit trick, but in practice this is a parity pick.
-            type_id = (rng.rand_tagged(RngCallerStatic.SURVIVAL_SPAWN_CREATURE_PARITY_PICK) & 1) + 3
-    elif xp < 50000:
-        type_id = 2
-    elif xp < 90000:
-        type_id = 4
-    else:
-        if 109999 < xp:
-            if r10 < 6:
-                type_id = 2
-            elif r10 < 9:
-                type_id = 4
-            else:
-                type_id = 0
-        else:
-            type_id = 0
-
-    # Rare override: forces spider_sp1 when (rand() & 0x1f) == 2.
-    if (rng.rand_tagged(RngCallerStatic.SURVIVAL_SPAWN_CREATURE_RARE_OVERRIDE) & 0x1F) == 2:
-        type_id = 3
+    type_id = _survival_weighted_type_pick(_survival_creature_type_weights(xp), r10)
 
     c.type_id = CreatureTypeId(type_id)
 
@@ -1210,8 +1240,12 @@ def build_survival_spawn_creature(pos: Vec2, rng: CrandLike, *, player_experienc
     # heading = (rand() % 314) * 0.01
     c.heading = float(f32(f32(float(rng.rand_tagged(RngCallerStatic.SURVIVAL_SPAWN_CREATURE_HEADING) % 314)) * f32(0.01)))
 
-    # Native computes in float32; preserve rounding so derived speeds match capture.
-    move_speed = f32(f32(f32(float(xp // 4000)) * f32(0.045)) + f32(0.9))
+    # Not native: the growth-rate literal was 0.045 (every 4000 XP) in the
+    # original; slowed to 0.03 so monster speed ramps up more gradually with
+    # XP (owner feedback: the late-game swarm spike felt too sudden). Native
+    # still computes in float32; preserve rounding so derived speeds match
+    # capture.
+    move_speed = f32(f32(f32(float(xp // 4000)) * f32(0.03)) + f32(0.9))
     if c.type_id == CreatureTypeId.SPIDER_SP1:
         c.flags |= CreatureFlags.AI7_LINK_TIMER
         move_speed = f32(f32(move_speed) * f32(1.3))
@@ -1355,15 +1389,21 @@ def build_survival_spawn_creature(pos: Vec2, rng: CrandLike, *, player_experienc
         # Rewrite-only odds, tuned well above the native rare-variant rate
         # (which this replaced - see the `if not MONSTER_RARITY_ENABLED`
         # branch above for those original 1-in-90/120/180/330/405 rolls).
-        # Final tier odds work out to an exact 3:2:1 split of a 10% total:
-        # Tainted 1/20 (5%), Mutated 1/30 (3.33%), Apex 1/60 (1.67%), Normal
-        # 90%. The whole tier-1 roll is folded into RED (GREEN/BLUE always
-        # miss now, kept only so this still consumes the same RNG calls as
-        # the native cascade - see the caller-order tests in
+        # At xp=0 the divisors below are 19/30/58 (Tainted 5.26%, Mutated
+        # 3.33%, Apex 1.67%) - the original flat odds - and they shrink (so
+        # the roll's hit chance rises) as XP climbs, floored so a run never
+        # guarantees a mod and Normal always stays possible. The whole
+        # tier-1 roll is folded into RED (GREEN/BLUE always miss now, kept
+        # only so this still consumes the same RNG calls as the native
+        # cascade - see the caller-order tests in
         # tests/modes/test_survival_spawn.py).
+        tainted_divisor = _survival_rarity_divisor(19, 6, xp, xp_per_step=15_000)
+        mutated_divisor = _survival_rarity_divisor(30, 8, xp, xp_per_step=20_000)
+        apex_divisor = _survival_rarity_divisor(58, 12, xp, xp_per_step=25_000)
+
         tier = 0
         r = rng.rand_tagged(RngCallerStatic.SURVIVAL_SPAWN_CREATURE_RARE_RED)
-        if r % 19 < 1:
+        if r % tainted_divisor < 1:
             tier = 1
         else:
             r = rng.rand_tagged(RngCallerStatic.SURVIVAL_SPAWN_CREATURE_RARE_GREEN)
@@ -1374,17 +1414,25 @@ def build_survival_spawn_creature(pos: Vec2, rng: CrandLike, *, player_experienc
                 if r % 360 < 0:
                     tier = 1
         r = rng.rand_tagged(RngCallerStatic.SURVIVAL_SPAWN_CREATURE_RARE_PURPLE)
-        if r % 30 < 1:
+        if r % mutated_divisor < 1:
             tier = 2
         else:
             r = rng.rand_tagged(RngCallerStatic.SURVIVAL_SPAWN_CREATURE_RARE_YELLOW)
-            if r % 58 < 1:
+            if r % apex_divisor < 1:
                 tier = 3
 
         if c.reward_value is not None:
             c.reward_value = x87_pc24_mul(c.reward_value, f32(0.8))
         if c.health is not None:
             c.max_health = c.health
+        # Not native: sprite colour is the player's only signal for "this
+        # monster has mods" - the cosmetic XP-drift tint above (computed
+        # unconditionally, above, to keep the RNG draws it consumes in sync)
+        # would otherwise dye even Normal monsters late-game (yellow-ish at
+        # high XP), which reads as a false "this one has mods" cue. Reset to
+        # a clean white here, before apply_rarity blends the tier colour on
+        # top for anything that actually rolled one.
+        c.tint = (f32(1.0), f32(1.0), f32(1.0), f32(1.0))
         if tier > 0:
             _rarity.apply_rarity(c, tier=tier, player_experience=xp)
 
@@ -1660,6 +1708,200 @@ def advance_survival_spawn_stage(stage: int, *, player_level: int) -> tuple[int,
         break
 
     return stage, tuple(spawns)
+
+
+# Not native: recurring Dens for Survival - not tied to any single creature
+# type. Draws from the same shared spawner-template pool the quest tiers
+# already use (alien/spider/lizard basic and elite dens - see
+# ALIEN_SPAWNER_TEMPLATES/apply_alien_spawner), instead of a bespoke subset,
+# so Survival actually uses every den (and the Lizard/Spider creature types
+# they birth) instead of those only ever showing up in quests.
+#
+# Gets more common, stronger, and faster-spawning-its-own-children the higher
+# the player's level climbs, and can itself roll a rarity tier - if it does,
+# every creature it births inherits that same tier (see CreaturePool.update's
+# spawn-slot tick in creatures/runtime.py).
+SURVIVAL_DEN_BASE_INTERVAL_S = 45.0
+SURVIVAL_DEN_MIN_INTERVAL_S = 8.0
+SURVIVAL_DEN_INTERVAL_DECAY_PER_LEVEL_S = 0.7
+SURVIVAL_DEN_HP_GROWTH_PER_LEVEL = 0.03  # +3% den HP per level, compounding
+SURVIVAL_DEN_CHILD_SPEEDUP_PER_LEVEL = 0.985  # children spawn ~1.5%/level faster, compounding
+SURVIVAL_DEN_CHILD_INTERVAL_FLOOR_MULT = 0.25  # never faster than 4x the template's base rate
+
+_SURVIVAL_DEN_TEMPLATES: tuple[SpawnId, ...] = tuple(ALIEN_SPAWNER_TEMPLATES.keys())
+_DEN_POSITIONS: tuple[Vec2, ...] = (Vec2(-64.0, 512.0), Vec2(1088.0, 512.0), Vec2(512.0, -64.0), Vec2(512.0, 1088.0))
+
+# Private RNGs (which den/position/rarity) - cosmetic/threat-escalation rolls,
+# same reasoning as crit.py's own private RNG / meta/relics_impl's pact rolls.
+_DEN_PICK_RNG = _random.Random(0x0DE47105)
+_DEN_POSITION_RNG = _random.Random(0x0DE9051E)
+_DEN_RARITY_RNG = _random.Random(0x0DE4A517)
+
+
+def survival_den_interval_s(player_level: int) -> float:
+    """Seconds between fresh Den spawns - shrinks (more common) as the player
+    levels up, floored at SURVIVAL_DEN_MIN_INTERVAL_S."""
+    level = max(0, int(player_level))
+    return max(
+        SURVIVAL_DEN_MIN_INTERVAL_S,
+        SURVIVAL_DEN_BASE_INTERVAL_S - level * SURVIVAL_DEN_INTERVAL_DECAY_PER_LEVEL_S,
+    )
+
+
+def survival_den_rarity_tier(player_level: int) -> int:
+    """0 (Normal) .. 3 (Apex) - a Den's own rarity odds, climbing with level
+    (same shape as the boss-wave escalation)."""
+    level = max(0, int(player_level))
+    p_apex = min(0.30, 0.006 * level)
+    p_mutated = min(0.5, 0.02 + 0.01 * level)
+    p_tainted = min(0.85, 0.10 + 0.02 * level)
+    roll = _DEN_RARITY_RNG.random()
+    if roll < p_apex:
+        return 3
+    if roll < p_apex + p_mutated:
+        return 2
+    if roll < p_apex + p_mutated + p_tainted:
+        return 1
+    return 0
+
+
+def survival_den_pick_template() -> SpawnId:
+    """Which Den variant spawns - uniformly drawn from the same pool the
+    quest tiers use."""
+    return _DEN_PICK_RNG.choice(_SURVIVAL_DEN_TEMPLATES)
+
+
+def survival_den_pick_position() -> Vec2:
+    return _DEN_POSITION_RNG.choice(_DEN_POSITIONS)
+
+
+def build_survival_den_plan(
+    template_id: SpawnId,
+    pos: Vec2,
+    heading: float,
+    rng: CrandLike,
+    env: SpawnEnv,
+    *,
+    player_level: int,
+    player_experience: int,
+    tier: int,
+) -> SpawnPlan:
+    """Like build_spawn_plan, but the Den (and its own spawn rate) scales
+    with player_level, and a rolled rarity tier gets applied to the Den
+    itself so its children inherit it at spawn time (see
+    CreaturePool.update's spawn-slot tick)."""
+    plan = build_spawn_plan(template_id, pos, heading, rng, env)
+    if not (0 <= plan.primary < len(plan.creatures)):
+        return plan
+    den_init = plan.creatures[plan.primary]
+
+    level = max(0, int(player_level))
+    hp_mult = (1.0 + SURVIVAL_DEN_HP_GROWTH_PER_LEVEL) ** level
+    if den_init.health is not None:
+        den_init.health = float(den_init.health) * hp_mult
+        den_init.max_health = den_init.health
+
+    speedup_mult = max(SURVIVAL_DEN_CHILD_INTERVAL_FLOOR_MULT, SURVIVAL_DEN_CHILD_SPEEDUP_PER_LEVEL ** level)
+    slot_idx = den_init.spawn_slot
+    if slot_idx is not None and 0 <= slot_idx < len(plan.spawn_slots):
+        plan.spawn_slots[slot_idx].interval = float(plan.spawn_slots[slot_idx].interval) * speedup_mult
+
+    if tier > 0:
+        from . import rarity as _rarity
+
+        _rarity.apply_rarity(den_init, tier=tier, player_experience=player_experience)
+    return plan
+
+
+# Not native: once advance_survival_spawn_stage's native ladder (stages 0..10,
+# capped at level 31) is exhausted, keep escalating instead of falling
+# silent - a fresh boss wave every SURVIVAL_BOSS_WAVE_LEVEL_INTERVAL levels,
+# growing in both count and rarity odds. Bosses roll the same Tainted/
+# Mutated/Apex tiers regular monsters do (creatures/rarity.py).
+SURVIVAL_BOSS_WAVE_START_LEVEL = 35  # a few levels past the native ladder's level>31 finish
+SURVIVAL_BOSS_WAVE_LEVEL_INTERVAL = 4
+_MILESTONE_BOSS_TEMPLATES: tuple[SpawnId, ...] = (
+    SpawnId.SPIDER_BOSS_3A,
+    SpawnId.ALIEN_CONST_RED_BOSS_2C,
+    SpawnId.LIZARD_CONST_YELLOW_BOSS_30,
+)
+_BOSS_WAVE_POSITIONS: tuple[Vec2, ...] = (Vec2(1088.0, 512.0), Vec2(-64.0, 512.0), Vec2(512.0, -64.0))
+
+# Private RNG for the rarity-tier roll only (cosmetic/threat escalation, same
+# reasoning as crit.py's own private RNG / meta/relics_impl's pact rolls) -
+# not the sim RNG, so it can't perturb replay determinism.
+_BOSS_WAVE_RARITY_RNG = _random.Random(0x8055B055)
+
+
+def survival_boss_wave_rarity_tier(wave_index: int) -> int:
+    """0 (Normal) .. 3 (Apex) - odds climb with wave_index so a plain boss
+    gets rarer to run into the longer a run goes."""
+    wave_index = max(0, int(wave_index))
+    p_apex = min(0.35, 0.03 * wave_index)
+    p_mutated = min(0.6, 0.05 + 0.05 * wave_index)
+    p_tainted = min(0.9, 0.25 + 0.08 * wave_index)
+    roll = _BOSS_WAVE_RARITY_RNG.random()
+    if roll < p_apex:
+        return 3
+    if roll < p_apex + p_mutated:
+        return 2
+    if roll < p_apex + p_mutated + p_tainted:
+        return 1
+    return 0
+
+
+def survival_boss_wave_composition(wave_index: int) -> tuple[SpawnId, ...]:
+    """Which boss template(s) a given post-milestone wave spawns - escalates
+    from 1 boss to up to 3, cycling through the boss pool for variety."""
+    wave_index = max(0, int(wave_index))
+    count = 1 + min(len(_BOSS_WAVE_POSITIONS) - 1, wave_index // 3)
+    return tuple(
+        _MILESTONE_BOSS_TEMPLATES[(wave_index + i) % len(_MILESTONE_BOSS_TEMPLATES)] for i in range(count)
+    )
+
+
+def advance_survival_boss_waves(
+    *, next_wave_level: int, wave_index: int, player_level: int,
+) -> tuple[int, int, tuple[tuple[SpawnId, Vec2, float, int], ...]]:
+    """Not native: the post-milestone continuation. Returns (next_wave_level,
+    wave_index, spawns), where each spawn is (template_id, pos, heading, tier)
+    - tier is rolled here (not in the caller) so the odds table above is the
+    single source of truth."""
+    if int(player_level) < next_wave_level:
+        return next_wave_level, wave_index, ()
+    wave_index = int(wave_index) + 1
+    heading = float(math.pi)
+    spawns = tuple(
+        (
+            template_id,
+            _BOSS_WAVE_POSITIONS[i % len(_BOSS_WAVE_POSITIONS)],
+            heading,
+            survival_boss_wave_rarity_tier(wave_index),
+        )
+        for i, template_id in enumerate(survival_boss_wave_composition(wave_index))
+    )
+    return next_wave_level + SURVIVAL_BOSS_WAVE_LEVEL_INTERVAL, wave_index, spawns
+
+
+def build_survival_boss_wave_plan(
+    template_id: SpawnId,
+    pos: Vec2,
+    heading: float,
+    rng: CrandLike,
+    env: SpawnEnv,
+    *,
+    tier: int,
+    player_experience: int,
+) -> SpawnPlan:
+    """Not native: like build_spawn_plan, but rolls the boss into a rarity
+    tier first (mutating its CreatureInit in place before materialization)
+    instead of leaving post-milestone bosses forever plain."""
+    plan = build_spawn_plan(template_id, pos, heading, rng, env)
+    if tier > 0 and 0 <= plan.primary < len(plan.creatures):
+        from . import rarity as _rarity
+
+        _rarity.apply_rarity(plan.creatures[plan.primary], tier=tier, player_experience=player_experience)
+    return plan
 
 
 def build_rush_mode_spawn_creature(

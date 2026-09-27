@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import math
 
+import pytest
+
 from crimson.creatures.runtime import CreaturePool
 from crimson.creatures.spawn import CreatureAiMode, CreatureFlags, CreatureInit
 from crimson.gameplay import GameplayState
@@ -204,3 +206,88 @@ def test_ranged_projectile_can_damage_creature_before_player() -> None:
     assert target.hp < 100.0
     assert hit_runtime.player_damage_calls == []
     assert player.health == 100.0
+
+
+def test_acid_lob_phases_through_creatures_and_queues_a_dot_instead_of_a_direct_hit() -> None:
+    from crimson.creatures import rarity as monster_rarity
+
+    state = GameplayState()
+    player = PlayerState(index=0, pos=Vec2(4.0, 0.0))
+
+    pool = CreaturePool()
+    blocker = pool.entries[0]
+    blocker.active = True
+    blocker.hp = 100.0
+    blocker.max_hp = 100.0
+    blocker.pos = Vec2(2.0, 0.0)  # sitting directly between the shot and the player
+
+    state.projectiles.spawn(
+        pos=Vec2(),
+        angle=math.pi / 2.0,
+        type_id=ProjectileTemplateId.ACID_LOB,
+        owner=OwnerRef.from_creature(1),
+        travel_budget=45.0,
+        hits_players=True,
+    )
+
+    hit_runtime = RecordingProjectileHitRuntime(players=[player])
+
+    state.projectiles.step(
+        PrimaryStepCtx(
+            dt=0.001,
+            creatures=pool.entries[:1],
+            options=make_projectile_update_options(
+                world_size=1024.0,
+                rng=state.rng,
+                runtime_state=state,
+                players=[player],
+                hit_runtime=hit_runtime,
+            ),
+        ),
+    )
+
+    assert blocker.hp == 100.0  # phased straight through, not stopped by it
+    assert hit_runtime.player_damage_calls == []  # no direct hit - it's a DoT
+    assert player.health == 100.0  # DoT drains over time, not instantly
+    assert player.acid_dot_pending_damage == [pytest.approx(monster_rarity.ACID_LOB_DOT_TOTAL_DAMAGE)]
+    assert player.acid_dot_pending_timers == [pytest.approx(monster_rarity.ACID_LOB_DOT_DURATION_S)]
+
+
+def test_acid_lob_projectile_steers_partially_toward_the_player_each_tick() -> None:
+    from crimson.projectiles.runtime.projectile_pool import _ACID_LOB_TURN_RATE_RAD_PER_S
+
+    state = GameplayState()
+    # Placed diagonally so the desired turn is unambiguous (not the exact
+    # +-pi edge case a straight-behind target would hit).
+    player = PlayerState(index=0, pos=Vec2(100.0, 100.0))
+
+    state.projectiles.spawn(
+        pos=Vec2(0.0, 0.0),
+        angle=0.0,  # aimed somewhere else entirely
+        type_id=ProjectileTemplateId.ACID_LOB,
+        owner=OwnerRef.from_creature(0),
+        travel_budget=45.0,
+        hits_players=True,
+    )
+    proj = state.projectiles.entries[0]
+    start_angle = float(proj.angle)
+
+    dt = 0.05
+    state.projectiles.step(
+        PrimaryStepCtx(
+            dt=dt,
+            creatures=[],
+            options=make_projectile_update_options(
+                world_size=1024.0,
+                rng=state.rng,
+                runtime_state=state,
+                players=[player],
+            ),
+        ),
+    )
+
+    turned = float(proj.angle) - start_angle
+    # The true bearing to the player is far more than one tick's max turn can
+    # cover, so the steering should be clamped to exactly the turn rate - not
+    # a full snap (only "some" homing capability was asked for).
+    assert turned == pytest.approx(_ACID_LOB_TURN_RATE_RAD_PER_S * dt, abs=1e-6)

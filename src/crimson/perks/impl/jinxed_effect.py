@@ -99,7 +99,11 @@ def update_jinxed(ctx: PerksUpdateEffectsCtx) -> None:
     )
 
     if float(ctx.state.bonuses.freeze) <= 0.0 and ctx.creatures is not None:
-        pool_mod = min(0x180, len(ctx.creatures))
+        # Not native: was capped at the original engine's fixed 384-slot
+        # array (0x180) - now scans the real (possibly larger) pool so
+        # Jinxed can reach every creature slot. Owner-approved parity break;
+        # shifts RNG-index outcomes for old replays.
+        pool_mod = len(ctx.creatures)
         if pool_mod <= 0:
             return
 

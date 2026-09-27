@@ -86,6 +86,11 @@ class WeaponId(IntEnum):
     # project-added weapons (Evil Scythe=27, Arc Gun=33 repurpose cut native
     # slots instead since this one has no free slot to borrow).
     TENET_GUN = 54
+    # Rewrite-only: Acid Lob affix's own projectile stat block (creatures/
+    # rarity.py) - an enemy-only, non-droppable "weapon" purely so
+    # weapon_entry_for_projectile_type_id has a travel_budget/damage_scale
+    # entry to key off of, same reasoning as Spider Plasma (26) above.
+    ACID_LOB = 55
 
 
 class Weapon(msgspec.Struct, frozen=True):
@@ -829,6 +834,27 @@ WEAPON_TABLE = [
         flags=8,
         travel_budget=45,
         damage_scale=1.0,
+        pellet_count=1,
+    ),
+    Weapon(
+        # Rewrite-only: Acid Lob affix's projectile - never fired via the
+        # normal weapon-select/drop system (see availability.py's
+        # _NON_PLAYER_WEAPON_IDS), damage_scale=0.0 like Plague Spreader Gun
+        # since it deals no direct hit damage at all (see creatures/rarity.py's
+        # _fire_acid_lob / the DoT-on-hit handling in projectile_pool.py).
+        weapon_id=WeaponId.ACID_LOB,
+        name='Acid Lob',
+        ammo_class=0,
+        clip_size=5,
+        shot_cooldown=2.0,
+        reload_time=1.2,
+        spread_heat_inc=0.04,
+        fire_sound=SfxId.BLOODSPILL_01,
+        reload_sound=SfxId.SHOTGUN_RELOAD,
+        icon_index=25,
+        flags=8,
+        travel_budget=45,
+        damage_scale=0.0,
         pellet_count=1,
     ),
 ]

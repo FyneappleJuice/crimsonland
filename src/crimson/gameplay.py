@@ -42,7 +42,10 @@ from .perks.helpers import perk_active
 from .perks.runtime.player_ticks import apply_player_perk_ticks
 from .perks.state import PerkEffectIntervals, PerkSelectionState
 from .run_mods.state import RunModSelectionState
+from .creatures import rarity as monster_rarity
 from .creatures.damage_runtime import CreatureDamageRuntime
+from .creatures.dummy import PendingTestMonsterRespawn
+from .creatures.rarity import PendingMonsterAreaEffect, PendingMonsterDetonation
 from .player_damage import PlayerDeathRuntime
 from .projectiles.runtime import (
     ProjectilePool,
@@ -166,6 +169,17 @@ class GameplayState(msgspec.Struct):
     bonus_hud: BonusHudState = msgspec.field(default_factory=BonusHudState)
     bonus_pool: BonusPool = msgspec.field(default_factory=BonusPool)
     deferred_freeze_corpse_fx: list[DeferredFreezeCorpseFx] = msgspec.field(default_factory=list)
+    # Not native: Bomber (Detonating) monster affix - blasts fuse for a beat
+    # before they actually go off (creatures/rarity.py's PendingMonsterDetonation).
+    pending_monster_detonations: list[PendingMonsterDetonation] = msgspec.field(default_factory=list)
+    # Not native: Pyre / Anchoring monster affixes - same delayed-fuse idea as
+    # Bomber above, but the effect then persists for a duration once it goes
+    # off (a burning field / a pull zone) instead of a one-shot blast.
+    pending_monster_area_effects: list[PendingMonsterAreaEffect] = msgspec.field(default_factory=list)
+    # Not native: sandbox mode stationary test monster (creatures/dummy.py) -
+    # respawns 5s after it dies to a hit, so it's ready for another on-death
+    # proc test without needing to be replaced.
+    pending_test_monster_respawns: list[PendingTestMonsterRespawn] = msgspec.field(default_factory=list)
     shock_chain_links_left: int = 0
     shock_chain_projectile_id: int = -1
     survival_reward_weapon_guard_id: WeaponId = WeaponId.PISTOL
@@ -1015,6 +1029,9 @@ def player_update(
     relic_fortify.tick(player, dt)
     # Not native: Leech relic's heal-over-time instances drip and age out.
     relic_leech.tick(player, dt)
+    # Not native: Acid Lob monster affix's damage-over-time instances drip and
+    # age out the same way, in the opposite direction.
+    monster_rarity.tick_acid_dot(player, dt)
 
     apply_player_perk_ticks(
         player=player,

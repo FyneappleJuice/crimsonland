@@ -10,6 +10,7 @@ from grim.sfx_map import SfxId
 
 from ..bonuses.blade_orbit import update_blade_orbits
 from ..bonuses.ion_overload import update_ion_overload_clouds
+from ..creatures.dummy import sandbox_keep_corpse, tick_test_monster_respawns, update_test_dummies
 from ..creatures.rarity import update_monster_affixes
 from ..weapon_runtime.arc_gun import update_arc_gun
 from ..weapon_runtime.power_up import WPU_FLAME_DAMAGE_MULT
@@ -137,14 +138,20 @@ class _WorldStepRuntime(ProjectileHitRuntime, CreatureDamageRuntime, PlayerDeath
         creature_index: int,
         resolve_damage_followup: Callable[[], tuple[SfxId, ...]],
     ) -> None:
+        idx = int(creature_index)
+        # Not native: sandbox mode test entities never keep a corpse, and the
+        # stationary test monster queues its own 5s respawn here - see
+        # creatures/dummy.py.
+        keep_corpse = sandbox_keep_corpse(self.world.creatures.entries, idx, self.world.state)
         self.world._record_creature_death(
-            creature_index=int(creature_index),
+            creature_index=idx,
             dt=float(self.dt),
             detail_preset=int(self.detail_preset),
             world_size=float(self.world_size),
             fx_queue=self.fx_queue,
             deaths=self.deaths,
             sfx=self.sfx,
+            keep_corpse=keep_corpse,
             resolve_damage_followup=resolve_damage_followup,
         )
 
@@ -196,9 +203,12 @@ class _WorldStepRuntime(ProjectileHitRuntime, CreatureDamageRuntime, PlayerDeath
         # Native secondary-rocket hits run the same first-hit game-tune branch
         # as bullet hits: sfx_play_exclusive(music_track_extra_0) plus one
         # playlist rand outside demo/rush, else the panned explosion sound.
+        # Not native: Maps is now the sandbox testing ground - exempted the
+        # same way Rush already is, so a rocket hit on a test dummy/monster
+        # never kicks off the combat music track either.
         if (
             (not self.world.state.demo_mode_active)
-            and self.game_mode != GameMode.RUSH
+            and self.game_mode not in (GameMode.RUSH, GameMode.MAPS)
             and not self.hit_audio_game_tune_started
         ):
             self.trigger_game_tune = True
@@ -483,6 +493,10 @@ class WorldState(msgspec.Struct):
             )
         # Not native: advance monster rarity affixes (regen / frenzy / auras).
         update_monster_affixes(self.players, self.creatures, dt, state=self.state)
+        # Not native: sandbox mode damage dummies (5s-silence damage reset).
+        update_test_dummies(self.creatures, dt)
+        # Not native: sandbox mode stationary test monster - auto-respawn timer.
+        tick_test_monster_respawns(self.creatures, self.state, dt)
         # Not native: advance orbiting-blade bonuses and apply their contact hits.
         update_blade_orbits(
             self.players,

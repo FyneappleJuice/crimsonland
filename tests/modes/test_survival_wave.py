@@ -160,9 +160,9 @@ def test_tick_survival_wave_spawns_triggers_single_spawn() -> None:
 
     assert_float_close(c.pos.x, 35.0)
     assert_float_close(c.pos.y, 1064.0)
-    assert c.type_id == CreatureTypeId.ALIEN
-    assert_float_close(c.health, 85.0)
-    assert_float_close(c.reward_value, 336.0)
+    assert c.type_id == CreatureTypeId.ZOMBIE
+    assert_float_close(c.health, 87.0)
+    assert_float_close(c.reward_value, 47.47047805786133)
     assert rng.state == 0xA6E9C9A6
 
 
@@ -181,15 +181,15 @@ def test_tick_survival_wave_spawns_extra_spawns_when_interval_is_negative() -> N
 
     assert_float_close(cooldown, 0.0)
     assert len(spawns) == 3
-    for spawn, (expected_x, expected_y) in zip(spawns, ((35.0, 1064.0), (1064.0, 947.0), (-40.0, 435.0))):
+    for spawn, (expected_x, expected_y) in zip(spawns, ((35.0, 1064.0), (1064.0, 947.0), (1064.0, 222.0))):
         assert_float_close(spawn.pos.x, expected_x)
         assert_float_close(spawn.pos.y, expected_y)
     assert [c.type_id for c in spawns] == [
-        CreatureTypeId.ALIEN,
+        CreatureTypeId.ZOMBIE,
         CreatureTypeId.ALIEN,
         CreatureTypeId.SPIDER_SP1,
     ]
-    assert rng.state == 0xBB25E9C6
+    assert rng.state == 0x45099BEC
 
 
 def test_tick_survival_wave_spawns_uses_distinct_extra_and_main_position_callers() -> None:

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from crimson.creatures.spawn_ids import SpawnId
-from crimson.modes.maps_mode import MAP_MODIFIERS, MapModifier, MapsSessionRuntime
+from crimson.modes.maps_mode import MAP_MODIFIERS, MapModifier, MapsSessionRuntime, SandboxSessionRuntime
 from crimson.sim.input import PlayerInput
 from crimson.sim.session_builders import build_survival_session
 from crimson.sim.state_types import PlayerState
@@ -98,6 +98,30 @@ def test_maps_session_runtime_scales_elapsed_time_fed_to_spawn_formula() -> None
     session.step_tick(dt=1.0 / 60.0, inputs=[PlayerInput()])
     # Real elapsed time should advance at the normal (unscaled) rate.
     assert session.elapsed_ms < 100.0
+
+
+def test_sandbox_session_runtime_never_spawns_anything_ambiently() -> None:
+    # Not native: Maps is now a sandbox mode - MapsMode._new_sim_session()
+    # swaps in SandboxSessionRuntime instead of MapsSessionRuntime, and its
+    # whole point is that nothing appears on its own.
+    world = WorldState.build(
+        world_size=1024.0, demo_mode_active=True, hardcore=False, quest_fail_retry_count=0,
+    )
+    world.players.append(PlayerState(index=0, pos=Vec2()))
+
+    session, spawn_state = build_survival_session(
+        world=world, world_size=1024.0, damage_scale_by_type={}, detail_preset=5,
+        violence_disabled=0, game_tune_started=True, finalize_post_render_lifecycle=False,
+    )
+    session.mode_runtime = SandboxSessionRuntime(spawn=spawn_state)
+    assert session.mode_runtime.needs_mid_step() is False
+
+    before = _active_creature_count(world)
+    for _ in range(600):  # 10 real seconds
+        session.step_tick(dt=1.0 / 60.0, inputs=[PlayerInput()])
+    after = _active_creature_count(world)
+
+    assert after == before
 
 
 def test_map_modifiers_table_is_well_formed() -> None:

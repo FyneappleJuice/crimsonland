@@ -347,6 +347,21 @@ def end_run() -> None:
     _ACTIVE_RELIC_IDS = ()
 
 
+def debug_set_active_relics(relic_ids: list[int]) -> None:
+    """Not native: sandbox mode debug panel (ui/sandbox_debug_panel.py) -
+    activates relics for the current session's stat pipeline directly,
+    bypassing the owned-inventory/grid entirely (no persistence, no shape or
+    family-conflict checks). Mirrors what begin_run() does for a real,
+    grid-placed run without touching relics.json or the placement grid."""
+    global _ACTIVE_RUN_MODS, _ACTIVE_RELIC_IDS
+    ids = [int(rid) for rid in relic_ids]
+    mods: list[StatMod] = []
+    for rid in ids:
+        mods.extend(relic_stat_mods(rid))
+    _ACTIVE_RUN_MODS = tuple(mods)
+    _ACTIVE_RELIC_IDS = tuple(ids)
+
+
 def active_run_stat_mods() -> tuple[StatMod, ...]:
     """Read by progression.refresh_player_stats each sim tick."""
     return _ACTIVE_RUN_MODS

@@ -24,6 +24,7 @@ from grim.raylib_api import rl
 from ...bonuses.ids import BonusId
 from ...meta.relics_impl import fortify as relic_fortify
 from ...meta.relics_impl import gathering_winds as relic_gathering_winds
+from ...meta.relics_impl import leech as relic_leech
 from ...perks.helpers import perk_active
 from ...perks.ids import PerkId
 from ...perks.impl.delicate_watch import DELICATE_WATCH_BREAK_THRESHOLD
@@ -124,6 +125,33 @@ def draw_player_status(
         else:
             col = rl.Color(210, 30, 30, int(225 * a))
         rl.draw_ring(center, r_in, r_out, start, end, _RING_SEGMENTS, col)
+
+        # Not native: Leech relic - a pale, low-alpha red arc continuing past
+        # the current health, previewing how much the still-draining
+        # heal-over-time instances would fill in total if left to finish.
+        pending_heal = sum(player.leech_pending_heal)
+        if pending_heal > 0.0:
+            pending_ratio = clamp(pending_heal / 100.0, 0.0, 1.0 - ratio)
+            if pending_ratio > 0.0:
+                rl.draw_ring(
+                    center, r_in, r_out, end, end + 360.0 * pending_ratio, _RING_SEGMENTS,
+                    rl.Color(255, 140, 140, int(90 * a)),
+                )
+
+        # Not native: Acid Lob monster affix - a pale, low-alpha green arc
+        # eating into the remaining health from its edge, previewing how much
+        # the still-draining damage-over-time instances would drain in total
+        # if left to finish. The inverse of the Leech preview above: that one
+        # extends past the ring to show a gain still coming; this one bites
+        # inward from the boundary to show a loss still coming.
+        pending_dot = sum(player.acid_dot_pending_damage)
+        if pending_dot > 0.0:
+            dot_ratio = clamp(pending_dot / 100.0, 0.0, ratio)
+            if dot_ratio > 0.0:
+                rl.draw_ring(
+                    center, r_in, r_out, end - 360.0 * dot_ratio, end, _RING_SEGMENTS,
+                    rl.Color(120, 255, 140, int(90 * a)),
+                )
 
     # Not native: Pact of Fortification - a thin grey arc just outside the
     # health ring, filling clockwise from 12 o'clock toward the stack cap.

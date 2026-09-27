@@ -122,7 +122,13 @@ class AudioRouter(msgspec.Struct):
         # Native plays the panned hit sample for every hit, uncapped.
         game_tune_started = bool(self.audio.music.game_tune_started)
         for idx in range(len(hits)):
-            if (not self.demo_mode_active) and game_mode != GameMode.RUSH and (not game_tune_started):
+            # Not native: Maps is now the sandbox testing ground - exempted
+            # the same way Rush already is (see sim/presentation_step.py).
+            if (
+                (not self.demo_mode_active)
+                and game_mode not in (GameMode.RUSH, GameMode.MAPS)
+                and (not game_tune_started)
+            ):
                 trigger_game_tune(self.audio, rng=rng)
                 game_tune_started = True
                 continue

@@ -11,17 +11,37 @@ from grim.rand import Crand
 from grim.raylib_api import rl
 from grim.view import ViewContext
 
+from ..creatures.dummy import spawn_stationary_test_monster, spawn_test_dummy
 from ..creatures.spawn import SURVIVAL_UPDATE_MAIN_SPAWN_POS_CALLERS, rand_survival_spawn_pos
 from ..creatures.spawn_ids import SpawnId
 from ..game_modes import GameMode
 from ..replay import Replay, ReplayRecorder
 from ..sim.sessions import DeterministicSession, MidStepContext, SurvivalSessionRuntime, survival_mid_step
+from ..ui.sandbox_debug_panel import SandboxDebugPanel
 from .survival_mode import SurvivalMode
 
-__all__ = ["MAP_MODIFIERS", "MapModifier", "MapsMode", "MapsSessionRuntime"]
+__all__ = ["MAP_MODIFIERS", "MapModifier", "MapsMode", "MapsSessionRuntime", "SandboxSessionRuntime"]
 
 _MAPS_BANNER_POS = Vec2(18.0, 4.0)
 _MAPS_BANNER_COLOR = rl.Color(220, 190, 140, 220)
+_SANDBOX_HINT_POS = Vec2(18.0, 20.0)
+_SANDBOX_HINT_COLOR = rl.Color(150, 210, 255, 220)
+# Not native: sandbox placement/drag - how close (world px) a click needs to
+# land to an existing test entity to grab it instead of doing nothing.
+_SANDBOX_DRAG_HIT_RADIUS = 34.0
+_SANDBOX_CURSOR_COLOR = rl.Color(255, 255, 255, 235)
+_SANDBOX_CURSOR_OUTLINE = rl.Color(20, 20, 20, 200)
+_SANDBOX_CURSOR_RADIUS = 5.0
+
+# Not native: sandbox time scale - how fast in-game time moves relative to
+# real time. Applied by scaling the per-frame dt handed to SurvivalMode's
+# update() before anything else sees it, so it uniformly slows/speeds up
+# movement, cooldowns, projectiles, animations - everything - the same way
+# replay_playback_mode.py's own speed control already scales its dt.
+_TIME_SCALE_STEPS: tuple[float, ...] = (0.1, 0.25, 0.5, 1.0, 1.5, 2.0, 3.0, 5.0)
+_DEFAULT_TIME_SCALE_INDEX = _TIME_SCALE_STEPS.index(1.0)
+_TIME_SCALE_HINT_POS = Vec2(18.0, 36.0)
+_TIME_SCALE_HINT_COLOR = rl.Color(230, 210, 140, 220)
 
 
 class MapModifier(msgspec.Struct, frozen=True):
@@ -114,6 +134,17 @@ class MapsSessionRuntime(SurvivalSessionRuntime):
         ctx.world.creatures.spawn_template(self.modifier.boss_spawn_id, pos, heading, state.rng)
 
 
+class SandboxSessionRuntime(SurvivalSessionRuntime):
+    """Not native: Maps' sandbox/testing-ground mode - a no-op `mid_step`
+    means the entire survival spawn cascade (waves, milestones, dens, boss
+    waves) never runs, so nothing appears in the arena except what the owner
+    places by hand (creatures/dummy.py). Leveling/XP/the normal perk-menu
+    stay untouched - only ambient monster spawning is suppressed."""
+
+    def needs_mid_step(self) -> bool:
+        return False
+
+
 class MapsMode(SurvivalMode):
     """Survival with a rolled map affix and a guaranteed boss.
 
@@ -137,6 +168,13 @@ class MapsMode(SurvivalMode):
         # before returning, so these must be set before `super().__init__()` runs.
         self.current_modifier: MapModifier = MAP_MODIFIERS[0]
         self._modifier_rolled = False
+        # Not native: sandbox placement/drag state (see _handle_input's F6/F7/F8
+        # handling below).
+        self._sandbox_edit_mode = False
+        self._sandbox_drag_index: int | None = None
+        self._sandbox_drag_offset = Vec2()
+        self._sandbox_panel = SandboxDebugPanel()
+        self._sandbox_time_scale_index = _DEFAULT_TIME_SCALE_INDEX
         super().__init__(
             ctx,
             config=config,
@@ -156,7 +194,11 @@ class MapsMode(SurvivalMode):
         session = super()._new_sim_session()
         base_runtime = session.mode_runtime
         assert isinstance(base_runtime, SurvivalSessionRuntime)
-        session.mode_runtime = MapsSessionRuntime(spawn=base_runtime.spawn, modifier=self.current_modifier)
+        # Not native: Maps is now a sandbox/testing-ground mode - see
+        # SandboxSessionRuntime's docstring. The rolled MapModifier still
+        # exists for the map-select screen's flavor text, but no longer
+        # drives any spawn behavior (there's no ambient spawning to scale).
+        session.mode_runtime = SandboxSessionRuntime(spawn=base_runtime.spawn)
         # Maps is the one mode that folds the non-native Fork Shot bonus into the
         # random drop pool (see bonuses/selection.py). Every native mode leaves
         # the original drop table untouched.
@@ -177,14 +219,156 @@ class MapsMode(SurvivalMode):
         score = int(self.player.experience)
         return f"maps_{self.current_modifier.key}_{stamp}_score{score}"
 
+    # --- sandbox placement / drag (not native) -----------------------------
+
+    def _handle_input(self) -> None:
+        super()._handle_input()
+        if self._game_over_active:
+            return
+
+        # Not native: time scale - works regardless of edit mode/panel state,
+        # since you'd want to slow down or fast-forward while just watching
+        # combat happen too, not only while placing test entities.
+        if rl.is_key_pressed(rl.KeyboardKey.KEY_MINUS):
+            self._sandbox_change_time_scale(-1)
+        if rl.is_key_pressed(rl.KeyboardKey.KEY_EQUAL):
+            self._sandbox_change_time_scale(1)
+        if rl.is_key_pressed(rl.KeyboardKey.KEY_ZERO):
+            self._sandbox_time_scale_index = _DEFAULT_TIME_SCALE_INDEX
+
+        if rl.is_key_pressed(rl.KeyboardKey.KEY_F4):
+            self._sandbox_panel.toggle()
+            self._paused = self._sandbox_panel.open or self._sandbox_edit_mode
+
+        if self._sandbox_panel.open:
+            self._sandbox_panel.handle_input(
+                players=self.sim_world.players, state=self.state, creatures=self.creatures.entries,
+            )
+            return  # panel owns the mouse while it's open
+
+        if rl.is_key_pressed(rl.KeyboardKey.KEY_F6):
+            self._sandbox_edit_mode = not self._sandbox_edit_mode
+            # Edit mode pauses the sim outright (same flag TAB already toggles)
+            # so a click-drag can never double as a trigger-pull or movement
+            # input underneath it.
+            self._paused = self._sandbox_edit_mode
+            self._sandbox_drag_index = None
+
+        if not self._sandbox_edit_mode:
+            return
+
+        if rl.is_key_pressed(rl.KeyboardKey.KEY_F7):
+            spawn_test_dummy(self.creatures, self._sandbox_mouse_world())
+        if rl.is_key_pressed(rl.KeyboardKey.KEY_F8):
+            spawn_stationary_test_monster(self.creatures, self._sandbox_mouse_world())
+
+        self._sandbox_update_drag()
+
+    def _sandbox_time_scale(self) -> float:
+        return _TIME_SCALE_STEPS[int(self._sandbox_time_scale_index)]
+
+    def _sandbox_change_time_scale(self, delta: int) -> None:
+        idx = int(self._sandbox_time_scale_index) + int(delta)
+        self._sandbox_time_scale_index = max(0, min(idx, len(_TIME_SCALE_STEPS) - 1))
+
+    def update(self, dt: float) -> None:
+        # Not native: scale the whole frame's dt before SurvivalMode ever sees
+        # it, so slow-mo/fast-forward affects movement, cooldowns, projectiles,
+        # and animations uniformly - same lever replay_playback_mode.py's own
+        # speed control already pulls (scaling dt before the tick advances).
+        super().update(float(dt) * self._sandbox_time_scale())
+
+    def _sandbox_mouse_world(self) -> Vec2:
+        return self.screen_to_world(Vec2.from_xy(rl.get_mouse_position()))
+
+    def _sandbox_nearest_entity(self, mouse_world: Vec2, *, max_dist: float) -> int | None:
+        best: int | None = None
+        best_dist = float(max_dist)
+        for idx, creature in enumerate(self.creatures.entries):
+            if not creature.active:
+                continue
+            dist = creature.pos.distance_to(mouse_world)
+            if dist <= best_dist:
+                best_dist = dist
+                best = idx
+        return best
+
+    def _sandbox_update_drag(self) -> None:
+        mouse_world = self._sandbox_mouse_world()
+
+        if self._sandbox_drag_index is not None:
+            if rl.is_mouse_button_down(rl.MouseButton.MOUSE_BUTTON_LEFT):
+                idx = self._sandbox_drag_index
+                if 0 <= idx < len(self.creatures.entries):
+                    self.creatures.entries[idx].pos = mouse_world + self._sandbox_drag_offset
+                return
+            self._sandbox_drag_index = None
+
+        # Not native: RMB deletes the nearest test entity outright - a
+        # deliberate removal, so (unlike a combat death) it never queues a
+        # respawn; that's still on a 5s timer, but only for a monster that
+        # actually died to a hit (see queue_stationary_monster_respawn).
+        if rl.is_mouse_button_pressed(rl.MouseButton.MOUSE_BUTTON_RIGHT):
+            idx = self._sandbox_nearest_entity(mouse_world, max_dist=_SANDBOX_DRAG_HIT_RADIUS)
+            if idx is not None:
+                self.creatures.entries[idx].active = False
+                if self._sandbox_drag_index == idx:
+                    self._sandbox_drag_index = None
+            return
+
+        if not rl.is_mouse_button_pressed(rl.MouseButton.MOUSE_BUTTON_LEFT):
+            return
+
+        idx = self._sandbox_nearest_entity(mouse_world, max_dist=_SANDBOX_DRAG_HIT_RADIUS)
+        if idx is None:
+            return
+        creature = self.creatures.entries[idx]
+        self._sandbox_drag_offset = creature.pos - mouse_world
+        self._sandbox_drag_index = idx
+
     def draw(self) -> None:
         super().draw()
         if self._game_over_active:
             return
-        modifier = self.current_modifier
+        # Not native: no ambient spawning happens anymore (SandboxSessionRuntime),
+        # so the old "boss inbound" banner would just be a lie - swapped for a
+        # plain sandbox-mode label instead of the rolled MapModifier's name.
         self._draw_ui_text(
-            f"{modifier.name} - {modifier.boss_name} inbound",
+            "Sandbox - no ambient spawns, place test targets by hand",
             _MAPS_BANNER_POS,
             _MAPS_BANNER_COLOR,
             scale=0.9,
         )
+        hint = (
+            "Edit mode ON (paused) - F7 dummy, F8 monster, LMB drag, RMB delete, F6 to exit"
+            if self._sandbox_edit_mode
+            else "F6: sandbox edit mode (place/drag/delete test dummies)  F4: perk/relic/run-mod/weapon panel"
+        )
+        self._draw_ui_text(hint, _SANDBOX_HINT_POS, _SANDBOX_HINT_COLOR, scale=0.75)
+        self._draw_ui_text(
+            f"Time scale: {self._sandbox_time_scale():.2f}x  (- / = to adjust, 0 to reset)",
+            _TIME_SCALE_HINT_POS,
+            _TIME_SCALE_HINT_COLOR,
+            scale=0.75,
+        )
+        self._sandbox_panel.draw(self)
+        self._draw_sandbox_cursor()
+
+    def _draw_sandbox_cursor(self) -> None:
+        # Not native: the game hides the OS cursor everywhere (loop_view.py's
+        # rl.hide_cursor()) and normally relies on the aim reticle to show
+        # where the mouse is - but the reticle is driven by the sim tick,
+        # which we deliberately stop (self._paused) while editing/the panel
+        # is open, so it freezes in place instead of following the mouse.
+        # Draw a plain screen-space crosshair here instead, read straight off
+        # the OS mouse position so it keeps tracking regardless of pause.
+        if not (self._sandbox_edit_mode or self._sandbox_panel.open):
+            return
+        mouse = rl.get_mouse_position()
+        r = _SANDBOX_CURSOR_RADIUS
+        rl.draw_circle_lines(int(mouse.x), int(mouse.y), r + 1.0, _SANDBOX_CURSOR_OUTLINE)
+        rl.draw_circle_lines(int(mouse.x), int(mouse.y), r, _SANDBOX_CURSOR_COLOR)
+        rl.draw_line(int(mouse.x - r * 2), int(mouse.y), int(mouse.x - r), int(mouse.y), _SANDBOX_CURSOR_COLOR)
+        rl.draw_line(int(mouse.x + r), int(mouse.y), int(mouse.x + r * 2), int(mouse.y), _SANDBOX_CURSOR_COLOR)
+        rl.draw_line(int(mouse.x), int(mouse.y - r * 2), int(mouse.x), int(mouse.y - r), _SANDBOX_CURSOR_COLOR)
+        rl.draw_line(int(mouse.x), int(mouse.y + r), int(mouse.x), int(mouse.y + r * 2), _SANDBOX_CURSOR_COLOR)

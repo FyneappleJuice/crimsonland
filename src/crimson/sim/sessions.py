@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import time
 
 import msgspec
@@ -8,7 +9,19 @@ from grim.rand import CrandLike, RecordingCrand
 from grim.sfx_map import SfxId
 
 from ..bonuses.blade_orbit import blade_sound_loop_index
-from ..creatures.spawn import advance_survival_spawn_stage, tick_rush_mode_spawns, tick_survival_wave_spawns
+from ..creatures.spawn import (
+    SURVIVAL_BOSS_WAVE_START_LEVEL,
+    advance_survival_boss_waves,
+    advance_survival_spawn_stage,
+    build_survival_boss_wave_plan,
+    build_survival_den_plan,
+    survival_den_interval_s,
+    survival_den_pick_position,
+    survival_den_pick_template,
+    survival_den_rarity_tier,
+    tick_rush_mode_spawns,
+    tick_survival_wave_spawns,
+)
 from ..game_modes import GameMode
 from ..gameplay import LATE_LEVEL_XP_STEEPEN_AT, survival_level_threshold, survival_update_weapon_handouts
 from ..perks.availability import prepare_perk_availability
@@ -92,6 +105,15 @@ class PostStepContext(msgspec.Struct, frozen=True):
 class SurvivalSpawnState(msgspec.Struct):
     stage: int = 0
     spawn_cooldown_ms: float = 0.0
+    # Not native: post-milestone boss-wave escalation (see
+    # advance_survival_boss_waves) - the player level the next wave fires at,
+    # and how many waves have fired so far (drives count/rarity escalation).
+    next_boss_wave_level: int = SURVIVAL_BOSS_WAVE_START_LEVEL
+    boss_wave_index: int = 0
+    # Not native: recurring Den spawns (see build_survival_den_plan) -
+    # seconds left until the next one, reset each time to
+    # survival_den_interval_s(level) (shrinks as level climbs).
+    den_spawn_cooldown_s: float = 5.0
 
 
 class RushSpawnState(msgspec.Struct):
@@ -136,8 +158,8 @@ def enforce_rush_loadout(world: WorldState) -> None:
 #    threshold's own polynomial term keeps growing too, so the shortcut
 #    under-delivers by ~2.3x by level 50).
 SURVIVAL_SPAWN_RAMP_START_LEVEL = LATE_LEVEL_XP_STEEPEN_AT
-SURVIVAL_SPAWN_RAMP_PER_LEVEL = 1.15  # +15% effective spawn rate per level past the start, compounding
-SURVIVAL_MONSTER_HP_GROWTH_PER_LEVEL = 1.15  # +15% monster HP per level past the start, compounding
+SURVIVAL_SPAWN_RAMP_PER_LEVEL = 1.07  # +7% effective spawn rate per level past the start, compounding
+SURVIVAL_MONSTER_HP_GROWTH_PER_LEVEL = 1.07  # +7% monster HP per level past the start, compounding
 
 
 def _survival_late_game_levels_past_ramp(player_level: int) -> float:
@@ -192,6 +214,46 @@ def survival_mid_step(ctx: MidStepContext, spawn: SurvivalSpawnState) -> None:
         )
 
     player_xp = ctx.world.players[0].experience if ctx.world.players else 0
+
+    # Not native: recurring Dens (see build_survival_den_plan) - more common,
+    # stronger, and faster-birthing-their-own-children the higher the player
+    # climbs. Draws from the full shared den-template pool (alien/spider/
+    # lizard variants), so Survival actually uses every den (and the Lizard/
+    # Spider creature types they birth) instead of those only ever showing
+    # up in quests.
+    dt_s = ctx.dt_sim_ms / 1000.0
+    spawn.den_spawn_cooldown_s -= dt_s
+    if spawn.den_spawn_cooldown_s <= 0.0:
+        spawn.den_spawn_cooldown_s += survival_den_interval_s(int(player_level))
+        den_plan = build_survival_den_plan(
+            survival_den_pick_template(),
+            survival_den_pick_position(),
+            float(math.pi),
+            state.rng,
+            ctx.world.creatures.env,
+            player_level=int(player_level),
+            player_experience=int(player_xp),
+            tier=survival_den_rarity_tier(int(player_level)),
+        )
+        ctx.world.creatures.spawn_plan(den_plan, rng=state.rng)
+
+    # Not native: once the native milestone ladder (above) is exhausted, keep
+    # escalating instead of falling silent - periodic boss waves, growing in
+    # both count and rarity odds (creatures/rarity.py's own tier system).
+    next_boss_wave_level, boss_wave_index, boss_wave_spawns = advance_survival_boss_waves(
+        next_wave_level=spawn.next_boss_wave_level,
+        wave_index=spawn.boss_wave_index,
+        player_level=int(player_level),
+    )
+    spawn.next_boss_wave_level = next_boss_wave_level
+    spawn.boss_wave_index = boss_wave_index
+    for template_id, pos, heading, tier in boss_wave_spawns:
+        plan = build_survival_boss_wave_plan(
+            template_id, pos, heading, state.rng, ctx.world.creatures.env,
+            tier=tier, player_experience=int(player_xp),
+        )
+        ctx.world.creatures.spawn_plan(plan, rng=state.rng)
+
     spawn_dt_ms = ctx.dt_sim_ms * _survival_spawn_dt_mult(player_level)
     cooldown, wave_spawns = tick_survival_wave_spawns(
         spawn.spawn_cooldown_ms,

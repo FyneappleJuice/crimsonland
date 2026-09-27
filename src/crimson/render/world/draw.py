@@ -14,6 +14,7 @@ from grim.math import clamp
 from grim.raylib_api import rl
 from grim.terrain_render import _maybe_alpha_test
 
+from ...creatures import rarity as monster_rarity
 from ...creatures.spawn import CreatureFlags, CreatureTypeId
 from ...effects_atlas import EFFECT_ID_ATLAS_TABLE_BY_ID, SIZE_CODE_GRID, EffectId
 from ...meta.relics_impl import critical_mass as relic_critical_mass
@@ -33,6 +34,7 @@ from .bonuses import draw_bonus_hover_labels, draw_bonus_pickups
 from .constants import _RAD_TO_DEG, monster_vision_fade_alpha
 from .context import WorldRenderCtx
 from .creatures import draw_creature_sprite
+from .dummy_stats import draw_dummy_stats
 from .monster_tooltip import draw_monster_rarity_tooltip
 from .effects import draw_effect_pool, draw_particle_pool, draw_sprite_effect_pool
 from .overlays import draw_aim_circle, draw_clock_gauge, draw_direction_arrows, draw_kinetic_discipline_fill
@@ -128,6 +130,8 @@ def draw_world(
         draw_critical_mass_radius(render_ctx, ctx=draw_ctx)
         draw_deadeye_neutral_ring(render_ctx, ctx=draw_ctx)
         draw_warbanners(render_ctx, ctx=draw_ctx)
+        draw_pending_detonation_warnings(render_ctx, ctx=draw_ctx)
+        draw_pending_area_effect_warnings(render_ctx, ctx=draw_ctx)
         with profile_pass("players_alive"):
             draw_players(render_ctx, ctx=draw_ctx, alive=True)
             # Not native: Hollow Form's clone, drawn dimmed right after the
@@ -137,6 +141,14 @@ def draw_world(
             # Not native: red health ring + clip count anchored to the player,
             # replacing the top-of-screen heart / health bar / ammo pips.
             draw_players_status(
+                render_ctx,
+                camera=camera,
+                view_scale=view_scale,
+                scale=scale,
+                alpha=entity_alpha,
+            )
+            # Not native: sandbox mode damage dummies (creatures/dummy.py).
+            draw_dummy_stats(
                 render_ctx,
                 camera=camera,
                 view_scale=view_scale,
@@ -422,6 +434,42 @@ def draw_creatures(render_ctx: WorldRenderCtx, *, ctx: WorldDrawContext) -> None
 
         tint_rgba = creature.tint
 
+        # Not native: Camouflaged / Obscurity / Flickering monster affixes -
+        # all three change how visible the creature reads, so they're applied
+        # before the energizer/lifecycle blends below rather than as a
+        # separate overlay pass.
+        if creature.affixes:
+            nearest_dist = None
+            if monster_rarity.AffixId.CAMOUFLAGED in creature.affixes or (
+                monster_rarity.AffixId.OBSCURITY in creature.affixes and not ctx.monster_vision
+            ):
+                nearest_dist = min(
+                    (creature.pos.distance_to(p.pos) for p in frame.players if p.health > 0.0),
+                    default=math.inf,
+                )
+
+            if monster_rarity.AffixId.CAMOUFLAGED in creature.affixes and nearest_dist is not None:
+                blend_t = clamp(nearest_dist / monster_rarity.CAMOUFLAGE_RANGE, 0.0, 1.0) * 0.85
+                tint_rgba = RGBA.lerp(tint_rgba, RGBA(0.35, 0.32, 0.28, tint_rgba.a), blend_t)
+
+            if (
+                monster_rarity.AffixId.OBSCURITY in creature.affixes
+                and not ctx.monster_vision
+                and float(creature.hit_flash_timer) <= 0.0
+                and nearest_dist is not None
+                and nearest_dist > monster_rarity.OBSCURITY_RANGE
+            ):
+                tint_rgba = tint_rgba.with_alpha(tint_rgba.a * 0.08)
+
+            if monster_rarity.AffixId.FLICKERING in creature.affixes:
+                if float(creature.affix_flicker_active) > 0.0:
+                    # Untouchable right now - reads as faint/ghostly.
+                    tint_rgba = tint_rgba.with_alpha(tint_rgba.a * 0.25)
+                elif 0.0 < float(creature.affix_flicker_timer) <= monster_rarity.FLICKER_TELEGRAPH_S:
+                    # Shimmer telegraph in the last stretch before it phases.
+                    pulse = math.sin(float(rl.get_time()) * 22.0) * 0.5 + 0.5
+                    tint_rgba = RGBA.lerp(tint_rgba, RGBA(1.0, 1.0, 1.0, tint_rgba.a), 0.5 * pulse)
+
         # Energizer: tint "weak" creatures blue-ish while active.
         # Mirrors `creature_render_type` (0x00418b60) branch when
         # `_bonus_energizer_timer > 0` and `max_health < 500`.
@@ -630,6 +678,68 @@ def draw_critical_mass_radius(render_ctx: WorldRenderCtx, *, ctx: WorldDrawConte
         c = rl.Vector2(float(center.x), float(center.y))
         rl.draw_circle_v(c, radius, fill)
         rl.draw_ring(c, radius - 1.5, radius + 1.5, 0.0, 360.0, 96, ring)
+
+
+_BOMBER_WARNING_COLOR = (255, 90, 30)
+
+
+def draw_pending_detonation_warnings(render_ctx: WorldRenderCtx, *, ctx: WorldDrawContext) -> None:
+    """Not native: Bomber (Detonating) monster affix - a pulsing orange ring at
+    the blast radius over the fuse delay before a queued explosion actually
+    goes off (creatures/rarity.py's PendingMonsterDetonation), so it reads as
+    a warning instead of an instant, un-telegraphed hit."""
+    pending = getattr(render_ctx.frame.state, "pending_monster_detonations", None)
+    if not pending:
+        return
+    r, g, b = _BOMBER_WARNING_COLOR
+    for det in pending:
+        fuse_left = clamp(float(det.timer) / float(monster_rarity.BOMBER_FUSE_DELAY_S), 0.0, 1.0)
+        pulse = math.sin(float(rl.get_time()) * 14.0) * 0.5 + 0.5
+        radius = float(det.radius) * ctx.scale
+        if radius <= 1.0:
+            continue
+        center = render_ctx._world_to_screen_with(det.pos, camera=ctx.camera, view_scale=ctx.view_scale)
+        c = rl.Vector2(float(center.x), float(center.y))
+        # Fades in and pulses faster as the fuse runs down, so the last
+        # instant before it goes off reads as urgent.
+        ring_alpha = (0.25 + 0.35 * pulse) * (1.0 - fuse_left * 0.5) * ctx.entity_alpha
+        fill_alpha = 0.06 * (1.0 - fuse_left * 0.5) * ctx.entity_alpha
+        rl.draw_circle_v(c, radius, rl.Color(r, g, b, int(fill_alpha * 255.0)))
+        rl.draw_ring(c, radius - 2.0, radius + 2.0, 0.0, 360.0, 64, rl.Color(r, g, b, int(clamp(ring_alpha, 0.0, 1.0) * 255.0)))
+
+
+_AREA_EFFECT_COLORS = {
+    int(monster_rarity._AreaEffectKind.PYRE): (255, 110, 30),
+    int(monster_rarity._AreaEffectKind.ANCHOR): (160, 70, 220),
+}
+
+
+def draw_pending_area_effect_warnings(render_ctx: WorldRenderCtx, *, ctx: WorldDrawContext) -> None:
+    """Not native: Pyre (Cinderburst) / Anchoring (Gravemark) monster affixes -
+    same fused warning ring as Bomber's while queued; once triggered, a
+    steadier filled zone for as long as the burning field / pull zone is
+    actually live (creatures/rarity.py's PendingMonsterAreaEffect)."""
+    pending = getattr(render_ctx.frame.state, "pending_monster_area_effects", None)
+    if not pending:
+        return
+    for effect in pending:
+        r, g, b = _AREA_EFFECT_COLORS.get(int(effect.kind), _BOMBER_WARNING_COLOR)
+        radius = float(effect.radius) * ctx.scale
+        if radius <= 1.0:
+            continue
+        center = render_ctx._world_to_screen_with(effect.pos, camera=ctx.camera, view_scale=ctx.view_scale)
+        c = rl.Vector2(float(center.x), float(center.y))
+        if not effect.triggered:
+            pulse = math.sin(float(rl.get_time()) * 14.0) * 0.5 + 0.5
+            ring_alpha = (0.25 + 0.35 * pulse) * ctx.entity_alpha
+            fill_alpha = 0.06 * ctx.entity_alpha
+        else:
+            # Live and persisting - a steadier, more solid fill than the
+            # pre-trigger warning pulse.
+            ring_alpha = 0.5 * ctx.entity_alpha
+            fill_alpha = 0.16 * ctx.entity_alpha
+        rl.draw_circle_v(c, radius, rl.Color(r, g, b, int(fill_alpha * 255.0)))
+        rl.draw_ring(c, radius - 2.0, radius + 2.0, 0.0, 360.0, 64, rl.Color(r, g, b, int(clamp(ring_alpha, 0.0, 1.0) * 255.0)))
 
 
 _WARBANNER_COLOR = (255, 225, 90)

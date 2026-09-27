@@ -497,7 +497,7 @@ def creature_apply_damage(
     if creature.rarity:
         from .rarity import monster_affix_on_hit
 
-        resist = monster_affix_on_hit(creature, int(ctx.damage_type), float(ctx.damage))
+        resist = monster_affix_on_hit(creature, int(ctx.damage_type), float(ctx.damage), impulse=ctx.impulse)
         if resist != 1.0:
             ctx.damage = f32(float(ctx.damage) * resist)
 
@@ -595,6 +595,13 @@ def creature_apply_damage(
     )
     if leech_shooter is not None and not ctx.owner.via_impale:
         relic_leech.heal_on_hit(leech_shooter, float(ctx.damage))
+
+    # Not native: sandbox mode damage dummy (creatures/dummy.py) - records the
+    # final, fully-resolved hit for the damage/dps/last-hit floating text.
+    if creature.is_test_dummy:
+        from .dummy import dummy_on_hit
+
+        dummy_on_hit(creature, float(ctx.damage))
 
     creature.hp = x87_pc24_sub(creature.hp, ctx.damage)
     creature.vel = Vec2(

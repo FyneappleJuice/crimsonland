@@ -227,6 +227,37 @@ def test_perks_update_effects_jinxed_default_skips_dead_players_without_extra_pi
     ]
 
 
+def test_perks_update_effects_jinxed_reaches_slots_past_the_old_384_cap() -> None:
+    # Regression: pool_mod used to be min(0x180, len(creatures)), so a bigger
+    # real creature pool (CREATURE_POOL_SIZE > 384) left slots 384+ completely
+    # unreachable by this perk. Owner-approved parity break - it should now
+    # scan the whole pool, whatever size it is.
+    dt = 0.2
+    creatures = [CreatureState() for _ in range(500)]
+    creatures[499].active = True
+    creatures[499].hp = 100.0
+    creatures[499].lifecycle_stage = 16.0
+    creatures[499].reward_value = 12.7
+
+    state = GameplayState()
+    state.rng = ScriptedCrand(
+        [
+            0,  # accident roll: rand%10 != 3
+            0,  # timer roll: (rand%0x14)*0.1
+            499,  # creature index: rand%500
+        ],
+        fallback=ScriptedCrand.Fallback.REPEAT_LAST,
+    )
+
+    player = PlayerState(index=0, pos=Vec2(10.0, 20.0), experience=100, health=50.0)
+    player.perk_counts[int(PerkId.JINXED)] = 1
+
+    perks_update_effects(state, [player], dt, creatures=creatures)
+
+    assert creatures[499].hp == -1.0
+    assert player.experience == 112
+
+
 def test_perks_update_effects_jinxed_default_uses_full_384_slot_pool() -> None:
     dt = 0.2
     creatures = [CreatureState() for _ in range(0x180)]

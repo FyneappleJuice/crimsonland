@@ -294,9 +294,12 @@ class PlayGameMenuView(PanelMenuView):
                 ),
                 _PlayGameModeEntry(
                     key="maps",
-                    label=" Maps  ",
-                    tooltip="Roll a randomized map with a guaranteed boss.",
-                    action="open_maps",
+                    label="Sandbox",
+                    tooltip="A quiet testing ground - place test dummies,\ngrant perks/relics/weapons on demand.",
+                    # Not native: jumps straight into the sandbox session -
+                    # no map-select screen to click through first (see
+                    # modes/maps_mode.py's SandboxSessionRuntime).
+                    action="start_maps",
                 ),
             ],
         )

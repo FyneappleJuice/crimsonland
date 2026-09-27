@@ -75,6 +75,23 @@ def test_plan_hit_sfx_no_skip_when_tune_started() -> None:
     ]
 
 
+def test_plan_hit_sfx_never_triggers_in_maps_sandbox_mode() -> None:
+    # Not native: Maps is now the sandbox testing ground - exempted the same
+    # way Rush already is, so hitting a test dummy/monster never kicks off
+    # the combat music track.
+    rng = ScriptedCrand(0, fallback=ScriptedCrand.Fallback.REPEAT_LAST)
+    trigger_game_tune, keys = plan_hit_sfx(
+        _hits(2),
+        game_mode=GameMode.MAPS,
+        demo_mode_active=False,
+        game_tune_started=False,
+        rng=rng,
+    )
+
+    assert trigger_game_tune is False
+    assert keys == [SfxId.BULLET_HIT_01, SfxId.BULLET_HIT_01]
+
+
 def test_arc_gun_emits_no_per_shot_fire_sound() -> None:
     player = PlayerState(index=0, pos=Vec2(0.0, 0.0))
     player.weapon.weapon_id = WeaponId.RAYGUN

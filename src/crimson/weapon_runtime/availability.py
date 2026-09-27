@@ -43,10 +43,15 @@ _FORK_ROSTER_WEAPON_IDS: tuple[WeaponId, ...] = (WeaponId.TENET_GUN,)
 #   - Spider Plasma is an enemy-only weapon stat block (the Spider Plasma
 #     Shooter creature's own attack, weapons.py:505) - never meant to be a
 #     player pickup at all.
+#   - Acid Lob (weapons.py:55) is the Acid Lob monster affix's own projectile
+#     stat block (creatures/rarity.py) - never meant to be a player pickup;
+#     its id also sits well outside WEAPON_DROP_ID_COUNT so this is purely
+#     documentation, same as Spider Plasma above.
 _NON_PLAYER_WEAPON_IDS: tuple[WeaponId, ...] = (
     WeaponId.SHRINKIFIER_5K,
     WeaponId.BLADE_GUN,
     WeaponId.SPIDER_PLASMA,
+    WeaponId.ACID_LOB,
 )
 
 # Rewrite-only: weapons shelved out of the active roster while the crit/build

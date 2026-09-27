@@ -282,6 +282,42 @@ def test_spawn_slot_update_uses_random_heading_sentinel(mocker) -> None:
     spawn_plan.assert_called_once()
 
 
+def test_rarity_tagged_den_passes_its_tier_down_to_its_children() -> None:
+    # Not native: a Den (see creatures/spawn.py's build_survival_den_plan)
+    # that rolled a rarity tier should stamp every child it births with the
+    # same tier, end to end through the real spawn-slot tick - not mocked.
+    state = GameplayState()
+    state.rng = Crand(1)
+    env = SpawnEnv(
+        terrain_width=1024.0, terrain_height=1024.0, demo_mode_active=True,
+        hardcore=False, quest_fail_retry_count=0,
+    )
+    pool = CreaturePool(env=env)
+
+    owner = pool.entries[0]
+    owner.active = True
+    owner.hp = 100.0
+    owner.lifecycle_stage = CREATURE_LIFECYCLE_ALIVE
+    owner.flags = HAS_SPAWN_SLOT_FLAG
+    owner.pos = Vec2(200.0, 300.0)
+    owner.spawn_slot_index = 0
+    owner.rarity = 3  # Apex
+
+    pool.spawn_slots.append(
+        SpawnSlotInit(
+            owner_creature=0, timer=0.0, count=0, limit=1, interval=1.0,
+            child_template_id=SpawnId.ALIEN_RANDOM_1D,
+        ),
+    )
+    player = PlayerState(index=0, pos=Vec2(512.0, 512.0), weapon=WeaponSlot(weapon_id=WeaponId.ASSAULT_RIFLE))
+
+    pool.update(1.0 / 60.0, options=make_creature_update_options(state=state, players=[player], env=env))
+
+    children = [e for e in pool.entries if e.active and e is not owner and e.rarity > 0]
+    assert children
+    assert children[0].rarity == 3
+
+
 def test_spawn_slot_update_requires_spawner_flag() -> None:
     state = GameplayState()
     env = SpawnEnv(

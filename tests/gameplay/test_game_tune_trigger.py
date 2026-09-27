@@ -73,6 +73,29 @@ def test_game_tune_not_triggered_in_rush_mode(mocker) -> None:
     ]
 
 
+def test_game_tune_not_triggered_in_maps_sandbox_mode(mocker) -> None:
+    # Not native: Maps is now the sandbox testing ground - exempted the same
+    # way Rush already is, so plinking a test dummy/monster never kicks off
+    # the combat music track.
+    trigger_game_tune = mocker.patch.object(audio_router, "trigger_game_tune", return_value="gt1_ingame")
+    play_sfx = mocker.patch.object(audio_router, "play_sfx")
+    router = AudioRouter(audio=_audio_state_stub(), audio_rng=Crand(0xBEEF))
+    rng = ScriptedCrand(0, fallback=ScriptedCrand.Fallback.REPEAT_LAST)
+
+    router.play_hit_sfx(
+        _hits(2),
+        game_mode=GameMode.MAPS,
+        rng=rng,
+        beam_types=frozenset(),
+    )
+
+    trigger_game_tune.assert_not_called()
+    assert play_sfx.call_args_list == [
+        call(router.audio, SfxId.BULLET_HIT_01, reflex_boost_timer=0.0),
+        call(router.audio, SfxId.BULLET_HIT_01, reflex_boost_timer=0.0),
+    ]
+
+
 def test_game_tune_not_triggered_in_demo(mocker) -> None:
     trigger_game_tune = mocker.patch.object(audio_router, "trigger_game_tune", return_value="gt1_ingame")
     play_sfx = mocker.patch.object(audio_router, "play_sfx")

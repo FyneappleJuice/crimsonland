@@ -67,6 +67,7 @@ from ..weapons import weapon_entry_for_projectile_type_id
 from .ai import creature_ai7_tick_link_timer, creature_ai_update_target
 from .damage_runtime import CreatureDamageRuntime
 from .damage_types import CreatureDamageType
+from .dummy import sandbox_keep_corpse
 from .ignite import ignite_tick
 from .lifecycle import (
     CREATURE_LIFECYCLE_ALIVE,
@@ -102,7 +103,16 @@ __all__ = [
 ]
 
 
-CREATURE_POOL_SIZE = 0x180
+# Not native: the original engine's creature array was a fixed 0x180 (384)
+# slots - raised here so more creatures can be alive at once in a long
+# Survival run instead of spawns silently dropping past 384. The other
+# native-ported call sites that used to hardcode 0x180 directly
+# (creature_find_nearest's search cap in projectiles/runtime/collision.py,
+# the Jinxed perk's target-pick modulo, a couple of presentation-step
+# iteration bounds) were updated to scan the real pool size instead -
+# an intentional, owner-approved parity break, not an oversight. Retune by
+# feel/performance - this is an experiment, not a final number.
+CREATURE_POOL_SIZE = 0x300
 
 CONTACT_DAMAGE_PERIOD = 0.5
 
@@ -455,6 +465,55 @@ class CreatureState(msgspec.Struct):
     affix_lunge_timer: float = 0.0
     affix_lunge_active: float = 0.0
     affix_lob_timer: float = 0.0
+    # Rewrite-only: precomputed once per tick in update_monster_affixes,
+    # folding in every "nearby ally reduces damage taken" source (Warding
+    # Ground / Vanguard aura / Phalanx) so monster_affix_on_hit can just read
+    # a single number instead of re-scanning the pool on every hit.
+    affix_incoming_damage_mult: float = 1.0
+    # Rewrite-only: Growth aura / Soul Eater - permanent stack counts, each
+    # incremented once per qualifying nearby ally death (apply_monster_death_affixes).
+    affix_growth_stacks: int = 0
+    affix_soul_stacks: int = 0
+    # Rewrite-only: Growth/Soul Eater need an unscaled baseline to multiply
+    # from each tick, same role as affix_base_move_speed/affix_base_contact_damage.
+    affix_base_size: float = 0.0
+    # Rewrite-only: Flickering (Phasing) - counts down to the next invuln
+    # window; affix_flicker_active > 0 while it's actually untouchable.
+    affix_flicker_timer: float = 0.0
+    affix_flicker_active: float = 0.0
+    # Rewrite-only: Second Wind (Undying) - consumed once; while healing,
+    # drips affix_second_wind_heal_remaining over affix_second_wind_heal_timer.
+    affix_second_wind_used: bool = False
+    affix_second_wind_heal_remaining: float = 0.0
+    affix_second_wind_heal_timer: float = 0.0
+    # Rewrite-only: Inevitability (Timed) - counts down; at 0, full heal +
+    # gains a fresh modifier and resets.
+    affix_inevitability_timer: float = 0.0
+    # Rewrite-only: Endurance (Stalwart) - while > 0, this window's one
+    # damage-capped hit has already been spent.
+    affix_endurance_window: float = 0.0
+
+    # Rewrite-only: Sandbox mode damage dummy (creatures/dummy.py). Spawned
+    # with huge health so it never realistically dies - no invulnerability
+    # flag needed anywhere in the damage pipeline. `dummy_damage_total`/
+    # `dummy_last_hit_amount` reset to 0 after `dummy_no_hit_timer` crosses
+    # DUMMY_DAMAGE_RESET_S with no hits. `dummy_streak_elapsed_s` accumulates
+    # real seconds every tick a streak is live (creatures/dummy.py's
+    # update_test_dummies); `dummy_last_hit_elapsed_s` snapshots that value at
+    # the moment of the most recent hit, freezing the dps denominator there
+    # instead of letting it keep growing after the streak goes quiet.
+    is_test_dummy: bool = False
+    dummy_damage_total: float = 0.0
+    dummy_last_hit_amount: float = 0.0
+    dummy_streak_elapsed_s: float = 0.0
+    dummy_last_hit_elapsed_s: float = 0.0
+    dummy_no_hit_timer: float = 0.0
+    # Rewrite-only: sandbox test entities (both the damage dummy above and
+    # the stationary 1hp test monster) set this so a death - if one ever
+    # happens - skips the corpse-fade animation entirely, via the same
+    # keep_corpse=False lever native already uses for "no corpse" kills
+    # (see CreaturePool.handle_death / on_creature_lethal call sites).
+    sandbox_no_corpse: bool = False
 
     # Rewrite-only: Cold Snap freezes the target on a crit (weapon_runtime/
     # crit.py, projectiles/runtime/projectile_pool.py). > 0 blocks movement.
@@ -563,9 +622,14 @@ class _CreatureInteractionCreatureDamageRuntime(CreatureDamageRuntime):
         resolve_damage_followup: Callable[[], tuple[SfxId, ...]],
     ) -> None:
         ctx = self.ctx
+        idx = int(creature_index)
+        # Not native: sandbox mode test entities never keep a corpse, and the
+        # stationary test monster queues its own 5s respawn here - see
+        # creatures/dummy.py.
+        keep_corpse = sandbox_keep_corpse(ctx.pool.entries, idx, ctx.state)
         ctx.deaths.append(
             ctx.pool.handle_death(
-                int(creature_index),
+                idx,
                 state=ctx.state,
                 players=ctx.players,
                 rng=ctx.rng,
@@ -574,6 +638,7 @@ class _CreatureInteractionCreatureDamageRuntime(CreatureDamageRuntime):
                 world_width=float(ctx.world_width),
                 world_height=float(ctx.world_height),
                 fx_queue=ctx.fx_queue,
+                keep_corpse=keep_corpse,
             ),
         )
         ctx.sfx.extend(resolve_damage_followup())
@@ -600,9 +665,14 @@ class _CreaturePoolCreatureDamageRuntime(CreatureDamageRuntime):
         creature_index: int,
         resolve_damage_followup: Callable[[], tuple[SfxId, ...]],
     ) -> None:
+        idx = int(creature_index)
+        # Not native: sandbox mode test entities never keep a corpse, and the
+        # stationary test monster queues its own 5s respawn here - see
+        # creatures/dummy.py.
+        keep_corpse = sandbox_keep_corpse(self.pool.entries, idx, self.state)
         self.deaths.append(
             self.pool.handle_death(
-                int(creature_index),
+                idx,
                 state=self.state,
                 players=self.players,
                 rng=self.rng,
@@ -611,6 +681,7 @@ class _CreaturePoolCreatureDamageRuntime(CreatureDamageRuntime):
                 world_width=float(self.world_width),
                 world_height=float(self.world_height),
                 fx_queue=self.fx_queue,
+                keep_corpse=keep_corpse,
             ),
         )
         self.sfx.extend(resolve_damage_followup())
@@ -1519,14 +1590,40 @@ class CreaturePool:
                         if int(slot.owner_creature) == int(idx):
                             child_template_id = tick_spawn_slot(slot, dt)
                             if child_template_id is not None:
-                                mapping, _ = self.spawn_template(
-                                    child_template_id,
-                                    creature.pos,
-                                    float(RANDOM_HEADING_SENTINEL),
-                                    rng,
-                                    env=spawn_env,
-                                    detail_preset=int(detail_preset),
-                                )
+                                den_rarity = int(creature.rarity)
+                                if den_rarity > 0:
+                                    # Not native: a rarity-tagged Den (see
+                                    # creatures/spawn.py's build_survival_den_plan)
+                                    # passes its own tier down to every child it
+                                    # births - roll the plan first, mutate the
+                                    # child's CreatureInit, then materialize.
+                                    from . import rarity as _rarity
+
+                                    plan = build_spawn_plan(
+                                        child_template_id,
+                                        creature.pos,
+                                        float(RANDOM_HEADING_SENTINEL),
+                                        rng,
+                                        spawn_env,
+                                    )
+                                    if 0 <= plan.primary < len(plan.creatures):
+                                        _rarity.apply_rarity(
+                                            plan.creatures[plan.primary],
+                                            tier=den_rarity,
+                                            player_experience=int(players[0].experience) if players else 0,
+                                        )
+                                    mapping, _ = self.spawn_plan(
+                                        plan, rng=rng, detail_preset=int(detail_preset),
+                                    )
+                                else:
+                                    mapping, _ = self.spawn_template(
+                                        child_template_id,
+                                        creature.pos,
+                                        float(RANDOM_HEADING_SENTINEL),
+                                        rng,
+                                        env=spawn_env,
+                                        detail_preset=int(detail_preset),
+                                    )
                                 spawned.extend(mapping)
 
             if (
@@ -1806,6 +1903,24 @@ class CreaturePool:
         entry.affix_lunge_timer = 0.0
         entry.affix_lunge_active = 0.0
         entry.affix_lob_timer = 0.0
+        entry.affix_incoming_damage_mult = 1.0
+        entry.affix_growth_stacks = 0
+        entry.affix_soul_stacks = 0
+        entry.affix_base_size = 0.0
+        entry.affix_flicker_timer = 0.0
+        entry.affix_flicker_active = 0.0
+        entry.affix_second_wind_used = False
+        entry.affix_second_wind_heal_remaining = 0.0
+        entry.affix_second_wind_heal_timer = 0.0
+        entry.affix_inevitability_timer = 0.0
+        entry.affix_endurance_window = 0.0
+        entry.is_test_dummy = bool(getattr(init, "is_test_dummy", False))
+        entry.dummy_damage_total = 0.0
+        entry.dummy_last_hit_amount = 0.0
+        entry.dummy_streak_elapsed_s = 0.0
+        entry.dummy_last_hit_elapsed_s = 0.0
+        entry.dummy_no_hit_timer = 0.0
+        entry.sandbox_no_corpse = bool(getattr(init, "sandbox_no_corpse", False))
         entry.crit_freeze_timer = 0.0
         entry.is_frozen = False
         relic_impaler.clear(entry)

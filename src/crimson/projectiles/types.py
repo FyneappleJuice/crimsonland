@@ -35,6 +35,10 @@ class ProjectileTemplateId(IntEnum):
     PLAGUE_SPREADER = 0x29
     RAINBOW_GUN = 0x2B
     FIRE_BULLETS = 0x2D
+    # Rewrite-only: Acid Lob affix (creatures/rarity.py) - past the native
+    # table, same as Tenet Gun (weapons.py's WeaponId.TENET_GUN=54) reusing
+    # the pattern for project-added content with no native slot to borrow.
+    ACID_LOB = 0x37
 
 
 # Rewrite-only: templates that deal CreatureDamageType.PLASMA instead of BULLET.

@@ -280,7 +280,10 @@ class ParticlePool:
 
             if creatures is None or limit <= 0:
                 return []
-            max_index = min(len(creatures), 0x180)
+            # Not native: was capped at the original engine's fixed 384-slot
+            # array (0x180) - now scans the real (possibly larger) pool.
+            # Owner-approved parity break.
+            max_index = len(creatures)
             radius = f32(float(radius))
             found: list[int] = []
 

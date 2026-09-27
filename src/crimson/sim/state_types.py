@@ -233,6 +233,11 @@ class PlayerState(msgspec.Struct):
     # own LEECH_HEAL_DURATION-second timer.
     leech_pending_heal: list[float] = msgspec.field(default_factory=list)
     leech_pending_timers: list[float] = msgspec.field(default_factory=list)
+    # Rewrite-only: Acid Lob monster affix (creatures/rarity.py) - the inverse
+    # of leech_pending_heal/leech_pending_timers above: one entry per hit that
+    # landed, its total damage and seconds left to drain it over.
+    acid_dot_pending_damage: list[float] = msgspec.field(default_factory=list)
+    acid_dot_pending_timers: list[float] = msgspec.field(default_factory=list)
     # Rewrite-only: War Banner relic (meta/relics_impl/warbanner.py) - where
     # each level up planted a banner; kept for the whole run.
     warbanner_positions: list[Vec2] = msgspec.field(default_factory=list)

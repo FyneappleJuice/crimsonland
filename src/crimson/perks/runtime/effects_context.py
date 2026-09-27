@@ -23,7 +23,10 @@ def creature_find_in_radius(creatures: Sequence[CreatureState], *, pos: Vec2, ra
     """
 
     start_index = max(0, int(start_index))
-    max_index = min(len(creatures), 0x180)
+    # Not native: was capped at the original engine's fixed 384-slot array
+    # (0x180) - now scans the real (possibly larger) pool. Owner-approved
+    # parity break.
+    max_index = len(creatures)
     if start_index >= max_index:
         return -1
 

@@ -47,7 +47,10 @@ def creature_find_nearest_alive(
 
     best_idx = -1
     best_distance = f32(1_000_000.0)
-    max_index = min(len(creatures), 0x180)
+    # Not native: was capped at the original engine's fixed 384-slot array
+    # (0x180) - now scans the real (possibly larger) pool. Owner-approved
+    # parity break.
+    max_index = len(creatures)
     for idx in range(max_index):
         creature = creatures[idx]
         if not creature.active:
@@ -79,7 +82,10 @@ def creature_find_nearest_active(
     best_idx = -1
     best_distance = f32(1_000_000.0)
     minimum_distance = f32(min_dist)
-    max_index = min(len(creatures), 0x180)
+    # Not native: was capped at the original engine's fixed 384-slot array
+    # (0x180) - now scans the real (possibly larger) pool. Owner-approved
+    # parity break.
+    max_index = len(creatures)
     for idx in range(max_index):
         creature = creatures[idx]
         if not creature.active or idx == int(exclude_id):

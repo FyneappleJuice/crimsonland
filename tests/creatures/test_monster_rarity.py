@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+
 import pytest
 
 from crimson.creatures import rarity as R
@@ -426,3 +428,359 @@ def test_native_variant_path_is_unchanged_when_disabled(monkeypatch: pytest.Monk
     c = build_survival_spawn_creature(Vec2(1.0, 2.0), Crand(0x66), player_experience=0)
     assert c.rarity == 0
     assert c.health == pytest.approx(65.0)  # native red variant
+
+
+def test_acid_lob_fires_toward_the_player_not_rotated_90_degrees() -> None:
+    """Regression test: the fired angle used to be a raw atan2(dy, dx), but
+    this codebase's projectile movement always reads angle - HALF_PI as the
+    actual travel direction (see projectile_pool.py's step()), so the shot
+    flew 90 degrees off from the player it was aimed at."""
+    import math
+
+    from crimson.math_parity import NATIVE_HALF_PI
+    from crimson.projectiles.runtime.projectile_pool import ProjectilePool
+    from crimson.projectiles.types import ProjectileTemplateId
+
+    creature = CreatureState(
+        active=True, hp=1000.0, max_hp=1000.0, rarity=1, affixes=(R.AffixId.ACID_LOB,), pos=Vec2(0.0, 0.0),
+    )
+    pool = _AffixPool([creature])
+    player = PlayerState(index=0, pos=Vec2(100.0, 50.0))
+
+    class _State:
+        def __init__(self) -> None:
+            self.projectiles = ProjectilePool()
+
+    state = _State()
+    R.update_monster_affixes([player], pool, 0.016, state=state)
+    spawned = state.projectiles.iter_active()
+    assert len(spawned) == 1
+    proj = spawned[0]
+    assert proj.type_id == ProjectileTemplateId.ACID_LOB
+    expected_angle = math.atan2(50.0, 100.0) + NATIVE_HALF_PI
+    assert proj.angle == pytest.approx(expected_angle)
+
+
+def test_hatch_death_children_are_buffed_from_the_original_weak_stats() -> None:
+    creature = CreatureState(
+        active=True, hp=0.0, max_hp=100.0, rarity=2, affixes=(R.AffixId.HATCHING,),
+        pos=Vec2(10.0, 20.0), move_speed=1.0,
+    )
+
+    class _Pool:
+        def __init__(self) -> None:
+            self._entries = [CreatureState(active=False) for _ in range(8)]
+            self.spawned_count = 0
+
+        def _alloc_slot(self):
+            for i, e in enumerate(self._entries):
+                if not e.active:
+                    return i
+            return None
+
+    pool = _Pool()
+    R.apply_monster_death_affixes(
+        pool, 0, creature,
+        state=object(), players=[], rng=None, detail_preset=5,
+        world_width=1000.0, world_height=1000.0,
+    )
+    children = [e for e in pool._entries if e.active]
+    assert len(children) == R.HATCHING_COUNT
+    for child in children:
+        assert child.hp == pytest.approx(45.0)
+        assert child.max_hp == pytest.approx(45.0)
+        assert child.size == pytest.approx(38.0)
+        assert child.contact_damage == pytest.approx(8.0)
+
+
+def test_bomber_death_queues_a_delayed_detonation_instead_of_an_instant_one() -> None:
+    from crimson.gameplay import GameplayState
+
+    creature = CreatureState(
+        active=True, hp=0.0, max_hp=100.0, rarity=2, affixes=(R.AffixId.DETONATING,), pos=Vec2(50.0, 50.0),
+    )
+    state = GameplayState()
+    player = PlayerState(index=0, pos=Vec2(50.0, 60.0), health=100.0)
+
+    R.apply_monster_death_affixes(
+        object(), 0, creature,
+        state=state, players=[player], rng=None, detail_preset=5,
+        world_width=1000.0, world_height=1000.0,
+    )
+
+    # No instant damage - the blast is fused, not immediate.
+    assert player.health == pytest.approx(100.0)
+    assert len(state.pending_monster_detonations) == 1
+    det = state.pending_monster_detonations[0]
+    assert det.timer == pytest.approx(R.BOMBER_FUSE_DELAY_S)
+    assert det.player_damage == pytest.approx(R.VOLATILE_DAMAGE * R.BOMBER_DAMAGE_MULT)
+    assert det.creature_damage == pytest.approx(R.VOLATILE_DAMAGE * R.BOMBER_DAMAGE_MULT)
+
+
+def test_monster_display_name_has_no_prefix_suffix_cap() -> None:
+    # Not native: the mechanical prefix/suffix split is gone - every "before"
+    # word and every "of X" word shows, however many are rolled.
+    name = R.monster_display_name(
+        "zombie",
+        (R.AffixId.OVERGROWN, R.AffixId.HASTED, R.AffixId.ARMORED, R.AffixId.FLAME_WARDED),
+    )
+    assert name == "Brood-Fed Rampant Zombie of Plating of Warding"
+
+
+def test_turtle_resists_a_front_hit_but_not_a_flanked_one() -> None:
+    creature = CreatureState(active=True, hp=1000.0, max_hp=1000.0, rarity=1, affixes=(R.AffixId.SHELLED,), heading=0.0)
+    # front-facing direction = heading - HALF_PI; a hit whose impulse points
+    # the opposite way (i.e. the shooter was roughly in front of it) should
+    # be resisted.
+    from crimson.math_parity import NATIVE_HALF_PI
+
+    front_angle = 0.0 - NATIVE_HALF_PI
+    front_impulse = Vec2(-math.cos(front_angle), -math.sin(front_angle))
+    mult = R.monster_affix_on_hit(creature, int(CreatureDamageType.BULLET), 100.0, impulse=front_impulse)
+    assert mult == pytest.approx(R.TURTLE_FRONT_RESIST_MULT)
+
+    flank_impulse = Vec2(-math.cos(front_angle + math.pi / 2.0), -math.sin(front_angle + math.pi / 2.0))
+    mult = R.monster_affix_on_hit(creature, int(CreatureDamageType.BULLET), 100.0, impulse=flank_impulse)
+    assert mult == pytest.approx(1.0)
+
+
+def test_endurance_caps_only_the_first_hit_in_each_window() -> None:
+    creature = CreatureState(active=True, hp=1000.0, max_hp=1000.0, rarity=2, affixes=(R.AffixId.ENDURANCE,))
+    first = R.monster_affix_on_hit(creature, int(CreatureDamageType.BULLET), 50.0)
+    assert first * 50.0 == pytest.approx(R.ENDURANCE_CAP_DAMAGE)
+    assert creature.affix_endurance_window == pytest.approx(R.ENDURANCE_WINDOW_S)
+
+    second = R.monster_affix_on_hit(creature, int(CreatureDamageType.BULLET), 50.0)
+    assert second == pytest.approx(1.0)
+
+    creature.affix_endurance_window = 0.0
+    third = R.monster_affix_on_hit(creature, int(CreatureDamageType.BULLET), 50.0)
+    assert third * 50.0 == pytest.approx(R.ENDURANCE_CAP_DAMAGE)
+
+
+def test_flickering_is_fully_invulnerable_during_its_window() -> None:
+    creature = CreatureState(active=True, hp=1000.0, max_hp=1000.0, rarity=3, affixes=(R.AffixId.FLICKERING,))
+    creature.affix_flicker_active = 0.5
+    assert R.monster_affix_on_hit(creature, int(CreatureDamageType.BULLET), 999.0) == 0.0
+
+    creature.affix_flicker_active = 0.0
+    assert R.monster_affix_on_hit(creature, int(CreatureDamageType.BULLET), 999.0) == pytest.approx(1.0)
+
+
+def test_flickering_cycles_through_telegraph_and_active_windows() -> None:
+    creature = CreatureState(active=True, hp=1000.0, max_hp=1000.0, rarity=3, affixes=(R.AffixId.FLICKERING,))
+    pool = _AffixPool([creature])
+
+    R.update_monster_affixes([], pool, R.FLICKER_INTERVAL_S, state=object())
+    assert creature.affix_flicker_active == pytest.approx(R.FLICKER_DURATION_S)
+
+    R.update_monster_affixes([], pool, R.FLICKER_DURATION_S + 0.01, state=object())
+    assert creature.affix_flicker_active == 0.0
+    assert creature.affix_flicker_timer == pytest.approx(R.FLICKER_INTERVAL_S)
+
+
+def test_second_wind_saves_the_creature_once_then_heals_over_time() -> None:
+    creature = CreatureState(active=True, hp=10.0, max_hp=100.0, rarity=3, affixes=(R.AffixId.SECOND_WIND,))
+    mult = R.monster_affix_on_hit(creature, int(CreatureDamageType.BULLET), 500.0)
+    creature.hp = max(0.0, creature.hp - 500.0 * mult)
+
+    assert creature.hp == pytest.approx(1.0)
+    assert creature.affix_second_wind_used is True
+    assert creature.affix_second_wind_heal_remaining == pytest.approx(100.0 * R.SECOND_WIND_HEAL_FRACTION)
+
+    # It's a one-time save - the next lethal hit isn't clamped.
+    mult_again = R.monster_affix_on_hit(creature, int(CreatureDamageType.BULLET), 500.0)
+    assert mult_again == pytest.approx(1.0)
+
+    pool = _AffixPool([creature])
+    R.update_monster_affixes([], pool, R.SECOND_WIND_HEAL_DURATION_S, state=object())
+    assert creature.hp == pytest.approx(1.0 + 100.0 * R.SECOND_WIND_HEAL_FRACTION)
+    assert creature.affix_second_wind_heal_timer == 0.0
+
+
+def test_inevitability_fully_heals_and_grants_a_new_modifier_after_the_interval() -> None:
+    creature = CreatureState(
+        active=True, hp=1.0, max_hp=500.0, rarity=3, affixes=(R.AffixId.INEVITABILITY,),
+    )
+    pool = _AffixPool([creature])
+    player = PlayerState(index=0, pos=Vec2(), experience=50_000)
+
+    R.update_monster_affixes([player], pool, R.INEVITABILITY_INTERVAL_S, state=object())
+
+    assert creature.hp == pytest.approx(500.0)
+    assert len(creature.affixes) == 2
+    gained = creature.affixes[1]
+    assert gained not in R._STATIC_STAT_ONLY_AFFIX_IDS
+    assert creature.affix_inevitability_timer == pytest.approx(R.INEVITABILITY_INTERVAL_S)
+
+
+def test_command_aura_boosts_nearby_allies_contact_damage_not_its_own() -> None:
+    caster = CreatureState(active=True, hp=100.0, max_hp=100.0, rarity=3, affixes=(R.AffixId.COMMAND,), pos=Vec2(0.0, 0.0))
+    ally = CreatureState(active=True, hp=100.0, max_hp=100.0, rarity=1, contact_damage=10.0, pos=Vec2(50.0, 0.0))
+    pool = _AffixPool([caster, ally])
+
+    R.update_monster_affixes([], pool, 0.016, state=object())
+
+    assert ally.contact_damage == pytest.approx(10.0 * (1.0 + R.COMMAND_AURA_CONTACT_BONUS))
+    assert caster.contact_damage == pytest.approx(0.0)  # doesn't buff itself
+
+
+def test_choir_aura_heals_nearby_allies() -> None:
+    caster = CreatureState(active=True, hp=100.0, max_hp=100.0, rarity=3, affixes=(R.AffixId.CHOIR,), pos=Vec2(0.0, 0.0))
+    ally = CreatureState(active=True, hp=50.0, max_hp=200.0, rarity=1, pos=Vec2(50.0, 0.0))
+    pool = _AffixPool([caster, ally])
+
+    R.update_monster_affixes([], pool, 1.0, state=object())
+
+    assert ally.hp == pytest.approx(50.0 + 200.0 * R.CHOIR_AURA_HEAL_FRAC_PER_S)
+
+
+def test_vanguard_and_warding_ground_reduce_incoming_damage_for_nearby_allies() -> None:
+    warder = CreatureState(
+        active=True, hp=100.0, max_hp=100.0, rarity=2, affixes=(R.AffixId.WARDING_GROUND,), pos=Vec2(0.0, 0.0),
+    )
+    guardian = CreatureState(
+        active=True, hp=100.0, max_hp=100.0, rarity=3, affixes=(R.AffixId.VANGUARD,), pos=Vec2(0.0, 0.0),
+    )
+    ally = CreatureState(active=True, hp=100.0, max_hp=100.0, rarity=1, pos=Vec2(50.0, 0.0))
+    pool = _AffixPool([warder, guardian, ally])
+
+    R.update_monster_affixes([], pool, 0.016, state=object())
+
+    assert ally.affix_incoming_damage_mult == pytest.approx(R.WARDING_GROUND_MULT * R.VANGUARD_AURA_MULT)
+    mult = R.monster_affix_on_hit(ally, int(CreatureDamageType.BULLET), 100.0)
+    assert mult == pytest.approx(R.WARDING_GROUND_MULT * R.VANGUARD_AURA_MULT)
+
+
+def test_phalanx_reduces_damage_per_nearby_linked_ally_up_to_the_cap() -> None:
+    a = CreatureState(active=True, hp=100.0, max_hp=100.0, rarity=2, affixes=(R.AffixId.PHALANX,), pos=Vec2(0.0, 0.0))
+    b = CreatureState(active=True, hp=100.0, max_hp=100.0, rarity=2, affixes=(R.AffixId.PHALANX,), pos=Vec2(10.0, 0.0))
+    c = CreatureState(active=True, hp=100.0, max_hp=100.0, rarity=2, affixes=(R.AffixId.PHALANX,), pos=Vec2(20.0, 0.0))
+    pool = _AffixPool([a, b, c])
+
+    R.update_monster_affixes([], pool, 0.016, state=object())
+
+    # `a` has 2 other Phalanx allies nearby -> -20%.
+    assert a.affix_incoming_damage_mult == pytest.approx(1.0 - 2 * R.PHALANX_REDUCTION_PER_ALLY)
+
+
+def test_growth_and_soul_eater_stack_off_a_nearby_ally_death() -> None:
+    dying = CreatureState(active=True, hp=0.0, max_hp=50.0, rarity=1, pos=Vec2(0.0, 0.0))
+    grower = CreatureState(
+        active=True, hp=100.0, max_hp=100.0, rarity=3, affixes=(R.AffixId.GROWTH,), pos=Vec2(10.0, 0.0),
+    )
+    reaper = CreatureState(
+        active=True, hp=100.0, max_hp=100.0, rarity=3, affixes=(R.AffixId.SOULS,), pos=Vec2(10.0, 0.0),
+    )
+    pool = _AffixPool([dying, grower, reaper])
+
+    R.apply_monster_death_affixes(
+        pool, 0, dying, state=object(), players=[], rng=None, detail_preset=5,
+        world_width=1000.0, world_height=1000.0,
+    )
+
+    assert grower.affix_growth_stacks == 1
+    assert grower.max_hp == pytest.approx(100.0 * (1.0 + R.GROWTH_HP_BONUS_PER_STACK))
+    assert grower.hp == pytest.approx(100.0 * (1.0 + R.GROWTH_HP_BONUS_PER_STACK))
+    assert reaper.affix_soul_stacks == 1
+
+
+def test_dread_static_and_gluttony_auras_affect_nearby_players() -> None:
+    from crimson.gameplay import GameplayState
+
+    state = GameplayState()
+    state.bonuses.freeze = 5.0
+    player = PlayerState(index=0, pos=Vec2(0.0, 0.0))
+    player.weapon.reload_timer = 2.0
+    dread = CreatureState(active=True, hp=100.0, max_hp=100.0, rarity=3, affixes=(R.AffixId.DREAD,), pos=Vec2(0.0, 0.0))
+    static = CreatureState(active=True, hp=100.0, max_hp=100.0, rarity=3, affixes=(R.AffixId.STATIC,), pos=Vec2(0.0, 0.0))
+    gluttony = CreatureState(
+        active=True, hp=100.0, max_hp=100.0, rarity=4, affixes=(R.AffixId.GLUTTONY,), pos=Vec2(0.0, 0.0),
+    )
+    pool = _AffixPool([dread, static, gluttony])
+    start_spread = float(player.spread_heat)
+    start_reload = float(player.weapon.reload_timer)
+
+    R.update_monster_affixes([player], pool, 1.0, state=state)
+
+    assert float(player.spread_heat) > start_spread
+    assert float(player.weapon.reload_timer) > start_reload
+    # update_monster_affixes only applies Gluttony's *extra* drain here - the
+    # base 1x decay happens separately in bonuses/update.py.
+    assert state.bonuses.freeze == pytest.approx(5.0 - R.GLUTTONY_EXTRA_DECAY_MULT)
+
+
+def test_vortex_pulls_the_player_toward_it() -> None:
+    creature = CreatureState(active=True, hp=100.0, max_hp=100.0, rarity=3, affixes=(R.AffixId.VORTEX,), pos=Vec2(0.0, 0.0))
+    player = PlayerState(index=0, pos=Vec2(100.0, 0.0))
+    pool = _AffixPool([creature])
+
+    R.update_monster_affixes([player], pool, 1.0, state=object())
+
+    assert 0.0 < player.pos.x < 100.0
+
+
+def test_pyre_and_anchoring_queue_a_delayed_area_effect_then_resolve() -> None:
+    from crimson.gameplay import GameplayState
+
+    state = GameplayState()
+    player = PlayerState(index=0, pos=Vec2(0.0, 0.0), health=100.0)
+    pyre_creature = CreatureState(
+        active=True, hp=0.0, max_hp=100.0, rarity=2, affixes=(R.AffixId.PYRE,), pos=Vec2(0.0, 0.0),
+    )
+
+    R.apply_monster_death_affixes(
+        object(), 0, pyre_creature, state=state, players=[player], rng=None, detail_preset=5,
+        world_width=1000.0, world_height=1000.0,
+    )
+
+    assert len(state.pending_monster_area_effects) == 1
+    effect = state.pending_monster_area_effects[0]
+    assert effect.triggered is False
+
+    class _EmptyPool:
+        entries: list = []
+
+    # Still fused.
+    R._tick_pending_area_effects([player], 0.05, state=state)
+    assert player.health == pytest.approx(100.0)
+    assert state.pending_monster_area_effects[0].triggered is False
+
+    # Fuse runs out - the field goes live and starts ticking damage.
+    R._tick_pending_area_effects([player], R.PYRE_FUSE_DELAY_S, state=state)
+    assert state.pending_monster_area_effects[0].triggered is True
+    assert player.health < 100.0
+
+    # Runs for its full duration, then despawns.
+    R._tick_pending_area_effects([player], R.PYRE_DURATION_S, state=state)
+    assert state.pending_monster_area_effects == []
+
+
+def test_bomber_detonation_resolves_with_nerfed_damage_once_the_fuse_runs_out() -> None:
+    from crimson.gameplay import GameplayState
+
+    creature = CreatureState(
+        active=True, hp=0.0, max_hp=100.0, rarity=2, affixes=(R.AffixId.DETONATING,), pos=Vec2(50.0, 50.0),
+    )
+    state = GameplayState()
+    player = PlayerState(index=0, pos=Vec2(50.0, 60.0), health=100.0)
+
+    R.apply_monster_death_affixes(
+        object(), 0, creature,
+        state=state, players=[player], rng=None, detail_preset=5,
+        world_width=1000.0, world_height=1000.0,
+    )
+
+    class _EmptyPool:
+        entries: list = []
+
+    # Still fused - not enough time has passed.
+    R._tick_pending_detonations([player], _EmptyPool(), 0.1, state=state)
+    assert player.health == pytest.approx(100.0)
+    assert len(state.pending_monster_detonations) == 1
+
+    # Fuse runs out - the blast actually lands now, nerfed from the old flat
+    # VOLATILE_DAMAGE.
+    R._tick_pending_detonations([player], _EmptyPool(), R.BOMBER_FUSE_DELAY_S, state=state)
+    assert player.health == pytest.approx(100.0 - R.VOLATILE_DAMAGE * R.BOMBER_DAMAGE_MULT)
+    assert state.pending_monster_detonations == []

@@ -97,6 +97,7 @@ WEAPON_TAGS: dict[WeaponId, WeaponTags] = {
     WeaponId.SHRINKIFIER_5K: WeaponTags(_A.UTILITY, _D.BULLET, _L.PROJECTILE),  # inactive
     WeaponId.BLADE_GUN: WeaponTags(_A.RIFLE, _D.BULLET, _L.PROJECTILE),
     WeaponId.SPIDER_PLASMA: WeaponTags(_A.RIFLE, _D.PLASMA, _L.PROJECTILE),  # enemy-only
+    WeaponId.ACID_LOB: WeaponTags(_A.UTILITY, _D.BULLET, _L.PROJECTILE),  # enemy-only
     WeaponId.EVIL_SCYTHE: WeaponTags(_A.MELEE, _D.MELEE, _L.MELEE),
     WeaponId.PLASMA_CANNON: WeaponTags(_A.CANNON, _D.PLASMA, _L.PROJECTILE),
     WeaponId.SPLITTER_GUN: WeaponTags(_A.RIFLE, _D.BULLET, _L.PROJECTILE),
