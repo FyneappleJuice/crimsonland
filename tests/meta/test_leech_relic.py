@@ -36,10 +36,37 @@ def test_kill_cost_is_a_straight_hp_loss_not_damage_taken() -> None:
     assert player.adrenaline_rush_window_timer == 0.0
 
 
-def test_heal_per_hit() -> None:
+def test_heal_on_hit_queues_an_instance_instead_of_healing_immediately() -> None:
     player = PlayerState(index=0, pos=Vec2(), health=50.0)
     leech.heal_on_hit(player, 100.0)
-    assert float(player.health) == pytest.approx(50.0 + 100.0 * 0.00756, rel=1e-5)
+    assert float(player.health) == 50.0  # nothing yet - it drips via tick()
+    assert player.leech_pending_heal == [pytest.approx(100.0 * 0.00756)]
+    assert player.leech_pending_timers == [leech.LEECH_HEAL_DURATION]
+
+
+def test_heal_drips_over_the_full_duration_then_stops() -> None:
+    player = PlayerState(index=0, pos=Vec2(), health=50.0)
+    leech.heal_on_hit(player, 100.0)
+    total = 100.0 * 0.00756
+    step = leech.LEECH_HEAL_DURATION / 10.0
+    for _ in range(10):
+        leech.tick(player, step)
+    assert float(player.health) == pytest.approx(50.0 + total, rel=1e-4)
+    assert player.leech_pending_heal == []
+    assert player.leech_pending_timers == []
+    # Nothing more drips once the instance has expired.
+    leech.tick(player, step)
+    assert float(player.health) == pytest.approx(50.0 + total, rel=1e-4)
+
+
+def test_each_hit_gets_its_own_independent_instance() -> None:
+    player = PlayerState(index=0, pos=Vec2(), health=50.0)
+    leech.heal_on_hit(player, 100.0)
+    leech.tick(player, leech.LEECH_HEAL_DURATION / 2.0)  # first instance half-drained
+    leech.heal_on_hit(player, 200.0)  # a second, independent instance starts fresh
+    assert len(player.leech_pending_heal) == 2
+    assert player.leech_pending_timers[0] == pytest.approx(leech.LEECH_HEAL_DURATION / 2.0)
+    assert player.leech_pending_timers[1] == pytest.approx(leech.LEECH_HEAL_DURATION)
 
 
 def test_nothing_happens_without_the_relic(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -47,4 +74,6 @@ def test_nothing_happens_without_the_relic(monkeypatch: pytest.MonkeyPatch) -> N
     player = PlayerState(index=0, pos=Vec2(), health=80.0)
     assert _kill_cost(player) == 0.0
     leech.heal_on_hit(player, 100.0)
+    assert player.leech_pending_heal == []
+    leech.tick(player, 1.0)
     assert float(player.health) == 80.0

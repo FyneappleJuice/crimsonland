@@ -4,9 +4,10 @@ from __future__ import annotations
 
 Projectile damage scales with how far the shot has traveled when it lands:
 a fixed -20% penalty at point-blank range, climbing logarithmically (fast up
-close, flattening out further away) to +12% at DEADEYE_PACT_FAR_DISTANCE,
-clamped there beyond it. Break-even (no bonus) falls out of the curve:
-~211 units.
+close, flattening out further away) to +20% at DEADEYE_PACT_FAR_DISTANCE -
+and uncapped beyond it: the same log curve keeps climbing past that point,
+just ever more slowly, so there's no hard ceiling on the bonus at extreme
+range. Break-even (no bonus) falls out of the curve: ~158.1 units.
 
 Hooked directly into projectile_pool.py's damage_amount computation (the
 `dist` value is already computed there for the plain formula) rather than
@@ -23,7 +24,7 @@ DEADEYE_PACT_FAR_DISTANCE = 500.0
 DEADEYE_PACT_NEAR_MULT = 0.80  # -20% at point-blank
 
 _FAR_MULT_BY_RELIC: dict[int, float] = {
-    RelicId.DEADEYE_PACT_LOW: 1.12,
+    RelicId.DEADEYE_PACT_LOW: 1.20,
 }
 
 
@@ -44,14 +45,16 @@ def distance_damage_mult(dist: float) -> float:
     if dist <= DEADEYE_PACT_NEAR_DISTANCE:
         return DEADEYE_PACT_NEAR_MULT
     far_mult = _FAR_MULT_BY_RELIC[relic_id]
-    if dist >= DEADEYE_PACT_FAR_DISTANCE:
-        return far_mult
+    # Uncapped: the log curve is evaluated at the real distance even past
+    # DEADEYE_PACT_FAR_DISTANCE, where _log_progress keeps climbing above 1.0
+    # (ever more slowly) instead of being clamped flat at far_mult.
     return DEADEYE_PACT_NEAR_MULT + _log_progress(dist) * (far_mult - DEADEYE_PACT_NEAR_MULT)
 
 
 def _log_progress(dist: float) -> float:
     """0.0 at DEADEYE_PACT_NEAR_DISTANCE, 1.0 at DEADEYE_PACT_FAR_DISTANCE,
-    logarithmic in between."""
+    logarithmic in between - and beyond 1.0 (still climbing, just slower)
+    past DEADEYE_PACT_FAR_DISTANCE."""
     return math.log(dist / DEADEYE_PACT_NEAR_DISTANCE) / math.log(DEADEYE_PACT_FAR_DISTANCE / DEADEYE_PACT_NEAR_DISTANCE)
 
 

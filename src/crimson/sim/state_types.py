@@ -227,6 +227,12 @@ class PlayerState(msgspec.Struct):
     # left. Instances expire independently, never refreshed.
     fortify_stacks: list[float] = msgspec.field(default_factory=list)
     fortify_timers: list[float] = msgspec.field(default_factory=list)
+    # Rewrite-only: Leech relic (meta/relics_impl/leech.py) - one entry per
+    # hit that leeched: its total heal amount and seconds left to drip it
+    # over. Instances never pool - each hit's leech runs independently on its
+    # own LEECH_HEAL_DURATION-second timer.
+    leech_pending_heal: list[float] = msgspec.field(default_factory=list)
+    leech_pending_timers: list[float] = msgspec.field(default_factory=list)
     # Rewrite-only: War Banner relic (meta/relics_impl/warbanner.py) - where
     # each level up planted a banner; kept for the whole run.
     warbanner_positions: list[Vec2] = msgspec.field(default_factory=list)

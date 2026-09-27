@@ -27,30 +27,30 @@ def _crowd(count: int, *, distance: float) -> list:
 
 def test_radius_counts_enemies_out_to_400() -> None:
     assert critical_mass.CRITICAL_MASS_RADIUS == 400.0
-    assert critical_mass.crit_bonus_chance(Vec2(), _crowd(7, distance=380.0)) == pytest.approx(0.144)
+    assert critical_mass.crit_bonus_chance(Vec2(), _crowd(7, distance=380.0)) == pytest.approx(0.132)
     assert critical_mass.crit_bonus_chance(Vec2(), _crowd(7, distance=420.0)) == 0.0
 
 
-def _rifle_damage_vs_no_relic(monkeypatch: pytest.MonkeyPatch, relic: RelicId, enemies: int) -> float:
-    """Average-damage multiplier of a Rifle (20% base, 2.0x) with the relic,
+def _pistol_damage_vs_no_relic(monkeypatch: pytest.MonkeyPatch, relic: RelicId, enemies: int) -> float:
+    """Average-damage multiplier of a Pistol (10% base, 2.0x) with the relic,
     relative to no relic - straight from the same inputs fire.py rolls with."""
     from crimson.weapon_runtime.crit import crit_chance_for_weapon
 
     monkeypatch.setattr(relics, "_ACTIVE_RELIC_IDS", (int(relic),))
     crowd = _crowd(enemies, distance=300.0)
-    base = crit_chance_for_weapon(WeaponId.ASSAULT_RIFLE)
+    base = crit_chance_for_weapon(WeaponId.PISTOL)
     chance = min(1.0, base + critical_mass.crit_bonus_chance(Vec2(), crowd))
     mult = CRIT_MULTIPLIER * critical_mass.crit_mult_penalty_mult(Vec2(), crowd)
     return (1.0 + chance * (mult - 1.0)) / (1.0 + base * (CRIT_MULTIPLIER - 1.0))
 
 
 @pytest.mark.parametrize(("relic", "gain"), [(RelicId.CRITICAL_MASS_LOW, 0.12)])
-def test_rifle_gains_the_tier_value_at_seven_enemies(monkeypatch: pytest.MonkeyPatch, relic: RelicId, gain: float) -> None:
-    assert _rifle_damage_vs_no_relic(monkeypatch, relic, 7) == pytest.approx(1.0 + gain)
+def test_pistol_gains_the_tier_value_at_seven_enemies(monkeypatch: pytest.MonkeyPatch, relic: RelicId, gain: float) -> None:
+    assert _pistol_damage_vs_no_relic(monkeypatch, relic, 7) == pytest.approx(1.0 + gain)
     # Keeps growing to the 10-enemy cap, then stops.
-    at_cap = _rifle_damage_vs_no_relic(monkeypatch, relic, 10)
+    at_cap = _pistol_damage_vs_no_relic(monkeypatch, relic, 10)
     assert at_cap == pytest.approx(1.0 + gain * 10.0 / 7.0)
-    assert _rifle_damage_vs_no_relic(monkeypatch, relic, 15) == pytest.approx(at_cap)
+    assert _pistol_damage_vs_no_relic(monkeypatch, relic, 15) == pytest.approx(at_cap)
 
 
 def test_penalty_applies_below_five_enemies_only(monkeypatch: pytest.MonkeyPatch) -> None:

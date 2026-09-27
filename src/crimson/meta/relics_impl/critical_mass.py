@@ -14,7 +14,7 @@ right before roll_primary_crit/roll_crit_mult is called.
 
 The bonus is a flat crit chance per nearby enemy, added on top of the
 weapon's own (not an "increased%" of it), growing up to
-CRITICAL_MASS_CAP_ENEMY_COUNT enemies. Tuned so a Rifle (20% base, 2.0x)
+CRITICAL_MASS_CAP_ENEMY_COUNT enemies. Tuned so a Pistol (10% base, 2.0x)
 gains exactly +12% average damage at CRITICAL_MASS_TUNING_ENEMY_COUNT
 enemies. Below CRITICAL_MASS_LOW_ENEMY_THRESHOLD enemies the crit multiplier
 is also docked.
@@ -40,10 +40,10 @@ CRITICAL_MASS_TUNING_ENEMY_COUNT = 7  # where +12% lands exactly
 CRITICAL_MASS_LOW_ENEMY_THRESHOLD = 5  # fewer than this -> crit mult penalty
 CRITICAL_MASS_MULT_PENALTY = 0.25  # -25% crit mult when thin
 
-# Flat crit chance per nearby enemy. A Rifle (EV 1.2) needs +14.4 points at
-# 7 enemies to average 1.344 (+12%).
+# Flat crit chance per nearby enemy. A Pistol (EV 1.10) needs +13.2 points at
+# 7 enemies to average 1.232 (+12%).
 _CHANCE_PER_ENEMY_BY_RELIC: dict[int, float] = {
-    RelicId.CRITICAL_MASS_LOW: 0.144 / CRITICAL_MASS_TUNING_ENEMY_COUNT,
+    RelicId.CRITICAL_MASS_LOW: 0.132 / CRITICAL_MASS_TUNING_ENEMY_COUNT,
 }
 
 

@@ -96,6 +96,7 @@ def test_death_clock_blocks_leech_heal_on_hit(monkeypatch: pytest.MonkeyPatch) -
     player.perk_counts[int(PerkId.DEATH_CLOCK)] = 1
 
     relic_leech.heal_on_hit(player, 10_000.0)
+    relic_leech.tick(player, relic_leech.LEECH_HEAL_DURATION)
 
     assert player.health == 50.0
 

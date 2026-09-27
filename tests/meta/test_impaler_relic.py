@@ -12,6 +12,7 @@ from crimson.gameplay import GameplayState
 from crimson.meta import relics
 from crimson.meta.relics import RelicId
 from crimson.meta.relics_impl import impaler
+from crimson.meta.relics_impl import leech as relic_leech
 from crimson.owner_ref import OwnerRef
 from crimson.projectiles.runtime import PrimaryStepCtx, ProjectilePool, SecondaryStepCtx
 from crimson.projectiles.types import ProjectileTemplateId
@@ -160,6 +161,9 @@ def test_impale_burst_does_not_heal_through_leech(monkeypatch: pytest.MonkeyPatc
         )
 
     _dealt(msgspec.structs.replace(OwnerRef.from_player(0), via_impale=True))
+    assert player.leech_pending_heal == []
     assert float(player.health) == 50.0
     _dealt(OwnerRef.from_player(0))
+    assert player.leech_pending_heal != []
+    relic_leech.tick(player, relic_leech.LEECH_HEAL_DURATION)
     assert float(player.health) > 50.0

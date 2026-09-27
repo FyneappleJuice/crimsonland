@@ -44,7 +44,7 @@ def test_deadeye_neutral_distance_is_where_damage_is_unchanged(monkeypatch: pyte
 
 
 def test_deadeye_neutral_distance_values(monkeypatch: pytest.MonkeyPatch) -> None:
-    expected = {RelicId.DEADEYE_PACT_LOW: 210.8}
+    expected = {RelicId.DEADEYE_PACT_LOW: 158.1}
     for relic, distance in expected.items():
         _equip(monkeypatch, relic)
         assert deadeye_pact.neutral_distance() == pytest.approx(distance, abs=0.1)
@@ -52,16 +52,18 @@ def test_deadeye_neutral_distance_values(monkeypatch: pytest.MonkeyPatch) -> Non
     assert deadeye_pact.neutral_distance() is None
 
 
-@pytest.mark.parametrize(("relic", "far_mult"), [(RelicId.DEADEYE_PACT_LOW, 1.12)])
+@pytest.mark.parametrize(("relic", "far_mult"), [(RelicId.DEADEYE_PACT_LOW, 1.20)])
 def test_deadeye_curve_endpoints_unchanged(monkeypatch: pytest.MonkeyPatch, relic: RelicId, far_mult: float) -> None:
     _equip(monkeypatch, relic)
     assert deadeye_pact.distance_damage_mult(10.0) == pytest.approx(0.80)
     assert deadeye_pact.distance_damage_mult(50.0) == pytest.approx(0.80)
     assert deadeye_pact.distance_damage_mult(500.0) == pytest.approx(far_mult)
-    assert deadeye_pact.distance_damage_mult(900.0) == pytest.approx(far_mult)  # clamped past 500
+    # Uncapped: still climbing well past 500, just ever more slowly.
+    assert deadeye_pact.distance_damage_mult(900.0) > far_mult
+    assert deadeye_pact.distance_damage_mult(2000.0) > deadeye_pact.distance_damage_mult(900.0)
     # Climbs the whole way, fastest up close (logarithmic - each step's gain
-    # shrinks with distance).
-    samples = [deadeye_pact.distance_damage_mult(d) for d in range(50, 501, 25)]
+    # shrinks with distance), including past the old cap point.
+    samples = [deadeye_pact.distance_damage_mult(d) for d in range(50, 2001, 25)]
     gains = [b - a for a, b in zip(samples, samples[1:])]
     assert all(g > 0.0 for g in gains)
     assert gains == sorted(gains, reverse=True)

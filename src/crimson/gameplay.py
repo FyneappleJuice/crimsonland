@@ -20,6 +20,7 @@ from .effects import EffectPool, ParticlePool, SpriteEffectPool
 from .game_modes import GameMode
 from .meta.relics_impl import fortify as relic_fortify
 from .meta.relics_impl import gathering_winds as relic_gathering_winds
+from .meta.relics_impl import leech as relic_leech
 from .meta.relics_impl import slayer_pact as relic_slayer_pact
 from .meta.relics_impl import warbanner as relic_warbanner
 from .math_parity import (
@@ -1012,6 +1013,8 @@ def player_update(
     relic_slayer_pact.update_kill_window(player, dt)
     # Not native: Pact of Fortification's stack instances age out on their own.
     relic_fortify.tick(player, dt)
+    # Not native: Leech relic's heal-over-time instances drip and age out.
+    relic_leech.tick(player, dt)
 
     apply_player_perk_ticks(
         player=player,
