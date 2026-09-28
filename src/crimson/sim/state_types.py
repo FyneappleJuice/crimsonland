@@ -23,6 +23,12 @@ class WeaponSlot(msgspec.Struct):
     reload_timer: float = 0.0
     reload_timer_max: float = 0.0
     shot_cooldown: float = 0.0
+    # Not native: mirrors reload_timer/reload_timer_max - lets Pact of the
+    # Giant relic (meta/relics_impl/giant_pact.py) compare the *other* slot's
+    # current shot_cooldown against its own configured rate, not just against
+    # 0. Stamped every time shot_cooldown is freshly set (weapon_runtime/
+    # fire.py); harmless for every other player, nothing else reads it.
+    shot_cooldown_max: float = 0.0
 
 
 class BladeOrbitState(msgspec.Struct):
@@ -130,6 +136,11 @@ class PlayerState(msgspec.Struct):
 
     weapon: WeaponSlot = msgspec.field(default_factory=lambda: WeaponSlot(weapon_id=WeaponId.PISTOL))
     alt_weapon: WeaponSlot | None = None
+    # Not native: Pact of the Giant relic (meta/relics_impl/giant_pact.py) -
+    # which slot (0 = weapon, 1 = alt_weapon) a floor weapon pickup replaces.
+    # Independent of which slot actually fires on a given tick; only a
+    # manual (Reload-key) forced reload flips it.
+    giant_pact_active_slot: int = 0
 
     shot_seq: int = 0
     weapon_reset_latch: int = 0

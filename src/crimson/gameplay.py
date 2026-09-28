@@ -20,6 +20,7 @@ from .effects import EffectPool, ParticlePool, SpriteEffectPool
 from .game_modes import GameMode
 from .meta.relics_impl import fortify as relic_fortify
 from .meta.relics_impl import gathering_winds as relic_gathering_winds
+from .meta.relics_impl import giant_pact as relic_giant_pact
 from .meta.relics_impl import leech as relic_leech
 from .meta.relics_impl import slayer_pact as relic_slayer_pact
 from .meta.relics_impl import warbanner as relic_warbanner
@@ -91,6 +92,9 @@ from .weapon_runtime import (
 )
 from .weapon_runtime import (
     weapon_entry as _weapon_entry,
+)
+from .weapon_runtime import (
+    weapon_slot_active as _weapon_slot_active,
 )
 from .weapons import WEAPON_TABLE, WeaponId
 
@@ -1265,7 +1269,33 @@ def player_update(
         reload_stationary=reload_stationary,
     )
 
-    has_alt_weapon_perk = perk_active(perk_player, PerkId.ALTERNATE_WEAPON)
+    # Not native: Pact of the Giant relic - the alt slot is normally frozen
+    # (it only advances while swapped into player.weapon), but dual-fire
+    # needs both slots' shot_cooldown/reload_timer ticking concurrently.
+    # Running the exact same single-slot functions against player.alt_weapon
+    # via weapon_slot_active gets every perk/relic interaction (Fastloader,
+    # WPU, War Banner, Angry Reloader, ...) applying to it identically, for
+    # free - see meta/relics_impl/giant_pact.py's module docstring.
+    giant_pact_dual_wielding = relic_giant_pact.dual_wielding(player)
+    if giant_pact_dual_wielding:
+        alt_slot = player.alt_weapon
+        assert alt_slot is not None
+        with _weapon_slot_active(player, alt_slot):
+            advance_weapon_shot_cooldown(player, state, dt, reload_stationary=reload_stationary)
+            advance_weapon_reload(
+                player,
+                perk_player,
+                input_state,
+                dt,
+                state,
+                players,
+                reload_stationary=reload_stationary,
+            )
+
+    # Pact of the Giant takes priority over the Alternate Weapon perk if a
+    # legacy save somehow has both - the perk's swap-on-Reload/movement-
+    # penalty logic never engages while the relic is active.
+    has_alt_weapon_perk = perk_active(perk_player, PerkId.ALTERNATE_WEAPON) and not giant_pact_dual_wielding
     single_player_mode = (len(players) == 1) if players is not None else True
     # Native gates on `grim_is_key_active` (key held), so holding reload chains
     # reloads back-to-back as each one completes.
@@ -1273,12 +1303,26 @@ def player_update(
         bool(input_state.reload_down or input_state.reload_pressed)
         and (not state.demo_mode_active)
         and (not has_alt_weapon_perk)
+        and (not giant_pact_dual_wielding)
         and move_mode != MovementControlType.MOUSE_POINT_CLICK
         and float(player.weapon.reload_timer) == 0.0
         and bool(single_player_mode)
     )
     if manual_reload_allowed:
         _player_start_reload(player, state, players=players)
+    elif (
+        giant_pact_dual_wielding
+        and bool(input_state.reload_down or input_state.reload_pressed)
+        and (not state.demo_mode_active)
+        and move_mode != MovementControlType.MOUSE_POINT_CLICK
+        and float(player.weapon.reload_timer) == 0.0
+        and bool(single_player_mode)
+    ):
+        # Not native: Pact of the Giant's own Reload-key handling - force a
+        # full reload of both slots (regardless of current ammo) and flip
+        # which slot floor pickups target next.
+        relic_giant_pact.start_combined_reload(player, state, players=players, force=True)
+        relic_giant_pact.flip_active_slot(player)
 
     _player_update_aim_by_scheme(
         player=player,
@@ -1301,6 +1345,8 @@ def player_update(
         )
 
     fire_gate_open_pre_reload = clear_reload_active_if_gate_open(player)
+    if giant_pact_dual_wielding:
+        relic_giant_pact.clear_alt_reload_active_if_gate_open(player)
 
     swapped_alt_weapon = False
     reload_key_active = bool(input_state.reload_down or input_state.reload_pressed)
@@ -1333,19 +1379,62 @@ def player_update(
     if force_pre_swap_fire_gate:
         player.weapon.shot_cooldown = 0.0
 
-    _fire_weapon(
-        _WeaponFireCtx(
-            player=player,
-            input_state=input_state,
-            dt=float(dt),
-            state=state,
-            detail_preset=int(detail_preset),
-            creatures=creatures,
-            players=players,
-            force_pre_swap_fire_gate=bool(force_pre_swap_fire_gate),
-            player_death_runtime=player_death_runtime,
-        ),
-    )
+    if giant_pact_dual_wielding:
+        # Not native: Pact of the Giant's alternating dual-fire. Tries the
+        # primary slot first, falling back to the alt slot only if the
+        # primary attempt didn't fire (at most one shot per tick - strict
+        # alternation, see meta/relics_impl/giant_pact.py's module docstring
+        # for the X.shot_cooldown<=0 AND Y.shot_cooldown<=Y.shot_cooldown_max/2
+        # gate). weapon_slot_active reuses fire_weapon completely unmodified
+        # for the alt slot's turn.
+        primary_slot = player.weapon
+        alt_slot = player.alt_weapon
+        assert alt_slot is not None
+        for mover, other in ((primary_slot, alt_slot), (alt_slot, primary_slot)):
+            if float(other.shot_cooldown) > float(other.shot_cooldown_max) * 0.5:
+                continue
+            if float(mover.ammo) <= 0.0:
+                # Not native: fire_weapon() itself has no "ammo > 0" gate (a
+                # normal single-weapon player only stops firing once
+                # reload_timer > 0 - ammo is allowed to dip to exactly the
+                # shot that empties it, then a reload starts). With the
+                # per-shot auto-reload suppressed here, an already-empty slot
+                # would otherwise keep "firing" (consuming ever-more-negative
+                # ammo, spawning real projectiles) every turn instead of
+                # silently refusing until the combined reload catches up -
+                # skip its turn outright once it's actually dry.
+                continue
+            with _weapon_slot_active(player, mover):
+                fire_result = _fire_weapon(
+                    _WeaponFireCtx(
+                        player=player,
+                        input_state=input_state,
+                        dt=float(dt),
+                        state=state,
+                        detail_preset=int(detail_preset),
+                        creatures=creatures,
+                        players=players,
+                        player_death_runtime=player_death_runtime,
+                        suppress_ammo_auto_reload=True,
+                    ),
+                )
+            if fire_result.fired:
+                break
+        relic_giant_pact.maybe_start_combined_reload(player, state, players=players)
+    else:
+        _fire_weapon(
+            _WeaponFireCtx(
+                player=player,
+                input_state=input_state,
+                dt=float(dt),
+                state=state,
+                detail_preset=int(detail_preset),
+                creatures=creatures,
+                players=players,
+                force_pre_swap_fire_gate=bool(force_pre_swap_fire_gate),
+                player_death_runtime=player_death_runtime,
+            ),
+        )
 
     while player.move_phase > 14.0:
         player.move_phase = f32(float(player.move_phase) - 14.0)

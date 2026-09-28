@@ -8,6 +8,7 @@ from .assign import (
     player_swap_alt_weapon,
     weapon_assign_player,
     weapon_entry,
+    weapon_slot_active,
 )
 from .availability import INACTIVE_WEAPON_IDS, prepare_weapon_availability, weapon_pick_random_available
 from .fire import WeaponFireCtx, WeaponFireResult, fire_weapon
@@ -52,6 +53,7 @@ __all__ = [
     "weapon_assign_player",
     "weapon_entry",
     "weapon_pick_random_available",
+    "weapon_slot_active",
     "weapon_tags",
     "weapons_with_archetype",
     "weapons_with_damage_type",

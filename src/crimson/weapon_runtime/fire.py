@@ -21,6 +21,7 @@ from ..math_parity import (
     x87_pc24_sub,
 )
 from ..meta.relics_impl import critical_mass as relic_critical_mass
+from ..meta.relics_impl import giant_pact as relic_giant_pact
 from ..perks import PerkId
 from ..perks.helpers import perk_active
 from ..perks.impl.pendulum import pendulum_damage_mult, pendulum_fire_rate_mult
@@ -172,6 +173,11 @@ class WeaponFireCtx(msgspec.Struct):
     creatures: Sequence[CreatureState] | None = None
     players: Sequence[PlayerState] | None = None
     force_pre_swap_fire_gate: bool = False
+    # Not native: Pact of the Giant relic (meta/relics_impl/giant_pact.py) -
+    # skips the per-shot "ammo hit 0 -> start a solo reload" tail below, so
+    # its own both-slots-empty/combined-duration reload can take over
+    # instead. Default False = zero behavior change for every other caller.
+    suppress_ammo_auto_reload: bool = False
     player_death_runtime: PlayerDeathRuntime | None = None
 
 
@@ -408,7 +414,19 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
     pendulum_rate_mult = pendulum_fire_rate_mult(state, player)
     if pendulum_rate_mult != 1.0:
         shot_cooldown = float(f32(float(shot_cooldown) * pendulum_rate_mult))
+    # Not native: Pact of the Giant relic - both weapon slots pay a flat 1.5x
+    # fire-rate cost while it's active; can't fold into the static
+    # shot_cooldown_mult stat for the same reason Pendulum's multiplier can't
+    # (see meta/relics_impl/giant_pact.py).
+    giant_pact_rate_mult = relic_giant_pact.fire_rate_cost_mult(player)
+    if giant_pact_rate_mult != 1.0:
+        shot_cooldown = float(f32(float(shot_cooldown) * giant_pact_rate_mult))
     player.weapon.shot_cooldown = max(0.0, float(f32(float(shot_cooldown))))
+    # Not native: mirrors reload_timer/reload_timer_max - lets Pact of the
+    # Giant compare the *other* slot's cooldown against its own configured
+    # rate (gameplay.py's dual-fire loop), not just against 0. Harmless for
+    # every other player - nothing else reads it.
+    player.weapon.shot_cooldown_max = float(player.weapon.shot_cooldown)
 
     aim = input_state.aim
     # `player_update` computes and stores aim_heading before entering the fire
@@ -881,6 +899,6 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
         # Alt-weapon same-tick fire uses the pre-swap gate (reload_timer==0) for
         # reload restart eligibility after ammo drains below zero.
         reload_start_gate_open = True
-    if player.weapon.ammo <= 0.0 and reload_start_gate_open:
+    if player.weapon.ammo <= 0.0 and reload_start_gate_open and not ctx.suppress_ammo_auto_reload:
         player_start_reload(player, state, players=ctx.players)
     return WeaponFireResult(fired=True, shot_count=int(shot_count), ammo_cost=float(ammo_cost))

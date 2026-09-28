@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
+from contextlib import contextmanager
 
 import msgspec
 
@@ -17,6 +18,32 @@ from .power_up import wpu_boosts_fire_rate
 
 def weapon_entry(weapon_id: WeaponId) -> Weapon:
     return WEAPON_BY_ID[weapon_id]
+
+
+@contextmanager
+def weapon_slot_active(player: PlayerState, slot: WeaponSlot) -> Iterator[None]:
+    """Temporarily make `slot` the player's "live" weapon (`player.weapon`)
+    for the with-block, restoring the previous slot afterward.
+
+    Not native: lets every bit of single-slot-scoped machinery (fire_weapon,
+    advance_weapon_shot_cooldown, advance_weapon_reload,
+    clear_reload_active_if_gate_open, player_start_reload,
+    weapon_assign_player, ...) run completely unmodified against
+    `player.alt_weapon` - for Pact of the Giant (meta/relics_impl/
+    giant_pact.py), which needs the exact same per-weapon math applied to a
+    second, concurrently-live slot. `slot` is a real WeaponSlot object
+    (typically player.alt_weapon) - it's a mutable msgspec.Struct, so
+    mutations made inside the block land on that same object; callers see
+    them through their own reference once the block exits and player.weapon
+    is restored.
+    """
+
+    previous = player.weapon
+    player.weapon = slot
+    try:
+        yield
+    finally:
+        player.weapon = previous
 
 
 class _WeaponAssignCtx(msgspec.Struct):

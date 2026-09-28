@@ -49,6 +49,7 @@ class RelicId(IntEnum):
     FIRST_STRIKE_LOW = 31
     FORTIFY_LOW = 34
     WARBANNER_LOW = 37
+    GIANT_PACT_LOW = 40
 
 
 # Not native: with --test-mode, init_relics tops the inventory up so exactly
@@ -77,6 +78,7 @@ RELIC_FAMILY: dict[int, str] = {
     RelicId.FIRST_STRIKE_LOW: "first_strike",
     RelicId.FORTIFY_LOW: "fortify",
     RelicId.WARBANNER_LOW: "warbanner",
+    RelicId.GIANT_PACT_LOW: "giant",
 }
 
 RELIC_NAME: dict[int, str] = {
@@ -90,6 +92,7 @@ RELIC_NAME: dict[int, str] = {
     RelicId.FIRST_STRIKE_LOW: "Pact of the First Strike",
     RelicId.FORTIFY_LOW: "Pact of Fortification",
     RelicId.WARBANNER_LOW: "War Banner",
+    RelicId.GIANT_PACT_LOW: "Pact of the Giant",
 }
 
 # Short label drawn inside a placed relic's grid cells.
@@ -104,6 +107,7 @@ RELIC_LABEL: dict[int, str] = {
     RelicId.FIRST_STRIKE_LOW: "1st",
     RelicId.FORTIFY_LOW: "Fort",
     RelicId.WARBANNER_LOW: "Bnr",
+    RelicId.GIANT_PACT_LOW: "Dual",
 }
 
 # Not native: short mechanical summary per relic, same spirit as
@@ -120,6 +124,7 @@ RELIC_BLURB: dict[int, str] = {
     RelicId.FIRST_STRIKE_LOW: "first hit on a creature deals +60% damage; until then it hits you 40% harder",
     RelicId.FORTIFY_LOW: "landing hits builds stacks of damage reduction (up to -12%); -10% move speed",
     RelicId.WARBANNER_LOW: "each level-up plants a banner; nearby banners give +25% attack & move speed",
+    RelicId.GIANT_PACT_LOW: "a second weapon fires alongside the first, alternating; both pay 1.5x slower fire rate",
 }
 
 # (width, height) in grid cells. Unlisted ids default to 1x1. The pact

@@ -10,6 +10,7 @@ from grim.geom import Vec2
 from ..creatures.damage_runtime import CreatureDamageRuntime
 from ..game_modes import GameMode
 from ..math_parity import f32, x87_pc24_hypot, x87_pc24_sub
+from ..meta.relics_impl import giant_pact as relic_giant_pact
 from ..perks.helpers import perk_active
 from ..rng_caller_static import RngCallerStatic
 from ..sim.state_types import BonusPickupEvent, GameplayState, PlayerState
@@ -388,7 +389,16 @@ class BonusPool:
         if players:
             carried_weapon_ids = _all_carried_weapon_ids(players)
             bonus_weapon_id = _weapon_id_from_weapon_entry(entry)
-            if entry.bonus_id == BonusId.WEAPON and bonus_weapon_id in carried_weapon_ids:
+            # Not native: Pact of the Giant relic - a player dual-wielding
+            # wants to be able to get offered a second copy of a weapon they
+            # already carry (the cleanest use of the relic is two identical
+            # weapons firing in a perfect interleave), so this exclusion is a
+            # no-op while it's active.
+            if (
+                entry.bonus_id == BonusId.WEAPON
+                and bonus_weapon_id in carried_weapon_ids
+                and not relic_giant_pact.giant_pact_active()
+            ):
                 self._clear_entry(entry)
                 return None
 
