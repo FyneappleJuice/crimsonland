@@ -145,8 +145,8 @@ PYRE_FUSE_DELAY_S = 1.8
 PYRE_RADIUS = 90.0
 PYRE_DURATION_S = 4.0
 # Not native: total damage the burning ground can deal over its full
-# duration is capped at 10 (2.5/s * 4s), not per-second-unbounded.
-PYRE_DAMAGE_PER_S = 2.5
+# duration is capped at 20 (5/s * 4s), not per-second-unbounded.
+PYRE_DAMAGE_PER_S = 5.0
 
 SOUL_STACK_RANGE = 250.0
 SOUL_DAMAGE_PER_STACK = 0.05
