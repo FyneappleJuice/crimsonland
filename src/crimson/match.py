@@ -4765,7 +4765,7 @@ def _scratch_build_key(
             "import_thunk": config.import_thunk,
             "dependencies": [
                 [
-                    str(path.relative_to(match_root) if path.is_relative_to(match_root) else path),
+                    path.relative_to(match_root).as_posix() if path.is_relative_to(match_root) else str(path),
                     _mtime_ns(path),
                 ]
                 for path in dependencies
@@ -4782,7 +4782,7 @@ def _scratch_build_key(
             "symbol": config.symbol,
             "dependencies": [
                 [
-                    str(path.relative_to(match_root) if path.is_relative_to(match_root) else path),
+                    path.relative_to(match_root).as_posix() if path.is_relative_to(match_root) else str(path),
                     _mtime_ns(path),
                 ]
                 for path in dependencies
@@ -4793,7 +4793,7 @@ def _scratch_build_key(
         "argv": list(_scratch_compile_argv(config, match_root)),
         "auto_inline_off": list(config.auto_inline_off),
         "dependencies": [
-            [str(path.relative_to(match_root) if path.is_relative_to(match_root) else path), _mtime_ns(path)]
+            [path.relative_to(match_root).as_posix() if path.is_relative_to(match_root) else str(path), _mtime_ns(path)]
             for path in dependencies
         ],
     }

@@ -35,7 +35,7 @@ def test_upgraded_choice_scales_the_boost_up_and_the_penalty_down() -> None:
 
 
 def test_upgraded_choice_penalty_inverts_an_already_negative_benefit_correctly() -> None:
-    # Reload Speed's own benefit reads "-3%" (less time is the win) -
+    # Reload Time's own benefit reads "-3%" (less time is the win) -
     # inverted as a penalty it must read as a POSITIVE (worse) number.
     choice = RunModChoice(
         kind=RunModChoiceKind.UPGRADED_RUN_MOD,
@@ -43,4 +43,4 @@ def test_upgraded_choice_penalty_inverts_an_already_negative_benefit_correctly()
         penalty_run_mod_id=RunModId.RELOAD_SPEED,
     )
     desc = run_mod_choice_display_description(choice)
-    assert "+3% Reload Speed" in desc
+    assert "+3% Reload Time" in desc

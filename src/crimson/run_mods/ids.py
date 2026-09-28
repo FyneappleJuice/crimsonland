@@ -95,7 +95,7 @@ class RunModMeta(msgspec.Struct, frozen=True):
 
 _RUN_MOD_TABLE: list[RunModMeta] = [
     RunModMeta(RunModId.FIRE_RATE, "Fire Rate", "+2% fire rate."),
-    RunModMeta(RunModId.RELOAD_SPEED, "Reload Speed", "-3% reload time."),
+    RunModMeta(RunModId.RELOAD_SPEED, "Reload Time", "-3% reload time."),
     RunModMeta(RunModId.CLIP_SIZE, "Clip Size", "+4% clip size."),
     RunModMeta(RunModId.POWERUP_DURATION, "Power-up Duration", "+5% power-up duration."),
     RunModMeta(RunModId.MOVE_SPEED, "Move Speed", "+3% move speed."),

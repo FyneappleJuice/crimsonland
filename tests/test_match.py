@@ -4,6 +4,7 @@ import hashlib
 import json
 import struct
 import subprocess
+import sys
 from dataclasses import replace
 from pathlib import Path
 from typing import cast
@@ -4823,6 +4824,20 @@ def _write_native_link_fixture(
     return artifact_dir, canonical
 
 
+# chmod's mode bits are a no-op on Windows (Path.stat().st_mode after
+# chmod() never reflects the requested POSIX permission bits the way it does
+# on a real POSIX host), and this toolchain-provenance audit hashes that
+# mode in - so the audit state these tests assert on can never actually
+# read "current" here. The native-link/match pipeline itself is meant to run
+# on a POSIX host (it drives wibo/Wine); Windows just can't exercise this
+# specific behavior meaningfully.
+_CHMOD_MODE_SKIP_REASON = (
+    "chmod's mode bits are a no-op on Windows, so this toolchain-provenance "
+    "audit (which hashes the captured mode) can never read as current here"
+)
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason=_CHMOD_MODE_SKIP_REASON)
 def test_native_link_status_reads_current_audit_and_renders_debt(tmp_path: Path) -> None:
     analysis_dir, _ = _write_native_link_fixture(tmp_path)
 
@@ -4890,6 +4905,7 @@ def test_native_link_status_labels_changed_or_mixed_artifacts_stale(tmp_path: Pa
     assert "`grim.dll`: **stale**" in markdown
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason=_CHMOD_MODE_SKIP_REASON)
 def test_native_link_status_projects_shared_json_inputs_by_image(
     tmp_path: Path,
 ) -> None:
@@ -5023,6 +5039,7 @@ def test_native_link_status_detects_changed_data_definitions(tmp_path: Path) -> 
     assert "definitions.json" in status.artifact_note
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason=_CHMOD_MODE_SKIP_REASON)
 def test_native_link_status_detects_changed_companion_artifact(tmp_path: Path) -> None:
     analysis_dir, _ = _write_native_link_fixture(tmp_path)
     (analysis_dir / "objects.txt").write_text("different.obj\n", encoding="utf-8")
@@ -5038,6 +5055,7 @@ def test_native_link_status_detects_changed_companion_artifact(tmp_path: Path) -
     assert "1 generated linker artifacts changed or missing" in status.artifact_note
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason=_CHMOD_MODE_SKIP_REASON)
 def test_native_link_status_can_allow_absent_ignored_toolchain(tmp_path: Path) -> None:
     analysis_dir, _ = _write_native_link_fixture(tmp_path)
     paths = {

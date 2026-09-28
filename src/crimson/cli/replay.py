@@ -747,7 +747,7 @@ def _build_replay_list_row(
     load_replay_fn: Callable[[bytes], Replay],
     current_version: str,
 ) -> tuple[_ReplayListRow, str | None]:
-    rel = str(replay_path.relative_to(replays_dir))
+    rel = replay_path.relative_to(replays_dir).as_posix()
     modified_text = "?"
     modified_ts = 0.0
     try:
