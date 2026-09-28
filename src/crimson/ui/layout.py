@@ -26,6 +26,14 @@ def ui_origin(screen_w: float, screen_h: float, scale: float) -> Vec2:
     return Vec2()
 
 
+# Not native: the widest layout the menu shift below follows. The layout
+# height is locked at 768 on wide windows (grim/letterbox.py), so this is a
+# 16:9 layout; ultrawide windows reuse its shift instead of pushing the menus
+# ever further down the screen.
+MENU_SHIFT_MAX_LAYOUT_WIDTH = 1366.0
+
+
 def menu_widescreen_y_shift(layout_w: float) -> float:
     # ui_menu_layout_init: pos_y += (screen_width / 640.0) * 150.0 - 150.0
+    layout_w = min(float(layout_w), MENU_SHIFT_MAX_LAYOUT_WIDTH)
     return (layout_w / UI_BASE_WIDTH) * 150.0 - 150.0

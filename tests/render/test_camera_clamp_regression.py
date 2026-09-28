@@ -510,3 +510,26 @@ def test_ground_draw_without_render_target_clears_background(mocker) -> None:
 
     draw_rectangle.assert_called_once()
     draw_texture_pro.assert_not_called()
+
+
+def test_ultrawide_view_keeps_16_9_zoom_and_centres_the_arena() -> None:
+    from crimson.render.world import viewport
+
+    # 32:15 ultrawide (e.g. 3840x1440) at the letterbox's 768-tall logical size
+    size = viewport.camera_screen_size(world_size=1024.0, config=None, runtime_w=2048.0, runtime_h=768.0)
+    # same vertical extent a 16:9 screen gets (1366x768 -> 1024x576)...
+    assert size.y == pytest.approx(768.0 * 1024.0 / 1366.0, rel=1e-2)
+    # ...so the view is wider than the arena
+    assert size.x > 1024.0
+    cam = viewport.clamp_camera(world_size=1024.0, camera=Vec2(-300.0, -100.0), screen_size=size)
+    assert cam.x == pytest.approx((size.x - 1024.0) * 0.5)
+    assert cam.y == -100.0
+
+
+def test_16_9_and_narrower_views_are_unchanged() -> None:
+    from crimson.render.world import viewport
+
+    size = viewport.camera_screen_size(world_size=1024.0, config=None, runtime_w=1366.0, runtime_h=768.0)
+    assert size.x == pytest.approx(1024.0)
+    size = viewport.camera_screen_size(world_size=1024.0, config=None, runtime_w=1024.0, runtime_h=768.0)
+    assert (size.x, size.y) == (1024.0, 768.0)

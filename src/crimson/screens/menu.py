@@ -19,6 +19,7 @@ from ..terrain_slots import (
     resolve_terrain_slots,
 )
 from ..ui.cursor import draw_menu_cursor
+from ..ui.layout import menu_widescreen_y_shift
 from ..ui.shadow import UI_SHADOW_OFFSET, draw_ui_quad_shadow
 from .assets import require_runtime_resources
 from .transitions import _draw_screen_fade
@@ -530,8 +531,8 @@ class MenuView:
 
     @staticmethod
     def _menu_widescreen_y_shift(screen_w: float) -> float:
-        # ((screen_width / 640.0) * 150.0) - 150.0
-        return (screen_w * 0.0015625 * 150.0) - 150.0
+        # ((screen_width / 640.0) * 150.0) - 150.0, capped for ultrawide layouts
+        return menu_widescreen_y_shift(screen_w)
 
     def _menu_item_scale(self, slot: int) -> tuple[float, float]:
         if self._menu_screen_width < 641:

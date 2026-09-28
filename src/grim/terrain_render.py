@@ -32,6 +32,13 @@ TERRAIN_DENSITY_OVERLAY = 0x23
 TERRAIN_DENSITY_DETAIL = 0x0F
 TERRAIN_DENSITY_SHIFT = 19
 TERRAIN_ROTATION_MAX = 0x13A
+# Not native: on screens wider than the camera's fit aspect the view extends
+# past the arena's left/right edges (crimson/render/world/viewport.py). That
+# strip shows the freshly generated ground (no blood/corpses), mirrored so it
+# continues seamlessly off the arena edge, and dimmed so the edge still reads.
+TERRAIN_OUT_OF_ARENA_TINT = rl.Color(105, 105, 105, 255)
+TERRAIN_ARENA_EDGE_COLOR = rl.Color(0, 0, 0, 140)
+TERRAIN_ARENA_EDGE_WIDTH = 2.0
 
 _UNLOCK_RANDOM_TERRAIN_CALLERS: tuple[tuple[int, int, int], ...] = (
     (
@@ -195,6 +202,9 @@ class GroundRenderer(msgspec.Struct):
     texture_failed: bool = False
     render_target: rl.RenderTexture | None = None
     _render_target_ready: bool = False
+    # Not native: a copy of the ground taken right after generation, before any
+    # decals are baked in - the out-of-arena fill (see TERRAIN_OUT_OF_ARENA_TINT).
+    _clean_target: rl.RenderTexture | None = None
     _scheduled_seed: int | None = None
     _scheduled_generation_kind: str = "explicit"
 
@@ -284,6 +294,39 @@ class GroundRenderer(msgspec.Struct):
             )
         rl.end_texture_mode()
         self._render_target_ready = True
+        self._snapshot_clean_ground()
+
+    def _snapshot_clean_ground(self) -> None:
+        """Not native: copy the just-generated ground for the out-of-arena fill."""
+        target = self.render_target
+        if target is None or not rl.is_window_ready():
+            return
+        tex_w = int(target.texture.width)
+        tex_h = int(target.texture.height)
+        clean = self._clean_target
+        if clean is None or (int(clean.texture.width), int(clean.texture.height)) != (tex_w, tex_h):
+            if clean is not None:
+                rl.unload_render_texture(clean)
+            clean = rl.load_render_texture(tex_w, tex_h)
+            if clean.id <= 0:
+                self._clean_target = None
+                return
+            rl.set_texture_filter(clean.texture, rl.TextureFilter.TEXTURE_FILTER_BILINEAR)
+            rl.set_texture_wrap(clean.texture, rl.TextureWrap.TEXTURE_WRAP_MIRROR_REPEAT)
+            self._clean_target = clean
+        rl.begin_texture_mode(clean)
+        # Texel-for-texel copy: a positive source height keeps the render
+        # texture's stored orientation, so both sample the same way.
+        with _blend_custom(rd.RL_ONE, rd.RL_ZERO, rd.RL_FUNC_ADD):
+            rl.draw_texture_pro(
+                target.texture,
+                rl.Rectangle(0.0, 0.0, float(tex_w), float(tex_h)),
+                rl.Rectangle(0.0, 0.0, float(tex_w), float(tex_h)),
+                rl.Vector2(0.0, 0.0),
+                0.0,
+                rl.WHITE,
+            )
+        rl.end_texture_mode()
 
     def bake_decals(self, decals: Sequence[GroundDecal]) -> bool:
         if not decals:
@@ -385,6 +428,18 @@ class GroundRenderer(msgspec.Struct):
         v0 = -camera.y / float(self.height)
         u1 = u0 + screen_w / float(self.width)
         v1 = v0 + screen_h / float(self.height)
+        dst_x = 0.0
+        dst_w = out_w
+        # (Only when the view is genuinely wider than the arena: the native
+        # camera clamp alone already lets a full-width view overhang by a unit.)
+        if screen_w > float(self.width) + 0.5:
+            # Not native: the view is wider than the arena - fill it with the
+            # dimmed out-of-arena ground, then draw the arena's slice on top.
+            self._draw_out_of_arena(u0, v0, u1, v1, out_w=out_w, out_h=out_h)
+            px_per_u = out_w / (u1 - u0)
+            dst_x = (max(u0, 0.0) - u0) * px_per_u
+            dst_w = (min(u1, 1.0) - max(u0, 0.0)) * px_per_u
+            u0, u1 = max(u0, 0.0), min(u1, 1.0)
         src_x = u0 * float(target.texture.width)
         # Render textures are vertically flipped in raylib, so adjust the source
         # rectangle to sample the correct world-space slice before flipping.
@@ -392,11 +447,43 @@ class GroundRenderer(msgspec.Struct):
         src_w = (u1 - u0) * float(target.texture.width)
         src_h = (v1 - v0) * float(target.texture.height)
         src = rl.Rectangle(src_x, src_y, src_w, -src_h)
-        dst = rl.Rectangle(0.0, 0.0, out_w, out_h)
+        dst = rl.Rectangle(dst_x, 0.0, dst_w, out_h)
         # Disable alpha blending when drawing terrain to screen - the render target's
         # alpha channel may be < 1.0 after stamp blending, but terrain should be opaque.
         with _blend_custom(rd.RL_ONE, rd.RL_ZERO, rd.RL_FUNC_ADD):
             rl.draw_texture_pro(target.texture, src, dst, rl.Vector2(0.0, 0.0), 0.0, rl.WHITE)
+
+    def _draw_out_of_arena(self, u0: float, v0: float, u1: float, v1: float, *, out_w: float, out_h: float) -> None:
+        """Not native: the ground past the arena's left/right edges, for views
+        wider than the arena (see TERRAIN_OUT_OF_ARENA_TINT)."""
+        clean = self._clean_target
+        if clean is None:
+            rl.draw_rectangle(0, 0, int(out_w + 0.5), int(out_h + 0.5), TERRAIN_CLEAR_COLOR)
+        else:
+            tex_w = float(clean.texture.width)
+            tex_h = float(clean.texture.height)
+            src = rl.Rectangle(u0 * tex_w, (1.0 - v1) * tex_h, (u1 - u0) * tex_w, -(v1 - v0) * tex_h)
+            with _blend_custom(rd.RL_ONE, rd.RL_ZERO, rd.RL_FUNC_ADD):
+                rl.draw_texture_pro(
+                    clean.texture,
+                    src,
+                    rl.Rectangle(0.0, 0.0, out_w, out_h),
+                    rl.Vector2(0.0, 0.0),
+                    0.0,
+                    TERRAIN_OUT_OF_ARENA_TINT,
+                )
+        # A thin dark line just outside each arena edge (the arena's own ground
+        # is drawn over everything inside it afterwards).
+        px_per_u = out_w / (u1 - u0)
+        for edge_u in (0.0, 1.0):
+            if u0 < edge_u < u1:
+                x = (edge_u - u0) * px_per_u
+                if edge_u == 0.0:
+                    x -= TERRAIN_ARENA_EDGE_WIDTH
+                rl.draw_rectangle_rec(
+                    rl.Rectangle(x, 0.0, TERRAIN_ARENA_EDGE_WIDTH, out_h),
+                    TERRAIN_ARENA_EDGE_COLOR,
+                )
 
     def _fit_view_window(self, screen_w: float, screen_h: float) -> tuple[float, float]:
         """

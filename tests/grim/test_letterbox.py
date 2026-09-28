@@ -70,3 +70,12 @@ def test_mouse_mapping_follows_a_live_window_resize(monkeypatch):
     assert mx2 == pytest.approx(vw * 0.25, rel=1e-3)
     assert my2 == pytest.approx(vh * 0.5, rel=1e-3)
     assert (mx2, my2) != (mx1, my1)
+
+
+def test_menu_widescreen_shift_is_capped_for_ultrawide_layouts():
+    from crimson.ui.layout import MENU_SHIFT_MAX_LAYOUT_WIDTH, menu_widescreen_y_shift
+
+    assert menu_widescreen_y_shift(640.0) == 0.0
+    capped = menu_widescreen_y_shift(MENU_SHIFT_MAX_LAYOUT_WIDTH)
+    assert menu_widescreen_y_shift(2048.0) == capped
+    assert menu_widescreen_y_shift(1024.0) < capped
