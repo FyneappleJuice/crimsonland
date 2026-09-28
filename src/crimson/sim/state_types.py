@@ -141,6 +141,17 @@ class PlayerState(msgspec.Struct):
     # Independent of which slot actually fires on a given tick; only a
     # manual (Reload-key) forced reload flips it.
     giant_pact_active_slot: int = 0
+    # Not native: Pact of the Giant - whose turn it is to fire (0 = weapon,
+    # 1 = alt_weapon). Flips after every shot, so the slots strictly
+    # alternate even when one weapon is much faster than the other.
+    giant_pact_next_slot: int = 0
+    # Not native: the weapon behind this player's most recent shot (fire.py's
+    # fire_weapon). With Pact of the Giant that's not always player.weapon, so
+    # the fire sound keys off this instead. -1 = none yet.
+    last_fired_weapon_id: int = -1
+    # Not native: the weapon the pickup name popup (aux_timer) is announcing -
+    # the slot a pickup filled, not necessarily player.weapon. -1 = none.
+    aux_weapon_id: int = -1
 
     shot_seq: int = 0
     weapon_reset_latch: int = 0

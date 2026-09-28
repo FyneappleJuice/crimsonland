@@ -516,7 +516,8 @@ def creature_apply_damage(
             # time). Value is read team-wide, same sharing rule as every
             # damage_mult_* bucket above. Reads elemental_type_stats so this
             # bucket can be exempted the same way as the per-type multipliers.
-            archetype_stat = _ARCHETYPE_DAMAGE_STAT.get(weapon_tags(shooter.weapon.weapon_id).archetype)
+            source_weapon_id = ctx.owner.weapon_id if int(ctx.owner.weapon_id) >= 0 else shooter.weapon.weapon_id
+            archetype_stat = _ARCHETYPE_DAMAGE_STAT.get(weapon_tags(source_weapon_id).archetype)
             if archetype_stat is not None:
                 archetype_mult = float(getattr(ctx.elemental_type_stats, archetype_stat))
                 if archetype_mult != 1.0:

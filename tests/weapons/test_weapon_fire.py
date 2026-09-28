@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import msgspec
+
 from crimson.gameplay import GameplayState
 from crimson.owner_ref import OwnerRef
 from crimson.sim.input import PlayerInput
@@ -35,7 +37,9 @@ def test_friendly_fire_enabled_primary_shots_can_hit_players() -> None:
     shots = [proj for proj in state.projectiles.entries if proj.active]
     assert shots
     assert all(proj.hits_players for proj in shots)
-    assert all(proj.owner == OwnerRef.from_player(1) for proj in shots)
+    # (Owner also carries the firing weapon's id now - OwnerRef.weapon_id.)
+    assert all(msgspec.structs.replace(proj.owner, weapon_id=-1) == OwnerRef.from_player(1) for proj in shots)
+    assert all(proj.owner.weapon_id == int(WeaponId.PISTOL) for proj in shots)
 
 
 def test_friendly_fire_disabled_primary_shots_never_hit_players() -> None:
@@ -44,4 +48,4 @@ def test_friendly_fire_disabled_primary_shots_never_hit_players() -> None:
     shots = [proj for proj in state.projectiles.entries if proj.active]
     assert shots
     assert not any(proj.hits_players for proj in shots)
-    assert all(proj.owner == OwnerRef.from_local_player(0) for proj in shots)
+    assert all(msgspec.structs.replace(proj.owner, weapon_id=-1) == OwnerRef.from_local_player(0) for proj in shots)

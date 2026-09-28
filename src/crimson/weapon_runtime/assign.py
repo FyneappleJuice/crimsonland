@@ -115,6 +115,7 @@ def weapon_assign_player(player: PlayerState, weapon_id: WeaponId, *, state: Gam
     player.weapon.reload_timer = 0.0
     player.weapon.shot_cooldown = 0.0
     player.aux_timer = 2.0
+    player.aux_weapon_id = int(weapon_id)
 
     if state is not None:
         state.sfx_queue.append(weapon.reload_sound)
@@ -133,12 +134,17 @@ def apply_clip_stat_mods_to_current_weapon(player: PlayerState) -> None:
     """
 
     refresh_player_stats([player])
-    weapon = weapon_entry(WeaponId(player.weapon.weapon_id))
-    clip_ctx = _WeaponAssignCtx(player=player, clip_size=max(0, int(weapon.clip_size)))
-    for modifier in _WEAPON_ASSIGN_CLIP_MODIFIERS:
-        modifier(clip_ctx)
-    player.weapon.clip_size = max(0, int(clip_ctx.clip_size))
-    player.weapon.ammo = float(player.weapon.clip_size)
+    from ..meta.relics_impl.giant_pact import wielded_slots
+
+    # Every wielded slot - Pact of the Giant's alt pistol starts with the
+    # same bonus as the primary.
+    for slot in wielded_slots(player):
+        weapon = weapon_entry(WeaponId(slot.weapon_id))
+        clip_ctx = _WeaponAssignCtx(player=player, clip_size=max(0, int(weapon.clip_size)))
+        for modifier in _WEAPON_ASSIGN_CLIP_MODIFIERS:
+            modifier(clip_ctx)
+        slot.clip_size = max(0, int(clip_ctx.clip_size))
+        slot.ammo = float(slot.clip_size)
 
 
 def most_used_weapon_id_for_player(

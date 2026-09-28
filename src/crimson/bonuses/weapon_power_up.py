@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from ..math_parity import f32
 from ..perks.impl.pendulum import pendulum_snapshot_on_bonus_pickup
+from ..meta.relics_impl.giant_pact import refill_wielded_slots
 from .apply_context import BonusApplyCtx
 
 
@@ -17,6 +18,5 @@ def apply_weapon_power_up(ctx: BonusApplyCtx) -> None:
         f32(float(old) + float(ctx.amount) * float(ctx.economist_multiplier)),
     )
     ctx.player.weapon_reset_latch = 0
-    ctx.player.weapon.shot_cooldown = 0.0
-    ctx.player.weapon.reload_timer = 0.0
-    ctx.player.weapon.ammo = float(ctx.player.weapon.clip_size)
+    # Every wielded weapon - both slots with Pact of the Giant.
+    refill_wielded_slots(ctx.player, reset_shot_cooldown=True)

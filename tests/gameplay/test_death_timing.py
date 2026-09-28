@@ -27,8 +27,8 @@ from tests.support.helpers import ScriptedCrand, assert_rng_progression
 
 def test_splitter_gun_pickup_persists_across_frames() -> None:
     # Not native: Splitter Gun is unconditionally unlocked (weapon_runtime/
-    # availability.py) and gameplay_enforce_weapon_guards no longer reverts
-    # it, so a pickup here now survives past the frame it lands on.
+    # availability.py) and nothing reverts it any more, so a pickup here
+    # survives past the frame it lands on.
     world_size = 1024.0
     world = WorldState.build(
         world_size=world_size,

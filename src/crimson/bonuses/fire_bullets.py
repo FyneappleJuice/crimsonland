@@ -12,6 +12,7 @@ from ..math_parity import f32
 from ..perks.impl.pendulum import pendulum_snapshot_on_bonus_pickup
 from ..projectiles.types import ProjectileHit
 from ..rng_caller_static import RngCallerStatic
+from ..meta.relics_impl.giant_pact import refill_wielded_slots
 from .apply_context import BonusApplyCtx, bonus_apply_seconds
 
 
@@ -36,9 +37,8 @@ def apply_fire_bullets(ctx: BonusApplyCtx) -> None:
         f32(float(ctx.player.fire_bullets_timer) + bonus_apply_seconds(ctx) * float(ctx.economist_multiplier)),
     )
     ctx.player.weapon_reset_latch = 0
-    ctx.player.weapon.shot_cooldown = 0.0
-    ctx.player.weapon.reload_timer = 0.0
-    ctx.player.weapon.ammo = float(ctx.player.weapon.clip_size)
+    # Every wielded weapon - both slots with Pact of the Giant.
+    refill_wielded_slots(ctx.player, reset_shot_cooldown=True)
 
 
 def queue_large_hit_decal_streak(

@@ -81,6 +81,12 @@ def plan_player_audio_sfx(
     sfx: list[SfxId] = []
 
     weapon = WEAPON_BY_ID[player.weapon.weapon_id]
+    # Not native: Pact of the Giant - a shot's sound is the weapon that fired it
+    # (player.last_fired_weapon_id), which isn't always player.weapon.
+    fired_weapon_id = (
+        player.last_fired_weapon_id if int(player.last_fired_weapon_id) >= 0 else player.weapon.weapon_id
+    )
+    fired_weapon = WEAPON_BY_ID[fired_weapon_id]
 
     if int(player.shot_seq) > int(prev_shot_seq):
         if float(player.fire_bullets_timer) > 0.0:
@@ -92,12 +98,12 @@ def plan_player_audio_sfx(
             # Not native: Plasma Overload bonus - swap the regular per-weapon
             # shot sfx for the Plasma Rifle's own fire sound.
             sfx.append(WEAPON_BY_ID[WeaponId.PLASMA_RIFLE].fire_sound)
-        elif player.weapon.weapon_id in _NO_FIRE_SOUND_WEAPONS:
+        elif fired_weapon_id in _NO_FIRE_SOUND_WEAPONS:
             # Rewrite-only weapons that own their audio elsewhere (Arc Gun: the
             # ARC_SOUND crackle on the soft channel; Evil Scythe: silent swing).
             pass
         else:
-            sfx.append(weapon.fire_sound)
+            sfx.append(fired_weapon.fire_sound)
 
     reload_active = player.weapon.reload_active
     reload_timer = float(player.weapon.reload_timer)

@@ -270,8 +270,14 @@ def _fire_momentum_shot(
     state: GameplayState,
     players: list[PlayerState] | None = None,
     from_hollow_form: bool = False,
+    kill_weapon_id: int = -1,
 ) -> bool:
-    """Returns whether a shot actually fired (False: no target, or fire failed)."""
+    """Returns whether a shot actually fired (False: no target, or fire failed).
+
+    `kill_weapon_id` is the weapon that landed the kill (OwnerRef.weapon_id);
+    while dual-wielding (Pact of the Giant) the free shot fires *that* weapon
+    rather than always the primary. -1 (a non-weapon kill - perk proc, bonus
+    rocket, ...) falls back to the primary."""
     # The bonus shot fires from whoever landed the kill: the killer's own
     # position, or - for a kill by the Hollow Form clone (from_hollow_form) -
     # the clone's, with the clone's own weapon snapshot. The clone is its own
@@ -286,6 +292,15 @@ def _fire_momentum_shot(
         # weapon snapshot doesn't, so fall back to the player's own.
         if killer.hollow_form_snapshot is not None:
             shooter = killer.hollow_form_snapshot
+    fired_slot = shooter.weapon
+    alt_slot = shooter.alt_weapon
+    if (
+        int(kill_weapon_id) >= 0
+        and int(fired_slot.weapon_id) != int(kill_weapon_id)
+        and alt_slot is not None
+        and int(alt_slot.weapon_id) == int(kill_weapon_id)
+    ):
+        fired_slot = alt_slot
     nearest_idx: int | None = None
     nearest_dist = None
     dx0, dy0 = float(origin.x), float(origin.y)
@@ -320,7 +335,7 @@ def _fire_momentum_shot(
         plasma_overload_timer=0.0,
         hollow_form_snapshot=None,
         weapon=msgspec.structs.replace(
-            shooter.weapon,
+            fired_slot,
             # Exactly one shot's worth, not a full clip: some weapons (Mini-
             # Rocket Swarmers' SwarmerDumpMode) dump their *entire* clip as
             # rockets in a single fire_weapon() call, keyed directly off this
@@ -2227,6 +2242,7 @@ class CreaturePool:
                 state=state,
                 players=players,
                 from_hollow_form=by_clone,
+                kill_weapon_id=int(creature.last_hit_owner.weapon_id),
             )
             if fired:
                 start_momentum_cooldown(killer, by_clone=by_clone)

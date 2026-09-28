@@ -306,3 +306,32 @@ def test_seeker_rounds_counts_a_mini_rocket_swarmers_volley_as_one_shot() -> Non
     _fire_rocket_and_resolve(state, player, creature)
 
     assert player.seeker_rounds_hit_counter == 1
+
+
+def test_seeker_rounds_counts_multi_plasma_shots() -> None:
+    # Regression: Multi-Plasma's fan fire mode never stamped shot_seq, so its
+    # bolts were never counted and Fire and Forget never fired a rocket.
+    state = GameplayState()
+    player = _player(WeaponId.MULTI_PLASMA)
+    creature = make_creature_state(pos=Vec2(40.0, 0.0), hp=1.0e9)
+    for _ in range(SEEKER_ROUNDS_HIT_THRESHOLD):
+        _fire_and_resolve(state, player, creature)
+    assert len(_active_rockets(state)) == 1
+
+
+@pytest.mark.parametrize("weapon_id", [WeaponId.MULTI_PLASMA, WeaponId.PLASMA_RIFLE])
+def test_special_fire_modes_stamp_shot_seq_and_real_crits(weapon_id: WeaponId) -> None:
+    from crimson.weapon_runtime.fire import DEATH_WISH_HEALTH_THRESHOLD
+
+    state = GameplayState()
+    player = _player(weapon_id)
+    if weapon_id == WeaponId.PLASMA_RIFLE:
+        player.plasma_overload_timer = 5.0  # Plasma Overload's twin-bolt mode
+    player.health = DEATH_WISH_HEALTH_THRESHOLD  # Death Wish forces every crit
+    player.perk_counts[int(PerkId.DEATH_WISH)] = 1
+    _fresh_shot(player)
+    fire_weapon(WeaponFireCtx(player=player, input_state=PlayerInput(aim=Vec2(40.0, 0.0), fire_down=True), dt=0.016, state=state))
+    bolts = [e for e in state.projectiles.entries if e.active]
+    assert len(bolts) >= 2
+    assert all(b.shot_seq == 0 for b in bolts)
+    assert all(b.did_crit for b in bolts)

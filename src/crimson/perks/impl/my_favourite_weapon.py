@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from ...meta.relics_impl.giant_pact import wielded_slots
 from ..ids import PerkId
 from ..runtime.apply_context import PerkApplyCtx
 from ..runtime.hook_types import PerkHooks
@@ -7,7 +8,9 @@ from ..runtime.hook_types import PerkHooks
 
 def apply_my_favourite_weapon(ctx: PerkApplyCtx) -> None:
     for player in ctx.players:
-        player.weapon.clip_size += 2
+        # Every wielded weapon - both slots with Pact of the Giant.
+        for slot in wielded_slots(player):
+            slot.clip_size += 2
 
 
 HOOKS = PerkHooks(

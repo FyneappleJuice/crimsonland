@@ -305,3 +305,43 @@ def test_hollow_form_resets_when_perk_is_not_active() -> None:
     assert player.hollow_form_timer == 0.0
     assert player.hollow_form_active_timer == 0.0
     assert player.hollow_form_snapshot is None
+
+
+def test_hollow_form_clone_dual_wields_and_alternates_with_giants_pact(monkeypatch: pytest.MonkeyPatch) -> None:
+    from crimson.meta import relics
+    from crimson.meta.relics import RelicId
+    from crimson.weapon_runtime import crit as crit_module
+    from crimson.weapon_runtime import init_default_alt_weapon
+    from crimson.weapon_runtime.assign import weapon_slot_active
+
+    monkeypatch.setattr(relics, "_ACTIVE_RELIC_IDS", (int(RelicId.GIANT_PACT_LOW),))
+    monkeypatch.setattr(crit_module._CRIT_RNG, "random", lambda: 1.0)
+    state = GameplayState()
+    player = PlayerState(index=0, pos=Vec2(), health=100.0)
+    player.perk_counts[int(PerkId.HOLLOW_FORM)] = 1
+    weapon_assign_player(player, WeaponId.ASSAULT_RIFLE, state=state)
+    init_default_alt_weapon(player)
+    assert player.alt_weapon is not None
+    with weapon_slot_active(player, player.alt_weapon):
+        weapon_assign_player(player, WeaponId.SHOTGUN, state=state)
+    player_ammo = (player.weapon.ammo, player.alt_weapon.ammo)
+    creature = _make_target(Vec2(200.0, 0.0))
+
+    perks_update_effects(state, [player], 0.016, creatures=[creature])  # clone appears
+    clone = player.hollow_form_snapshot
+    assert clone is not None and clone.alt_weapon is not None
+    # The clone has its own alt slot, not a shared reference to the player's.
+    assert clone.alt_weapon is not player.alt_weapon
+
+    order: list[int] = []
+    for _ in range(90):  # ~1.5s of the clone's 2s window
+        before = (clone.weapon.ammo, clone.alt_weapon.ammo)
+        perks_update_effects(state, [player], 1.0 / 60.0, creatures=[creature])
+        if clone.weapon.ammo < before[0]:
+            order.append(0)
+        if clone.alt_weapon.ammo < before[1]:
+            order.append(1)
+
+    assert 0 in order and 1 in order  # both weapons fire...
+    assert all(a != b for a, b in zip(order, order[1:])), order  # ...strictly alternating
+    assert (player.weapon.ammo, player.alt_weapon.ammo) == player_ammo  # player's clips untouched

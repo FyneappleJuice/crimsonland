@@ -14,8 +14,8 @@ def apply_weapon(ctx: BonusApplyCtx) -> None:
     if relic_giant_pact.dual_wielding(ctx.player):
         # Not native: Pact of the Giant relic - a pickup replaces whichever
         # slot is currently "active" (giant_pact_active_slot), not always
-        # the primary.
-        target = relic_giant_pact.active_slot(ctx.player)
+        # the primary - except a leftover starter Pistol is filled first.
+        target = relic_giant_pact.pickup_target_slot(ctx.player)
         with weapon_slot_active(ctx.player, target):
             weapon_assign_player(ctx.player, weapon_id, state=ctx.state)
         return

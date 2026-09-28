@@ -186,8 +186,14 @@ class GameplayState(msgspec.Struct):
     pending_test_monster_respawns: list[PendingTestMonsterRespawn] = msgspec.field(default_factory=list)
     shock_chain_links_left: int = 0
     shock_chain_projectile_id: int = -1
-    survival_reward_weapon_guard_id: WeaponId = WeaponId.PISTOL
     survival_reward_handout_enabled: bool = True
+    # Not native: Pact of the Giant - how many starter-pistol forced weapon
+    # drops this run has had (bonuses/pool.py). Capped at
+    # GIANT_PACT_FORCED_WEAPON_DROPS so they arm both slots once, not forever.
+    giant_pact_forced_weapon_drops: int = 0
+    # Not native: the first of those forced drops' weapon - the second one is
+    # biased toward it (bonuses/pool.py). -1 = none yet.
+    giant_pact_first_forced_weapon_id: int = -1
     survival_reward_fire_seen: bool = False
     survival_reward_damage_seen: bool = False
     survival_recent_death_pos: list[Vec2] = msgspec.field(default_factory=lambda: [Vec2(), Vec2(), Vec2()])
@@ -392,7 +398,6 @@ def survival_update_weapon_handouts(
     ):
         if player.weapon.weapon_id == WeaponId.PISTOL and WeaponId.SHRINKIFIER_5K not in INACTIVE_WEAPON_IDS:
             _weapon_assign_player(player, WeaponId.SHRINKIFIER_5K, state=state)
-            state.survival_reward_weapon_guard_id = WeaponId.SHRINKIFIER_5K
         state.survival_reward_handout_enabled = False
         state.survival_reward_damage_seen = True
         state.survival_reward_fire_seen = True
@@ -417,35 +422,8 @@ def survival_update_weapon_handouts(
         dy = x87_pc24_sub(float(player.pos.y), centroid_y)
         if x87_pc24_hypot(dx, dy) < 16.0 and float(player.health) < 15.0:
             _weapon_assign_player(player, WeaponId.BLADE_GUN, state=state)
-            state.survival_reward_weapon_guard_id = WeaponId.BLADE_GUN
             state.survival_reward_fire_seen = True
             state.survival_reward_handout_enabled = False
-
-
-def survival_enforce_reward_weapon_guard(state: GameplayState, players: Sequence[PlayerState]) -> None:
-    """Revoke temporary Survival handout weapons when guard id mismatches."""
-
-    guard_id = state.survival_reward_weapon_guard_id
-    for player in players:
-        weapon_id = player.weapon.weapon_id
-        if weapon_id == WeaponId.BLADE_GUN and guard_id != WeaponId.BLADE_GUN:
-            _weapon_assign_player(player, WeaponId.PISTOL, state=state)
-        if weapon_id == WeaponId.SHRINKIFIER_5K and guard_id != WeaponId.SHRINKIFIER_5K:
-            _weapon_assign_player(player, WeaponId.PISTOL, state=state)
-
-
-def gameplay_enforce_weapon_guards(state: GameplayState, players: Sequence[PlayerState]) -> None:
-    """Apply the weapon revocation gates embedded in native world rendering.
-
-    Not native: the full-game-unlock revocation for Splitter Gun is dropped
-    here, matching the mod's roguelite direction - it's already unconditionally
-    unlocked in weapon_runtime/availability.py, so reverting it on pickup
-    would just be an inconsistent bug, not a real gate.
-    """
-
-    # Native gameplay_render_world checked exactly the two fixed player slots;
-    # this extends the same entitlement policy to generalized co-op.
-    survival_enforce_reward_weapon_guard(state, players)
 
 
 def gameplay_accumulate_weapon_usage_time(
@@ -457,6 +435,12 @@ def gameplay_accumulate_weapon_usage_time(
 
     if not players:
         return
+    # Not native: every wielded weapon accrues equipped time (both, with Pact
+    # of the Giant).
+    for slot in relic_giant_pact.wielded_slots(players[0])[1:]:
+        extra_id = int(slot.weapon_id)
+        if 0 <= extra_id < len(state.weapon_usage_time):
+            state.weapon_usage_time[extra_id] = (int(state.weapon_usage_time[extra_id]) + int(frame_dt_ms)) & 0xFFFFFFFF
     weapon_id = int(players[0].weapon.weapon_id)
     if not 0 <= weapon_id < len(state.weapon_usage_time):
         return
@@ -596,7 +580,11 @@ def _player_decelerate_move_speed(player: PlayerState, dt: float) -> None:
 
 
 def _player_apply_move_speed_caps(player: PlayerState) -> None:
-    if player.weapon.weapon_id == WeaponId.MEAN_MINIGUN and player.move_speed > f32(0.8):
+    # Either wielded weapon (Pact of the Giant) being a Mean Minigun slows you.
+    holding_mean_minigun = any(
+        slot.weapon_id == WeaponId.MEAN_MINIGUN for slot in relic_giant_pact.wielded_slots(player)
+    )
+    if holding_mean_minigun and player.move_speed > f32(0.8):
         player.move_speed = f32(0.8)
 
 
@@ -881,6 +869,97 @@ def clear_reload_active_if_gate_open(player: PlayerState) -> bool:
             player.pendulum_phase = not player.pendulum_phase
         player.weapon.reload_active = False
     return fire_gate_open_pre_reload
+
+
+def advance_giant_pact_alt_slot(
+    player: PlayerState,
+    perk_player: PlayerState,
+    input_state: PlayerInput,
+    dt: float,
+    state: GameplayState,
+    players: list[PlayerState] | None,
+    *,
+    reload_stationary: bool,
+) -> None:
+    """Not native: Pact of the Giant - tick the alt slot's shot_cooldown and
+    reload_timer alongside the primary's, by running the exact same
+    single-slot functions against it (weapon_slot_active), so every
+    perk/relic interaction applies to it identically. Shared by
+    player_update and Hollow Form's clone."""
+
+    alt_slot = player.alt_weapon
+    assert alt_slot is not None
+    with _weapon_slot_active(player, alt_slot):
+        advance_weapon_shot_cooldown(player, state, dt, reload_stationary=reload_stationary)
+        advance_weapon_reload(
+            player,
+            perk_player,
+            input_state,
+            dt,
+            state,
+            players,
+            reload_stationary=reload_stationary,
+        )
+
+
+def giant_pact_dual_fire(
+    player: PlayerState,
+    input_state: PlayerInput,
+    dt: float,
+    state: GameplayState,
+    *,
+    detail_preset: int,
+    creatures: Sequence[CreatureState] | None,
+    players: list[PlayerState] | None,
+    player_death_runtime: PlayerDeathRuntime | None = None,
+) -> None:
+    """Not native: Pact of the Giant's alternating dual-fire, then the combined
+    reload once both slots are dry. Shared by player_update and Hollow Form's
+    clone, so the clone alternates exactly like the player does."""
+
+    # Not native: Pact of the Giant's alternating dual-fire - see
+    # meta/relics_impl/giant_pact.py's module docstring. At most one
+    # shot per tick; weapon_slot_active reuses fire_weapon completely
+    # unmodified for the alt slot's turn.
+    slots = (player.weapon, player.alt_weapon)
+    assert slots[1] is not None
+    # Strict turn-taking: only the slot whose turn it is may fire, and
+    # only once the other slot is at least halfway through its own
+    # cooldown. The half-cooldown gate alone let a fast weapon fire
+    # repeatedly while a slow partner was still cooling down (e.g. ~3
+    # Jackhammer blasts per Pistol shot); the turn makes every shot wait
+    # for the other weapon's next one.
+    turn = 1 if int(player.giant_pact_next_slot) == 1 else 0
+    mover, other = slots[turn], slots[1 - turn]
+    # Not native: fire_weapon() itself has no "ammo > 0" gate (a normal
+    # single-weapon player only stops firing once reload_timer > 0). With
+    # the per-shot auto-reload suppressed here, an empty slot would keep
+    # "firing" (ever-more-negative ammo, real projectiles) - so a dry slot
+    # passes its turn instead, and never makes the other slot wait.
+    if float(mover.ammo) <= 0.0:
+        turn, mover, other = 1 - turn, other, mover
+    other_dry = float(other.ammo) <= 0.0
+    if float(mover.ammo) > 0.0 and (
+        other_dry or float(other.shot_cooldown) <= float(other.shot_cooldown_max) * 0.5
+    ):
+        with _weapon_slot_active(player, mover):
+            fire_result = _fire_weapon(
+                _WeaponFireCtx(
+                    player=player,
+                    input_state=input_state,
+                    dt=float(dt),
+                    state=state,
+                    detail_preset=int(detail_preset),
+                    creatures=creatures,
+                    players=players,
+                    player_death_runtime=player_death_runtime,
+                    suppress_ammo_auto_reload=True,
+                    giant_pact_partner_dry=other_dry,
+                ),
+            )
+        if fire_result.fired:
+            player.giant_pact_next_slot = 1 - turn
+    relic_giant_pact.maybe_start_combined_reload(player, state, players=players)
 
 
 def player_update(
@@ -1278,19 +1357,9 @@ def player_update(
     # free - see meta/relics_impl/giant_pact.py's module docstring.
     giant_pact_dual_wielding = relic_giant_pact.dual_wielding(player)
     if giant_pact_dual_wielding:
-        alt_slot = player.alt_weapon
-        assert alt_slot is not None
-        with _weapon_slot_active(player, alt_slot):
-            advance_weapon_shot_cooldown(player, state, dt, reload_stationary=reload_stationary)
-            advance_weapon_reload(
-                player,
-                perk_player,
-                input_state,
-                dt,
-                state,
-                players,
-                reload_stationary=reload_stationary,
-            )
+        advance_giant_pact_alt_slot(
+            player, perk_player, input_state, dt, state, players, reload_stationary=reload_stationary,
+        )
 
     # Pact of the Giant takes priority over the Alternate Weapon perk if a
     # legacy save somehow has both - the perk's swap-on-Reload/movement-
@@ -1380,47 +1449,16 @@ def player_update(
         player.weapon.shot_cooldown = 0.0
 
     if giant_pact_dual_wielding:
-        # Not native: Pact of the Giant's alternating dual-fire. Tries the
-        # primary slot first, falling back to the alt slot only if the
-        # primary attempt didn't fire (at most one shot per tick - strict
-        # alternation, see meta/relics_impl/giant_pact.py's module docstring
-        # for the X.shot_cooldown<=0 AND Y.shot_cooldown<=Y.shot_cooldown_max/2
-        # gate). weapon_slot_active reuses fire_weapon completely unmodified
-        # for the alt slot's turn.
-        primary_slot = player.weapon
-        alt_slot = player.alt_weapon
-        assert alt_slot is not None
-        for mover, other in ((primary_slot, alt_slot), (alt_slot, primary_slot)):
-            if float(other.shot_cooldown) > float(other.shot_cooldown_max) * 0.5:
-                continue
-            if float(mover.ammo) <= 0.0:
-                # Not native: fire_weapon() itself has no "ammo > 0" gate (a
-                # normal single-weapon player only stops firing once
-                # reload_timer > 0 - ammo is allowed to dip to exactly the
-                # shot that empties it, then a reload starts). With the
-                # per-shot auto-reload suppressed here, an already-empty slot
-                # would otherwise keep "firing" (consuming ever-more-negative
-                # ammo, spawning real projectiles) every turn instead of
-                # silently refusing until the combined reload catches up -
-                # skip its turn outright once it's actually dry.
-                continue
-            with _weapon_slot_active(player, mover):
-                fire_result = _fire_weapon(
-                    _WeaponFireCtx(
-                        player=player,
-                        input_state=input_state,
-                        dt=float(dt),
-                        state=state,
-                        detail_preset=int(detail_preset),
-                        creatures=creatures,
-                        players=players,
-                        player_death_runtime=player_death_runtime,
-                        suppress_ammo_auto_reload=True,
-                    ),
-                )
-            if fire_result.fired:
-                break
-        relic_giant_pact.maybe_start_combined_reload(player, state, players=players)
+        giant_pact_dual_fire(
+            player,
+            input_state,
+            dt,
+            state,
+            detail_preset=int(detail_preset),
+            creatures=creatures,
+            players=players,
+            player_death_runtime=player_death_runtime,
+        )
     else:
         _fire_weapon(
             _WeaponFireCtx(

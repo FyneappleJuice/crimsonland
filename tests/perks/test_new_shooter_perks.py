@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import math
 
+import msgspec
+
 import pytest
 
 from crimson.creatures.damage import (
@@ -1076,3 +1078,32 @@ def test_momentum_player_and_clone_have_separate_cooldowns() -> None:
     perks_update_effects(state, [player], MOMENTUM_COOLDOWN + 0.01)
     assert player.momentum_cooldown_timer == 0.0
     assert _kill_again(state, player, pool) == 1
+
+
+@pytest.mark.parametrize(
+    ("kill_weapon_id", "expected"),
+    [(int(WeaponId.SHOTGUN), WeaponId.SHOTGUN), (int(WeaponId.ASSAULT_RIFLE), WeaponId.ASSAULT_RIFLE), (-1, WeaponId.ASSAULT_RIFLE)],
+)
+def test_momentum_shot_fires_the_weapon_that_got_the_kill(
+    monkeypatch: pytest.MonkeyPatch, kill_weapon_id: int, expected: WeaponId,
+) -> None:
+    # Pact of the Giant: the free shot used to always come from the primary
+    # slot, whichever weapon actually landed the kill.
+    from crimson.meta import relics
+    from crimson.meta.relics import RelicId
+    from crimson.weapon_runtime import init_default_alt_weapon
+    from crimson.weapon_runtime.assign import weapon_slot_active
+
+    monkeypatch.setattr(relics, "_ACTIVE_RELIC_IDS", (int(RelicId.GIANT_PACT_LOW),))
+    state, player, pool = _kill_setup(weapon_id=WeaponId.ASSAULT_RIFLE, momentum=True)
+    init_default_alt_weapon(player)
+    assert player.alt_weapon is not None
+    with weapon_slot_active(player, player.alt_weapon):
+        weapon_assign_player(player, WeaponId.SHOTGUN, state=state)
+    pool.entries[0].last_hit_owner = msgspec.structs.replace(OwnerRef.from_player(0), weapon_id=kill_weapon_id)
+
+    pool.handle_death(0, state=state, players=[player], rng=state.rng, world_width=1024.0, world_height=1024.0, fx_queue=None)
+
+    spawned = list(state.projectiles.iter_active())
+    assert spawned
+    assert {int(p.owner.weapon_id) for p in spawned} == {int(expected)}

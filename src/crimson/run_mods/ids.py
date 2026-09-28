@@ -10,8 +10,9 @@ these two pools do not interact.
 Two entries (DAMAGE_TYPE_BOOST, WEAPON_TYPE_BOOST) are "meta" slots: they're
 the only ones ever drawn from the base pool for their category, but they
 never reach a player - `run_mod_generate_choices` immediately resolves each
-one to a concrete damage-type/archetype id (weighted 2x toward whatever the
-player is currently holding - see run_mods/selection.py) before the choice
+one to a concrete damage-type/archetype id (weighted 3x toward whatever the
+player is currently holding - both weapons with Pact of the Giant; see
+run_mods/selection.py) before the choice
 list is returned, so what's actually shown and picked already has a fixed,
 known number (e.g. "+3% Plasma Damage") - there is no click-to-reveal gamble.
 The specific ids they resolve into (RUN_MOD_HIDDEN_FROM_POOL) are real

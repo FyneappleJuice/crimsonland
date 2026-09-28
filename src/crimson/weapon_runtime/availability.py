@@ -34,12 +34,6 @@ _FORK_ROSTER_WEAPON_IDS: tuple[WeaponId, ...] = (WeaponId.TENET_GUN,)
 
 # Weapons kept out of the normal Weapon-bonus drop pool entirely, regardless
 # of unlock progress:
-#   - Shrinkifier 5K / Blade Gun are native special-handout weapons. Survival
-#     hands these out itself via scripted triggers (idling too long, dying
-#     near your own graveyard - see gameplay.py::survival_update_weapon_handouts)
-#     and immediately revokes them back to Pistol if they show up any other
-#     way (gameplay.py::survival_enforce_reward_weapon_guard). Letting them
-#     roll from a normal Weapon bonus just means an instant, confusing revert.
 #   - Spider Plasma is an enemy-only weapon stat block (the Spider Plasma
 #     Shooter creature's own attack, weapons.py:505) - never meant to be a
 #     player pickup at all.
@@ -47,9 +41,12 @@ _FORK_ROSTER_WEAPON_IDS: tuple[WeaponId, ...] = (WeaponId.TENET_GUN,)
 #     stat block (creatures/rarity.py) - never meant to be a player pickup;
 #     its id also sits well outside WEAPON_DROP_ID_COUNT so this is purely
 #     documentation, same as Spider Plasma above.
+#
+# Not native: Blade Gun / Shrinkifier 5K were native Survival-only handout
+# weapons, revoked back to Pistol if obtained any other way. That revocation
+# guard is gone - Blade Gun is a normal roster weapon now, and Shrinkifier 5K
+# sits in INACTIVE_WEAPON_IDS below until it's reactivated.
 _NON_PLAYER_WEAPON_IDS: tuple[WeaponId, ...] = (
-    WeaponId.SHRINKIFIER_5K,
-    WeaponId.BLADE_GUN,
     WeaponId.SPIDER_PLASMA,
     WeaponId.ACID_LOB,
 )

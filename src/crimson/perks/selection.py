@@ -48,11 +48,15 @@ def _resolve_weapon_mastery(state: GameplayState, player: PlayerState) -> PerkId
     ]
     if not candidates:
         return None
-    current_damage_type = weapon_tags(player.weapon.weapon_id).damage_type
+    from ..meta.relics_impl.giant_pact import wielded_slots
+
+    # Every wielded weapon's damage type (both, with Pact of the Giant); a
+    # type both weapons share is still 3x, not 6x.
+    favoured = {
+        _WEAPON_MASTERY_SUB_ROLL.get(weapon_tags(slot.weapon_id).damage_type) for slot in wielded_slots(player)
+    }
     weights = [
-        _WEAPON_MASTERY_CURRENT_WEAPON_BIAS
-        if _WEAPON_MASTERY_SUB_ROLL.get(current_damage_type) == perk_id
-        else 1.0
+        _WEAPON_MASTERY_CURRENT_WEAPON_BIAS if perk_id in favoured else 1.0
         for perk_id in candidates
     ]
     # Not native: rewrite-only content. Read (not draw) the shared sim RNG's
@@ -155,18 +159,20 @@ def perk_generate_choices(
         player_count=player_count,
     )
     player_perk_counts = player.perk_counts
-    player_weapon_id = player.weapon.weapon_id
+    from ..meta.relics_impl.giant_pact import wielded_slots
+
+    player_weapon_ids = {slot.weapon_id for slot in wielded_slots(player)}
     death_clock_active = int(player_perk_counts[int(PerkId.DEATH_CLOCK)]) > 0
     flamethrower_id = WeaponId.FLAMETHROWER
 
-    pyromaniac_allowed = player_weapon_id == flamethrower_id
+    pyromaniac_allowed = flamethrower_id in player_weapon_ids
     if int(player_count) > 1:
         pyromaniac_allowed = False
         source_players = players if players is not None else [player]
         for source_player in source_players:
             if float(source_player.health) <= 0.0:
                 continue
-            if source_player.weapon.weapon_id == flamethrower_id:
+            if flamethrower_id in {slot.weapon_id for slot in wielded_slots(source_player)}:
                 pyromaniac_allowed = True
                 break
 

@@ -93,6 +93,39 @@ def test_both_weapons_fire_and_strictly_alternate(monkeypatch: pytest.MonkeyPatc
     assert abs(primary_shots - alt_shots) <= 1
 
 
+@pytest.mark.parametrize(
+    ("primary", "alt"),
+    [(WeaponId.JACKHAMMER, WeaponId.PISTOL), (WeaponId.PISTOL, WeaponId.JACKHAMMER)],
+)
+def test_fast_weapon_waits_for_a_slow_partner(monkeypatch: pytest.MonkeyPatch, primary: WeaponId, alt: WeaponId) -> None:
+    # Regression: the half-cooldown gate alone let a fast weapon (Jackhammer)
+    # fire ~3 times per slow partner (Pistol) shot once the partner was past
+    # its halfway point. Turns make every shot wait for the other weapon's.
+    _equip(monkeypatch, RelicId.GIANT_PACT_LOW)
+    _never_crit(monkeypatch)
+    state = GameplayState()
+    player = PlayerState(index=0, pos=Vec2())
+    weapon_assign_player(player, alt, state=state)
+    init_default_alt_weapon(player)
+    assert player.alt_weapon is not None
+    player.alt_weapon, player.weapon = player.weapon, player.alt_weapon
+    weapon_assign_player(player, primary, state=state)
+    player.weapon.ammo = 1000.0
+    player.alt_weapon.ammo = 1000.0
+
+    order: list[int] = []
+    for _ in range(400):
+        before = (float(player.weapon.ammo), float(player.alt_weapon.ammo))
+        player_update(player, PlayerInput(aim=Vec2(100.0, 0.0), fire_down=True), dt=1.0 / 60.0, state=state)
+        if float(player.weapon.ammo) < before[0]:
+            order.append(0)
+        if float(player.alt_weapon.ammo) < before[1]:
+            order.append(1)
+
+    assert len(order) >= 6
+    assert all(a != b for a, b in zip(order, order[1:])), order
+
+
 def test_empty_slot_does_not_stall_the_other(monkeypatch: pytest.MonkeyPatch) -> None:
     _equip(monkeypatch, RelicId.GIANT_PACT_LOW)
     _never_crit(monkeypatch)
@@ -226,3 +259,205 @@ def test_already_carried_weapon_can_still_drop_while_dual_wielding(monkeypatch: 
     assert entry is not None
     assert entry.bonus_id == BonusId.WEAPON
     assert entry.amount == WeaponId.SHOTGUN
+
+
+def test_first_two_pickups_fill_both_starter_pistols(monkeypatch: pytest.MonkeyPatch) -> None:
+    _equip(monkeypatch, RelicId.GIANT_PACT_LOW)
+    player = _dual_pistol_player()
+    assert giant_pact.holding_starter_pistol(player)
+    state = GameplayState()
+
+    bonus_apply(state, player, BonusId.WEAPON, amount=int(WeaponId.JACKHAMMER), origin=player.pos, creatures=[], players=[player])
+    assert player.weapon.weapon_id == WeaponId.JACKHAMMER
+    assert player.alt_weapon is not None and player.alt_weapon.weapon_id == WeaponId.PISTOL
+    # The alt slot's Pistol keeps the "starter pistol" forced drops going...
+    assert giant_pact.holding_starter_pistol(player)
+
+    # ...and the next pickup fills it, instead of replacing the Jackhammer.
+    bonus_apply(state, player, BonusId.WEAPON, amount=int(WeaponId.ASSAULT_RIFLE), origin=player.pos, creatures=[], players=[player])
+    assert player.weapon.weapon_id == WeaponId.JACKHAMMER
+    assert player.alt_weapon.weapon_id == WeaponId.ASSAULT_RIFLE
+    assert not giant_pact.holding_starter_pistol(player)
+
+    # With no pistol left, pickups go back to the active slot.
+    bonus_apply(state, player, BonusId.WEAPON, amount=int(WeaponId.SHOTGUN), origin=player.pos, creatures=[], players=[player])
+    assert player.weapon.weapon_id == WeaponId.SHOTGUN
+
+
+def test_starter_pistol_rule_ignores_the_alt_slot_without_the_relic(monkeypatch: pytest.MonkeyPatch) -> None:
+    _equip(monkeypatch)
+    player = _dual_pistol_player()
+    weapon_assign_player(player, WeaponId.JACKHAMMER, state=GameplayState())
+    assert not giant_pact.holding_starter_pistol(player)  # native: primary only
+
+
+@pytest.mark.parametrize("with_relic", [True, False])
+def test_starter_pistol_forced_drops_stop_after_two_while_dual_wielding(
+    monkeypatch: pytest.MonkeyPatch, with_relic: bool,
+) -> None:
+    from grim.rand import Crand
+
+    if with_relic:
+        _equip(monkeypatch, RelicId.GIANT_PACT_LOW)
+    else:
+        _equip(monkeypatch)
+    state = GameplayState()
+    state.bonus_pool = BonusPool()
+    prepare_weapon_availability(state)
+    state.rng = Crand(12345)
+    player = _dual_pistol_player()  # never picks anything up - still all pistols
+
+    for _ in range(300):
+        state.bonus_pool.try_spawn_on_kill(pos=Vec2(256.0, 256.0), state=state, players=[player])
+        for entry in state.bonus_pool.entries:  # nothing ever gets picked up
+            state.bonus_pool._clear_entry(entry)
+
+    expected = giant_pact.GIANT_PACT_FORCED_WEAPON_DROPS if with_relic else 0
+    assert state.giant_pact_forced_weapon_drops == expected
+
+
+def _dual_player(primary: WeaponId, alt: WeaponId) -> tuple[GameplayState, PlayerState]:
+    from crimson.weapon_runtime.assign import weapon_slot_active
+
+    state = GameplayState()
+    player = _dual_pistol_player()
+    assert player.alt_weapon is not None
+    weapon_assign_player(player, primary, state=state)
+    with weapon_slot_active(player, player.alt_weapon):
+        weapon_assign_player(player, alt, state=state)
+    return state, player
+
+
+@pytest.mark.parametrize("perk", [PerkId.AMMO_MANIAC, PerkId.MY_FAVOURITE_WEAPON])
+def test_clip_perks_apply_to_both_weapons(monkeypatch: pytest.MonkeyPatch, perk: PerkId) -> None:
+    from crimson.perks.runtime.apply import perk_apply
+
+    _equip(monkeypatch, RelicId.GIANT_PACT_LOW)
+    state, player = _dual_player(WeaponId.ASSAULT_RIFLE, WeaponId.SHOTGUN)
+    assert player.alt_weapon is not None
+    before = (player.weapon.clip_size, player.alt_weapon.clip_size)
+    perk_apply(state, [player], perk)
+    assert player.weapon.clip_size > before[0]
+    assert player.alt_weapon.clip_size > before[1]
+
+
+def test_shots_carry_the_weapon_that_fired_them(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Weapon Affinity's damage bucket reads this at hit time - it used to use
+    # the primary weapon for every shot, including the alt weapon's.
+    _equip(monkeypatch, RelicId.GIANT_PACT_LOW)
+    _never_crit(monkeypatch)
+    state, player = _dual_player(WeaponId.ASSAULT_RIFLE, WeaponId.SHOTGUN)
+    seen: set[int] = set()
+    for _ in range(60):
+        player_update(player, PlayerInput(aim=Vec2(100.0, 0.0), fire_down=True), dt=1.0 / 60.0, state=state)
+        seen |= {int(p.owner.weapon_id) for p in state.projectiles.entries if p.active}
+    assert {int(WeaponId.ASSAULT_RIFLE), int(WeaponId.SHOTGUN)} <= seen
+
+
+@pytest.mark.parametrize(
+    "bonus_id",
+    [BonusId.REFLEX_BOOST, BonusId.WEAPON_POWER_UP, BonusId.FIRE_BULLETS, BonusId.PLASMA_OVERLOAD],
+)
+def test_ammo_refilling_power_ups_refill_both_weapons(monkeypatch: pytest.MonkeyPatch, bonus_id: BonusId) -> None:
+    _equip(monkeypatch, RelicId.GIANT_PACT_LOW)
+    state, player = _dual_player(WeaponId.ASSAULT_RIFLE, WeaponId.SHOTGUN)
+    assert player.alt_weapon is not None
+    player.weapon.ammo = 0.0
+    player.alt_weapon.ammo = 0.0
+    player.alt_weapon.reload_timer = 1.5
+
+    bonus_apply(state, player, bonus_id, amount=5, origin=player.pos, creatures=[], players=[player])
+
+    assert player.weapon.ammo == float(player.weapon.clip_size)
+    assert player.alt_weapon.ammo == float(player.alt_weapon.clip_size)
+    assert player.alt_weapon.reload_timer == 0.0
+
+
+def _fire_once(state: GameplayState, player: PlayerState) -> None:
+    player_update(player, PlayerInput(aim=Vec2(100.0, 0.0), fire_down=True), dt=1.0 / 60.0, state=state)
+
+
+def test_a_weapon_firing_alone_uses_its_normal_fire_rate(monkeypatch: pytest.MonkeyPatch) -> None:
+    _equip(monkeypatch, RelicId.GIANT_PACT_LOW)
+    _never_crit(monkeypatch)
+
+    def _alt_cooldown(primary_ammo: float) -> float:
+        state, player = _dual_player(WeaponId.ASSAULT_RIFLE, WeaponId.SHOTGUN)
+        assert player.alt_weapon is not None
+        player.weapon.ammo = primary_ammo
+        player.giant_pact_next_slot = 1  # the Shotgun's turn
+        _fire_once(state, player)
+        return float(player.alt_weapon.shot_cooldown_max)
+
+    both_loaded = _alt_cooldown(10.0)
+    partner_dry = _alt_cooldown(0.0)
+    assert both_loaded == pytest.approx(partner_dry * giant_pact.GIANT_PACT_FIRE_RATE_COST_MULT, rel=1e-4)
+
+
+def test_second_forced_drop_leans_toward_the_first_weapon() -> None:
+    from collections import Counter
+
+    from crimson.weapon_runtime.tags import weapon_tags
+
+    state = GameplayState()
+    prepare_weapon_availability(state)
+    first = WeaponId.PLASMA_RIFLE
+    counts: Counter[int] = Counter()
+    for seed in range(4000):
+        state.rng.srand(seed)
+        counts[giant_pact.pick_similar_weapon(state, int(first))] += 1
+
+    tags = weapon_tags(first)
+    same_class = [w for w in counts if weapon_tags(WeaponId(w)).archetype == tags.archetype and w != first]
+    same_ammo = [w for w in counts if weapon_tags(WeaponId(w)).damage_type == tags.damage_type and w != first]
+    unrelated = [
+        w for w in counts
+        if weapon_tags(WeaponId(w)).archetype != tags.archetype and weapon_tags(WeaponId(w)).damage_type != tags.damage_type
+    ]
+    assert counts.most_common(1)[0][0] == int(first)  # the same weapon is likeliest
+    avg = lambda ids: sum(counts[w] for w in ids) / max(1, len(ids))  # noqa: E731
+    assert avg(same_class) > 2 * avg(unrelated)
+    assert avg(same_ammo) > 2 * avg(unrelated)
+    assert int(WeaponId.PISTOL) not in counts
+
+
+def test_fire_sound_and_pickup_popup_follow_the_actual_weapon(monkeypatch: pytest.MonkeyPatch) -> None:
+    from crimson.sim.presentation_step import plan_player_audio_sfx
+    from crimson.weapons import WEAPON_BY_ID
+
+    _equip(monkeypatch, RelicId.GIANT_PACT_LOW)
+    state, player = _dual_player(WeaponId.ASSAULT_RIFLE, WeaponId.ION_RIFLE)
+    assert player.aux_weapon_id == int(WeaponId.ION_RIFLE)  # the popup names the alt pickup
+
+    player.last_fired_weapon_id = int(WeaponId.ION_RIFLE)
+    player.shot_seq = 1
+    sfx = plan_player_audio_sfx(player, prev_shot_seq=0, prev_reload_active=False, prev_reload_timer=0.0)
+    assert WEAPON_BY_ID[WeaponId.ION_RIFLE].fire_sound in sfx
+    assert WEAPON_BY_ID[WeaponId.ASSAULT_RIFLE].fire_sound not in sfx
+
+
+def test_ammo_shield_pays_from_the_fuller_weapon(monkeypatch: pytest.MonkeyPatch) -> None:
+    from crimson.player_damage import AMMO_SHIELD_AMMO_COST, player_take_damage
+
+    _equip(monkeypatch, RelicId.GIANT_PACT_LOW)
+    state, player = _dual_player(WeaponId.ASSAULT_RIFLE, WeaponId.SHOTGUN)
+    assert player.alt_weapon is not None
+    player.perk_counts[int(PerkId.AMMO_SHIELD)] = 1
+    player.weapon.ammo = 0.0
+    player.alt_weapon.ammo = 8.0
+    player_take_damage(state, player, 5.0, players=[player])
+    assert player.weapon.ammo == 0.0
+    assert player.alt_weapon.ammo == pytest.approx(8.0 - AMMO_SHIELD_AMMO_COST)
+
+
+def test_random_weapon_perk_replaces_the_pickup_slot(monkeypatch: pytest.MonkeyPatch) -> None:
+    from crimson.perks.runtime.apply import perk_apply
+
+    _equip(monkeypatch, RelicId.GIANT_PACT_LOW)
+    state = GameplayState()
+    prepare_weapon_availability(state)
+    player = _dual_pistol_player()
+    weapon_assign_player(player, WeaponId.ASSAULT_RIFLE, state=state)
+    perk_apply(state, [player], PerkId.RANDOM_WEAPON)
+    assert player.weapon.weapon_id == WeaponId.ASSAULT_RIFLE  # untouched...
+    assert player.alt_weapon is not None and player.alt_weapon.weapon_id != WeaponId.PISTOL  # ...pistol replaced

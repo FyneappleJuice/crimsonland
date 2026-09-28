@@ -125,7 +125,13 @@ def player_take_damage(
     if perk_active(perk_player, PerkId.AMMO_SHIELD):
         reduction = min(1.0, AMMO_SHIELD_DAMAGE_REDUCTION * efficacy)
         damage_scaled = float(f32(float(damage_scaled) * (1.0 - reduction)))
-        perk_player.weapon.ammo = max(0.0, float(perk_player.weapon.ammo) - AMMO_SHIELD_AMMO_COST)
+        # Not native: with Pact of the Giant the cost comes out of whichever
+        # weapon has more ammo left, so the shield keeps working until both
+        # are dry instead of only ever draining the primary.
+        from .meta.relics_impl.giant_pact import wielded_slots
+
+        paying_slot = max(wielded_slots(perk_player), key=lambda slot: float(slot.ammo))
+        paying_slot.ammo = max(0.0, float(paying_slot.ammo) - AMMO_SHIELD_AMMO_COST)
 
     dodged = False
     if perk_active(perk_player, PerkId.NINJA):

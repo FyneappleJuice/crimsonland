@@ -105,7 +105,9 @@ def fire_ion_overload_bolt(state: GameplayState, player: PlayerState) -> None:
 
     muzzle = native_fire_muzzle_pos(player.pos, float(player.aim_heading))
     spawn_pos, spawn_angle = muzzle, float(player.aim_heading)
-    tenet_reverse = int(player.weapon.weapon_id) == int(WeaponId.TENET_GUN)
+    from ..meta.relics_impl.giant_pact import wielded_slots
+
+    tenet_reverse = any(int(slot.weapon_id) == int(WeaponId.TENET_GUN) for slot in wielded_slots(player))
     if tenet_reverse:
         # See weapon_runtime/spawn.py::projectile_spawn's Tenet Gun check -
         # this bolt fires on its own via `state.projectiles.spawn` directly

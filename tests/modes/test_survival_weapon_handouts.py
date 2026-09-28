@@ -5,8 +5,6 @@ import pytest
 from crimson.creatures.runtime import CreaturePool
 from crimson.gameplay import (
     GameplayState,
-    gameplay_enforce_weapon_guards,
-    survival_enforce_reward_weapon_guard,
     survival_update_weapon_handouts,
 )
 from crimson.sim.state_types import PlayerState
@@ -30,7 +28,6 @@ def test_survival_handout_time_gate_skips_shrinkifier_while_shelved() -> None:
     )
 
     assert player.weapon.weapon_id == WeaponId.PISTOL
-    assert state.survival_reward_weapon_guard_id != WeaponId.SHRINKIFIER_5K
     assert state.survival_reward_handout_enabled is False
     assert state.survival_reward_damage_seen is True
     assert state.survival_reward_fire_seen is True
@@ -56,7 +53,6 @@ def test_survival_handout_time_gate_assigns_shrinkifier_when_reactivated(
     )
 
     assert player.weapon.weapon_id == WeaponId.SHRINKIFIER_5K
-    assert state.survival_reward_weapon_guard_id == WeaponId.SHRINKIFIER_5K
     assert state.survival_reward_handout_enabled is False
     assert state.survival_reward_damage_seen is True
     assert state.survival_reward_fire_seen is True
@@ -74,7 +70,6 @@ def test_survival_handout_time_gate_consumes_gate_even_without_pistol() -> None:
     )
 
     assert player.weapon.weapon_id == WeaponId.ASSAULT_RIFLE
-    assert state.survival_reward_weapon_guard_id == WeaponId.PISTOL
     assert state.survival_reward_handout_enabled is False
     assert state.survival_reward_damage_seen is True
     assert state.survival_reward_fire_seen is True
@@ -121,7 +116,6 @@ def test_survival_handout_centroid_gate_assigns_blade_gun() -> None:
     )
 
     assert player.weapon.weapon_id == WeaponId.BLADE_GUN
-    assert state.survival_reward_weapon_guard_id == WeaponId.BLADE_GUN
     assert state.survival_reward_fire_seen is True
     assert state.survival_reward_handout_enabled is False
 
@@ -184,28 +178,10 @@ def test_creature_handle_death_tracks_survival_recent_death_samples() -> None:
     assert state.survival_reward_handout_enabled is False
 
 
-def test_survival_weapon_guard_reverts_mismatched_temporary_weapons() -> None:
-    state = GameplayState()
-    player0 = PlayerState(index=0, pos=Vec2())
-    player1 = PlayerState(index=1, pos=Vec2())
-    weapon_assign_player(player0, WeaponId.SHRINKIFIER_5K, state=state)
-    weapon_assign_player(player1, WeaponId.BLADE_GUN, state=state)
-    state.survival_reward_weapon_guard_id = WeaponId.SHRINKIFIER_5K
+def test_handout_weapons_are_no_longer_revoked() -> None:
+    # Not native: the revocation guard that swapped Blade Gun / Shrinkifier
+    # 5K back to Pistol when obtained outside their scripted handout is gone.
+    import crimson.gameplay as gameplay
 
-    survival_enforce_reward_weapon_guard(state, [player0, player1])
-
-    assert player0.weapon.weapon_id == WeaponId.SHRINKIFIER_5K
-    assert player1.weapon.weapon_id == WeaponId.PISTOL
-
-
-def test_gameplay_weapon_guard_never_revokes_splitter_gun() -> None:
-    # Not native: Splitter Gun is unconditionally unlocked (weapon_runtime/
-    # availability.py), so the native full-game-unlock revocation gate is gone.
-    state = GameplayState()
-    players = [PlayerState(index=index, pos=Vec2()) for index in range(3)]
-    for player in players:
-        weapon_assign_player(player, WeaponId.SPLITTER_GUN, state=state)
-
-    gameplay_enforce_weapon_guards(state, players)
-
-    assert all(player.weapon.weapon_id == WeaponId.SPLITTER_GUN for player in players)
+    assert not hasattr(gameplay, "survival_enforce_reward_weapon_guard")
+    assert not hasattr(gameplay, "gameplay_enforce_weapon_guards")

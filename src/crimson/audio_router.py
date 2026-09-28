@@ -71,6 +71,12 @@ class AudioRouter(msgspec.Struct):
         if self.audio is None:
             return
         weapon = WEAPON_BY_ID[player.weapon.weapon_id]
+        # Not native: Pact of the Giant - a shot's sound is the weapon that fired it
+        # (player.last_fired_weapon_id), which isn't always player.weapon.
+        fired_weapon_id = (
+            player.last_fired_weapon_id if int(player.last_fired_weapon_id) >= 0 else player.weapon.weapon_id
+        )
+        fired_weapon = WEAPON_BY_ID[fired_weapon_id]
 
         if int(player.shot_seq) > int(prev_shot_seq):
             if float(player.fire_bullets_timer) > 0.0:
@@ -84,11 +90,11 @@ class AudioRouter(msgspec.Struct):
                 # Not native: Plasma Overload bonus - swap the regular
                 # per-weapon shot sfx for the Plasma Rifle's own fire sound.
                 self.play_sfx(WEAPON_BY_ID[WeaponId.PLASMA_RIFLE].fire_sound)
-            elif player.weapon.weapon_id in (WeaponId.RAYGUN, WeaponId.EVIL_SCYTHE):
+            elif fired_weapon_id in (WeaponId.RAYGUN, WeaponId.EVIL_SCYTHE):
                 # Rewrite-only weapons whose audio is handled elsewhere / silent.
                 pass
             else:
-                self.play_sfx(weapon.fire_sound)
+                self.play_sfx(fired_weapon.fire_sound)
 
         reload_active = player.weapon.reload_active
         reload_timer = float(player.weapon.reload_timer)

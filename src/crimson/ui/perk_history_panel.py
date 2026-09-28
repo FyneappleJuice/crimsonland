@@ -2,9 +2,11 @@ from __future__ import annotations
 
 """Not native: read-only sidebar shown alongside the perk-selection screen.
 
-Lists every perk the player has picked this run, plus a compact summary of
-resolved `PlayerStats` buckets (progression/stats.py) that currently differ
-from their identity default. Purely informational - no picks, no input
+Lists every perk the player has picked this run (top half) and the player's
+actual current stats - HP, crit, move speed, reload (bottom half, see
+ui/player_stats_readout.py) - plus a compact summary of resolved
+`PlayerStats` buckets (progression/stats.py) that currently differ from their
+identity default, in its own panel to the left. Purely informational - no picks, no input
 handling - so unlike ui/perk_menu.py and ui/run_mod_menu.py this has no
 "controller" of its own; it just mirrors PerkMenuController's own
 open/timeline state (see survival_mode.py/quest_mode.py's draw calls).
@@ -28,6 +30,7 @@ from ..progression.stats import PlayerStats
 from ..sim.state_types import PlayerState
 from .menu_panel import MENU_PANEL_DST_BOTTOM_H, MENU_PANEL_DST_TOP_H, draw_classic_menu_panel, draw_menu_panel_hardware
 from .perk_menu import PERK_MENU_ANIM_END_MS, PERK_MENU_ANIM_START_MS, ui_element_slide_x
+from .player_stats_readout import player_stat_lines
 
 PERK_HISTORY_PANEL_WIDTH = 220.0
 # Not native: "Stat Bonuses" used to be a bottom section squeezed into the
@@ -64,6 +67,8 @@ PERK_HISTORY_TEXT_COLOR = rl.Color(215, 215, 215, 255)
 PERK_HISTORY_COUNT_COLOR = rl.Color(140, 195, 255, 255)
 PERK_HISTORY_EMPTY_COLOR = rl.Color(140, 140, 140, 200)
 PERK_HISTORY_STATS_TITLE_COLOR = rl.Color(140, 220, 235, 255)
+PERK_HISTORY_CURRENT_LABEL_COLOR = rl.Color(170, 172, 182, 255)
+PERK_HISTORY_CURRENT_VALUE_COLOR = rl.Color(240, 240, 240, 255)
 PERK_HISTORY_STATS_TEXT_COLOR = rl.Color(185, 230, 185, 255)
 PERK_HISTORY_STATS_MORE_COLOR = rl.Color(140, 140, 140, 200)
 
@@ -88,6 +93,9 @@ class PerkHistoryPanelComputedLayout(msgspec.Struct):
     list_pos: Vec2
     list_step_y: float
     list_bottom: float
+    current_title_pos: Vec2
+    current_list_pos: Vec2
+    current_value_right_x: float
     stats_panel: Rect
     stats_title_pos: Vec2
     stats_list_pos: Vec2
@@ -111,7 +119,13 @@ def perk_history_panel_compute_layout(
 
     title_pos = panel.top_left.offset(dx=PERK_HISTORY_PADDING_X, dy=PERK_HISTORY_TITLE_Y)
     list_pos = panel.top_left.offset(dx=PERK_HISTORY_PADDING_X, dy=PERK_HISTORY_LIST_Y)
-    list_bottom = panel.bottom - _PANEL_BOTTOM_CHROME_H - 8.0
+    # Not native: the perk list gets the top half; the player's current stats
+    # ("Current Stats", ui/player_stats_readout.py) the bottom half.
+    half_y = panel.y + panel.h * 0.5
+    list_bottom = half_y - 4.0
+    current_title_pos = Vec2(panel.x + PERK_HISTORY_PADDING_X, half_y + 4.0)
+    current_list_pos = current_title_pos.offset(dy=PERK_HISTORY_LIST_Y - PERK_HISTORY_TITLE_Y)
+    current_value_right_x = panel.right - PERK_HISTORY_PADDING_X
 
     stats_title_pos = stats_panel.top_left.offset(dx=PERK_HISTORY_PADDING_X, dy=PERK_HISTORY_STATS_TITLE_Y)
     stats_list_pos = stats_panel.top_left.offset(dx=PERK_HISTORY_PADDING_X, dy=PERK_HISTORY_STATS_LIST_Y)
@@ -123,6 +137,9 @@ def perk_history_panel_compute_layout(
         list_pos=list_pos,
         list_step_y=PERK_HISTORY_LIST_STEP,
         list_bottom=list_bottom,
+        current_title_pos=current_title_pos,
+        current_list_pos=current_list_pos,
+        current_value_right_x=current_value_right_x,
         stats_panel=stats_panel,
         stats_title_pos=stats_title_pos,
         stats_list_pos=stats_list_pos,
@@ -308,6 +325,16 @@ def draw_perk_history_panel(
                     PERK_HISTORY_COUNT_COLOR,
                 )
             pos = pos.offset(dy=layout.list_step_y)
+
+    # Not native: the player's actual current stats, bottom half of the perks
+    # panel. Per-weapon values are comma-separated while dual-wielding.
+    draw_small_text(font, "Current Stats", layout.current_title_pos, PERK_HISTORY_TITLE_COLOR)
+    pos = layout.current_list_pos
+    for label, value in player_stat_lines(player):
+        draw_small_text(font, label, pos, PERK_HISTORY_CURRENT_LABEL_COLOR)
+        value_x = layout.current_value_right_x - _text_width(value, resources)
+        draw_small_text(font, value, Vec2(value_x, pos.y), PERK_HISTORY_CURRENT_VALUE_COLOR)
+        pos = pos.offset(dy=layout.list_step_y)
 
     draw_small_text(font, "Stat Bonuses", layout.stats_title_pos, PERK_HISTORY_STATS_TITLE_COLOR)
     stat_rows = stat_summary_rows(player.stats)

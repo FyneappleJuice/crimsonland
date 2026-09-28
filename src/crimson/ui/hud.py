@@ -14,8 +14,10 @@ from grim.raylib_api import rl
 from ..bonuses.hud import BonusHudState
 from ..game_modes import GameMode
 from ..gameplay import survival_level_threshold
+from ..meta.relics_impl import giant_pact as relic_giant_pact
 from ..sim.state_types import PlayerState
 from ..weapon_icon_overrides import weapon_icon_dst_rect, weapon_icon_override_texture
+from .menu_panel import MENU_PANEL_DST_BOTTOM_H, MENU_PANEL_DST_TOP_H, draw_classic_menu_panel, draw_menu_panel_hardware
 from ..weapons import WEAPON_BY_ID, WeaponId, weapon_display_name
 
 HUD_TEXT_COLOR = rl.Color(220, 220, 220, 255)
@@ -58,6 +60,12 @@ HUD_WEAPON_ICON_SIZE = (64.0, 32.0)
 HUD_WEAPON_TL_POS = (7.0, 7.0)
 HUD_WEAPON_TL_SIZE = (84.0, 42.0)
 HUD_WEAPON_TL_PAD = 5.0
+# Not native: Pact of the Giant's two top-left weapon panels - classic framed
+# menu panels (ui_menuPanel + its cable/plug hardware), weapon 1 left,
+# weapon 2 right, joined by the hardware piece.
+HUD_DUAL_WEAPON_PANEL_POS = (4.0, 4.0)
+HUD_DUAL_WEAPON_PANEL_MARGIN = (14.0, 12.0)  # icon inset inside each panel (x, y)
+HUD_DUAL_WEAPON_HARDWARE_SCALE = 0.12
 HUD_CLOCK_POS = (220.0, 2.0)
 HUD_CLOCK_SIZE = (32.0, 32.0)
 HUD_CLOCK_ALPHA = 0.9
@@ -458,8 +466,19 @@ def draw_hud_overlay(
                 )
             max_y = max(max_y, bg_dst.y + bg_dst.height)
 
+    # Not native: Pact of the Giant - two framed panels, weapon 1 then weapon 2.
+    dual_weapon_tl = (
+        show_weapon
+        and player_count == 1
+        and not HUD_TOP_BAR
+        and bool(hud_players)
+        and relic_giant_pact.dual_wielding(hud_players[0])
+    )
+    if dual_weapon_tl:
+        max_y = max(max_y, _draw_dual_weapon_panels(resources, wicons, hud_players[0], alpha=alpha, ui=ui))
+
     # Weapon icon.
-    if show_weapon:
+    if show_weapon and not dual_weapon_tl:
         weapon_tl = player_count == 1 and not HUD_TOP_BAR
         if weapon_tl:
             icon_base_pos = Vec2(*HUD_WEAPON_TL_POS)
@@ -946,9 +965,14 @@ def draw_hud_overlay(
         )
         max_y = max(max_y, dst.y + dst.height)
 
-        icon_index = _weapon_icon_index(hud_player.weapon.weapon_id)
+        # Not native: announce the weapon the pickup actually filled (Pact of
+        # the Giant can put it in the alt slot), not always player.weapon.
+        aux_weapon_id = (
+            hud_player.aux_weapon_id if int(hud_player.aux_weapon_id) >= 0 else hud_player.weapon.weapon_id
+        )
+        icon_index = _weapon_icon_index(aux_weapon_id)
         if icon_index is not None:
-            aux_override_tex = weapon_icon_override_texture(resources, hud_player.weapon.weapon_id)
+            aux_override_tex = weapon_icon_override_texture(resources, aux_weapon_id)
             if aux_override_tex is not None:
                 aux_tex = aux_override_tex
                 src = rl.Rectangle(0.0, 0.0, float(aux_override_tex.width), float(aux_override_tex.height))
@@ -958,7 +982,7 @@ def draw_hud_overlay(
             icon_pos = aux_icon_base_pos + aux_step * float(aux_row)
             dst = rl.Rectangle(ui(icon_pos.x), ui(icon_pos.y), ui(60.0), ui(30.0))
             aux_draw_dst = (
-                weapon_icon_dst_rect(dst, hud_player.weapon.weapon_id) if aux_override_tex is not None else dst
+                weapon_icon_dst_rect(dst, aux_weapon_id) if aux_override_tex is not None else dst
             )
             rl.draw_texture_pro(
                 aux_tex,
@@ -970,7 +994,7 @@ def draw_hud_overlay(
             )
             max_y = max(max_y, dst.y + dst.height)
 
-        weapon_name = weapon_display_name(hud_player.weapon.weapon_id)
+        weapon_name = weapon_display_name(aux_weapon_id)
         weapon_color = _with_alpha(HUD_TEXT_COLOR, text_alpha)
         text_pos = aux_text_base_pos + aux_step * float(aux_row)
         _draw_text(
@@ -984,3 +1008,56 @@ def draw_hud_overlay(
         aux_row += 1
 
     return max_y
+
+
+def _draw_dual_weapon_panels(resources, wicons: rl.Texture, player: PlayerState, *, alpha: float, ui) -> float:
+    """Not native: Pact of the Giant's top-left weapon HUD - one classic framed
+    panel per wielded weapon (weapon 1 left, weapon 2 right), the second hung
+    off the first by the menu panel's own cable/plug hardware, like the
+    level-up screen's run-mod panel hangs off the perk panel. Returns the
+    panels' bottom edge (screen px) for the HUD's running max_y."""
+
+    icon_w, icon_h = HUD_WEAPON_TL_SIZE
+    margin_x, margin_y = HUD_DUAL_WEAPON_PANEL_MARGIN
+    panel_w = icon_w + 2.0 * margin_x
+    panel_h = icon_h + 2.0 * margin_y
+    hw_src_w = 183.0  # menu_panel.MENU_PANEL_HARDWARE_SRC width
+    gap = hw_src_w * HUD_DUAL_WEAPON_HARDWARE_SCALE
+    # Frame chrome sized to the panel's own height (it's all border at this size).
+    border_scale = panel_h / (MENU_PANEL_DST_TOP_H + MENU_PANEL_DST_BOTTOM_H)
+    panel_tex = resources.texture(TextureId.UI_MENU_PANEL)
+    tint = rl.Color(255, 255, 255, int(255 * alpha))
+    base_x, base_y = HUD_DUAL_WEAPON_PANEL_POS
+    bottom = 0.0
+    slots = relic_giant_pact.wielded_slots(player)
+    for idx, slot in enumerate(slots):
+        px = base_x + idx * (panel_w + gap)
+        panel = rl.Rectangle(ui(px), ui(base_y), ui(panel_w), ui(panel_h))
+        draw_classic_menu_panel(panel_tex, dst=panel, tint=tint, border_scale=ui(border_scale), trim_hardware=True)
+        if idx > 0:
+            # The connecting rod: hardware on this panel's left edge, bridging
+            # the gap back to the previous panel.
+            draw_menu_panel_hardware(panel_tex, panel=panel, tint=tint, scale=ui(HUD_DUAL_WEAPON_HARDWARE_SCALE))
+        bottom = max(bottom, panel.y + panel.height)
+
+        weapon_id = slot.weapon_id
+        icon_index = _weapon_icon_index(weapon_id)
+        if icon_index is None:
+            continue
+        override_tex = weapon_icon_override_texture(resources, weapon_id)
+        src = (
+            rl.Rectangle(0.0, 0.0, float(override_tex.width), float(override_tex.height))
+            if override_tex is not None
+            else _weapon_icon_src(wicons, icon_index)
+        )
+        dst = rl.Rectangle(ui(px + margin_x), ui(base_y + margin_y), ui(icon_w), ui(icon_h))
+        draw_dst = weapon_icon_dst_rect(dst, weapon_id) if override_tex is not None else dst
+        rl.draw_texture_pro(
+            override_tex if override_tex is not None else wicons,
+            src,
+            draw_dst,
+            rl.Vector2(0.0, 0.0),
+            0.0,
+            tint,
+        )
+    return bottom

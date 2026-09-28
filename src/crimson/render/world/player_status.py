@@ -16,7 +16,7 @@ from __future__ import annotations
 import math
 
 from grim.assets import TextureId
-from grim.fonts.small import draw_small_text
+from grim.fonts.small import draw_small_text, measure_small_text_height, measure_small_text_width
 from grim.geom import Vec2
 from grim.math import clamp
 from grim.raylib_api import rl
@@ -24,6 +24,7 @@ from grim.raylib_api import rl
 from ...bonuses.ids import BonusId
 from ...creatures.rarity import ACID_LOB_DOT_DURATION_S
 from ...meta.relics_impl import fortify as relic_fortify
+from ...meta.relics_impl import giant_pact as relic_giant_pact
 from ...meta.relics_impl import gathering_winds as relic_gathering_winds
 from ...meta.relics_impl import leech as relic_leech
 from ...perks.helpers import perk_active
@@ -246,19 +247,49 @@ def draw_player_status(
 
     # Current clip ammo, upper-right of the player.
     font = render_ctx.frame.resources.small_font
-    ammo = max(0, int(float(player.weapon.ammo)))
-    text = str(ammo)
     tx = float(screen.x) + r_out * 0.75
     ty = float(screen.y) - r_out - 11.0 * float(scale)
     shadow = rl.Color(0, 0, 0, int(185 * a))
-    fg = rl.Color(240, 240, 240, int(255 * a)) if ammo > 0 else rl.Color(210, 90, 90, int(255 * a))
-    if font is not None:
-        draw_small_text(font, text, Vec2(tx + 1.0, ty + 1.0), shadow, scale=_HUD_TEXT_SCALE)
-        draw_small_text(font, text, Vec2(tx, ty), fg, scale=_HUD_TEXT_SCALE)
+    if relic_giant_pact.dual_wielding(player) and player.alt_weapon is not None and font is not None:
+        _draw_dual_ammo(font, player, tx=tx, ty=ty, alpha=a, shadow=shadow)
     else:
-        rl.draw_text(text, int(tx), int(ty), 20, fg)
+        ammo = max(0, int(float(player.weapon.ammo)))
+        text = str(ammo)
+        fg = _ammo_color(ammo, a)
+        if font is not None:
+            draw_small_text(font, text, Vec2(tx + 1.0, ty + 1.0), shadow, scale=_HUD_TEXT_SCALE)
+            draw_small_text(font, text, Vec2(tx, ty), fg, scale=_HUD_TEXT_SCALE)
+        else:
+            rl.draw_text(text, int(tx), int(ty), 20, fg)
 
     _draw_player_powerups(render_ctx, screen=screen, scale=float(scale), r_out=r_out, alpha=a)
+
+
+def _ammo_color(ammo: int, a: float) -> rl.Color:
+    return rl.Color(240, 240, 240, int(255 * a)) if ammo > 0 else rl.Color(210, 90, 90, int(255 * a))
+
+
+def _draw_dual_ammo(font, player: PlayerState, *, tx: float, ty: float, alpha: float, shadow: rl.Color) -> None:
+    """Not native: Pact of the Giant - "A, B" clip counts for both weapon
+    slots, with the active slot (the one a weapon pickup replaces; flipped by
+    a manual reload) underlined."""
+
+    assert player.alt_weapon is not None
+    counts = (max(0, int(float(player.weapon.ammo))), max(0, int(float(player.alt_weapon.ammo))))
+    active = 1 if int(player.giant_pact_active_slot) == 1 else 0
+    parts = ((str(counts[0]), 0), (", ", None), (str(counts[1]), 1))
+    height = measure_small_text_height(font, "0") * _HUD_TEXT_SCALE
+    x = float(int(tx))
+    for text, slot in parts:
+        width = measure_small_text_width(font, text) * _HUD_TEXT_SCALE
+        color = _ammo_color(counts[slot], alpha) if slot is not None else rl.Color(200, 200, 205, int(255 * alpha))
+        draw_small_text(font, text, Vec2(x + 1.0, ty + 1.0), shadow, scale=_HUD_TEXT_SCALE)
+        draw_small_text(font, text, Vec2(x, ty), color, scale=_HUD_TEXT_SCALE)
+        if slot == active:
+            y = int(ty + height - 2.0)
+            rl.draw_rectangle(int(x) + 1, y + 1, int(width), 2, shadow)
+            rl.draw_rectangle(int(x), y, int(width), 2, color)
+        x += width
 
 
 def _active_powerup_slots(render_ctx: WorldRenderCtx) -> list:

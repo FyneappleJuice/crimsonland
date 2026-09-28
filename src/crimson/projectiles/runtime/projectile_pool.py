@@ -493,10 +493,15 @@ class ProjectilePool:
             if profile is not None and profile.initial_damage_pool > 1.0:
                 return  # already pierces - leave piercing weapons alone
             proj.reserved = _FORK_RESERVED_FORKED
+            # The weapon that fired this bolt (OwnerRef.weapon_id), not the
+            # shooter's primary - they differ with Pact of the Giant.
+            fired_weapon_id = (
+                proj.owner.weapon_id
+                if int(proj.owner.weapon_id) >= 0
+                else players[owner_player_index].weapon.weapon_id
+            )
             child_reserved = (
-                _FORK_RESERVED_SHOTGUN_CHILD
-                if players[owner_player_index].weapon.weapon_id in _SHOTGUN_WEAPON_IDS
-                else _FORK_RESERVED_FORKED
+                _FORK_RESERVED_SHOTGUN_CHILD if fired_weapon_id in _SHOTGUN_WEAPON_IDS else _FORK_RESERVED_FORKED
             )
             for offset in (-_FORK_SHOT_ANGLE_RAD, _FORK_SHOT_ANGLE_RAD):
                 child_index = self.spawn(

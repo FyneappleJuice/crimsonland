@@ -28,7 +28,6 @@ from ..game_modes import GameMode
 from ..gameplay import (
     build_gameplay_state,
     gameplay_accumulate_weapon_usage_time,
-    gameplay_enforce_weapon_guards,
     player_frame_dt_after_roundtrip,
     player_update,
     survival_progression_update,
@@ -471,7 +470,6 @@ class WorldState(msgspec.Struct):
         self.state.time_scale_active = float(self.state.bonuses.reflex_boost) > 0.0
         bonus_update_pre_pickup_timers(self.state, dt)
         gameplay_accumulate_weapon_usage_time(self.state, self.players, frame_dt_ms)
-        gameplay_enforce_weapon_guards(self.state, self.players)
         pickups = bonus_update(
             self.state,
             self.players,

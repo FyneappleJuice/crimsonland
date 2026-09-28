@@ -845,12 +845,13 @@ def update_monster_affixes(players, creatures, dt: float, *, state) -> None:
                     p.pos = Vec2(px + (cx - px) * frac, py + (cy - py) * frac)
                 if _has(c, AffixId.DREAD) and math.hypot(px - cx, py - cy) <= DREAD_AURA_RANGE:
                     p.spread_heat = min(f32(0.48), float(p.spread_heat) + DREAD_SPREAD_HEAT_RATE * dt)
-                if (
-                    _has(c, AffixId.STATIC)
-                    and float(p.weapon.reload_timer) > 0.0
-                    and math.hypot(px - cx, py - cy) <= STATIC_AURA_RANGE
-                ):
-                    p.weapon.reload_timer = float(p.weapon.reload_timer) + STATIC_JAM_EXTRA_RATE * dt
+                if _has(c, AffixId.STATIC) and math.hypot(px - cx, py - cy) <= STATIC_AURA_RANGE:
+                    from ..meta.relics_impl.giant_pact import wielded_slots
+
+                    # Every reloading wielded weapon (both, with Pact of the Giant).
+                    for slot in wielded_slots(p):
+                        if float(slot.reload_timer) > 0.0:
+                            slot.reload_timer = float(slot.reload_timer) + STATIC_JAM_EXTRA_RATE * dt
                 if _has(c, AffixId.GLUTTONY) and math.hypot(px - cx, py - cy) <= GLUTTONY_AURA_RANGE:
                     extra = GLUTTONY_EXTRA_DECAY_MULT * dt
                     if state.bonuses.weapon_power_up > 0.0:

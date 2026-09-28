@@ -6,6 +6,7 @@ from grim.color import RGBA
 
 from ..math_parity import f32
 from ..sim.state_types import BonusPickupEvent, GameplayState
+from ..meta.relics_impl.giant_pact import refill_wielded_slots
 from .apply_context import BonusApplyCtx
 
 
@@ -18,8 +19,8 @@ def apply_reflex_boost(ctx: BonusApplyCtx) -> None:
     )
 
     for target in ctx.players:
-        target.weapon.ammo = float(target.weapon.clip_size)
-        target.weapon.reload_timer = 0.0
+        # Every wielded weapon - both slots with Pact of the Giant.
+        refill_wielded_slots(target, reset_shot_cooldown=False)
 
 
 def apply_reflex_boost_pickup_fx(*, state: GameplayState, pickup: BonusPickupEvent, detail_preset: int) -> None:

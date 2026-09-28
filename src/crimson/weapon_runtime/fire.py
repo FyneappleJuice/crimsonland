@@ -178,6 +178,9 @@ class WeaponFireCtx(msgspec.Struct):
     # its own both-slots-empty/combined-duration reload can take over
     # instead. Default False = zero behavior change for every other caller.
     suppress_ammo_auto_reload: bool = False
+    # Not native: Pact of the Giant - the other slot is out of ammo, so this
+    # weapon is firing alone and doesn't pay the pact's fire-rate cost.
+    giant_pact_partner_dry: bool = False
     player_death_runtime: PlayerDeathRuntime | None = None
 
 
@@ -298,6 +301,67 @@ def _apply_speed_scale_rule(
 
 
 def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
+    """Fire the player's current weapon slot. Not native: everything the
+    shot spawns is stamped with that weapon's id on its owner (OwnerRef.
+    weapon_id) - see _stamp_source_weapon."""
+
+    state = ctx.state
+    weapon_id = int(ctx.player.weapon.weapon_id)
+    pools = [
+        pool.entries
+        for pool in (state.projectiles, state.secondary_projectiles, state.particles)
+        if pool is not None
+    ]
+    before = [{i for i, e in enumerate(entries) if e.active} for entries in pools]
+    result = _fire_weapon_impl(ctx)
+    if result.fired:
+        _stamp_source_weapon(pools, before, weapon_id)
+        ctx.player.last_fired_weapon_id = weapon_id
+    return result
+
+
+def _stamp_source_weapon(pools: list, before: list[set[int]], weapon_id: int) -> None:
+    for entries, active_before in zip(pools, before):
+        for i, entry in enumerate(entries):
+            if entry.active and i not in active_before and int(entry.owner.weapon_id) < 0:
+                entry.owner = msgspec.structs.replace(entry.owner, weapon_id=weapon_id)
+
+
+def _stamp_primary_shot(
+    entry,
+    *,
+    weapon_id: WeaponId,
+    player: PlayerState,
+    perk_player: PlayerState,
+    creatures,
+    force_crit: bool,
+    lucky_power: float,
+    pendulum_dmg_mult: float,
+) -> None:
+    """Not native: roll a trigger-pull projectile's crit and stamp its
+    shot_seq exactly like PrimaryPelletsMode's own pellets do - for the
+    special fire modes (Multi-Plasma's fan, Plasma Overload's twin bolt) that
+    used a bare roll_crit_mult and left shot_seq/did_crit unset. Without this
+    Fire and Forget never counted their shots, and Deep Freeze / Harvester's
+    Scythe / Overdue never saw their crits (nor did Death Wish, Diamond Flask
+    or Critical Mass apply to them)."""
+
+    critical_mass_chance = relic_critical_mass.crit_bonus_chance(player.pos, creatures)
+    critical_mass_mult = relic_critical_mass.crit_mult_penalty_mult(player.pos, creatures)
+    crit_mult, did_crit = roll_primary_crit(
+        weapon_id,
+        force_crit=force_crit,
+        lucky_power=lucky_power,
+        increased_chance=float(perk_player.stats.crit_chance),
+        added_chance=critical_mass_chance,
+        crit_mult=float(perk_player.stats.crit_mult) * critical_mass_mult,
+    )
+    entry.crit_mult = crit_mult * pendulum_dmg_mult
+    entry.did_crit = did_crit
+    entry.shot_seq = int(player.shot_seq)
+
+
+def _fire_weapon_impl(ctx: WeaponFireCtx) -> WeaponFireResult:
     player = ctx.player
     input_state = ctx.input_state
     dt = float(ctx.dt)
@@ -418,7 +482,7 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
     # fire-rate cost while it's active; can't fold into the static
     # shot_cooldown_mult stat for the same reason Pendulum's multiplier can't
     # (see meta/relics_impl/giant_pact.py).
-    giant_pact_rate_mult = relic_giant_pact.fire_rate_cost_mult(player)
+    giant_pact_rate_mult = 1.0 if ctx.giant_pact_partner_dry else relic_giant_pact.fire_rate_cost_mult(player)
     if giant_pact_rate_mult != 1.0:
         shot_cooldown = float(f32(float(shot_cooldown) * giant_pact_rate_mult))
     player.weapon.shot_cooldown = max(0.0, float(f32(float(shot_cooldown))))
@@ -723,7 +787,17 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
                 )
                 if energy_heat_mult != 1.0:
                     state.projectiles.entries[int(fan_proj_id)].energy_heat_mult = float(energy_heat_mult)
-                state.projectiles.entries[int(fan_proj_id)].crit_mult = roll_crit_mult(weapon_id, increased_chance=float(perk_player.stats.crit_chance), crit_mult=float(perk_player.stats.crit_mult))
+                # Same crit roll + shot stamping as a normal pellet (see _stamp_primary_shot).
+                _stamp_primary_shot(
+                    state.projectiles.entries[int(fan_proj_id)],
+                    weapon_id=weapon_id,
+                    player=player,
+                    perk_player=perk_player,
+                    creatures=creatures,
+                    force_crit=death_wish_force_crit,
+                    lucky_power=diamond_flask_power,
+                    pendulum_dmg_mult=pendulum_dmg_mult,
+                )
         case PlasmaOverloadMode():
             # Not native: Plasma Overload bonus - two Plasma Rifle bolts fired
             # side-by-side on the same heading (not a fan - no angle spread).
@@ -756,7 +830,17 @@ def fire_weapon(ctx: WeaponFireCtx) -> WeaponFireResult:
                 )
                 if energy_heat_mult != 1.0:
                     state.projectiles.entries[int(bolt_proj_id)].energy_heat_mult = float(energy_heat_mult)
-                state.projectiles.entries[int(bolt_proj_id)].crit_mult = roll_crit_mult(weapon_id, increased_chance=float(perk_player.stats.crit_chance), crit_mult=float(perk_player.stats.crit_mult))
+                # Same crit roll + shot stamping as a normal pellet (see _stamp_primary_shot).
+                _stamp_primary_shot(
+                    state.projectiles.entries[int(bolt_proj_id)],
+                    weapon_id=weapon_id,
+                    player=player,
+                    perk_player=perk_player,
+                    creatures=creatures,
+                    force_crit=death_wish_force_crit,
+                    lucky_power=diamond_flask_power,
+                    pendulum_dmg_mult=pendulum_dmg_mult,
+                )
                 if weapon_id == WeaponId.TENET_GUN:
                     state.projectiles.entries[int(bolt_proj_id)].tenet_reverse = True
         case SwarmerDumpMode():

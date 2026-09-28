@@ -50,6 +50,13 @@ class OwnerRef(msgspec.Struct, frozen=True):
     # (meta/relics_impl/impaler.py) - it's the shooter's damage (kill/XP
     # credit), but mustn't impale again or heal through Leech.
     via_impale: bool = False
+    # Not native: the weapon that fired this shot (weapon_runtime/fire.py's
+    # fire_weapon stamps it on everything a trigger-pull spawns; children -
+    # bounces, explosions, ion clouds - inherit it through the owner). Read by
+    # creatures/damage.py's run-mod Weapon Type bucket, which used to key off
+    # the shooter's *primary* weapon at hit time - wrong for Pact of the
+    # Giant's second weapon. -1 = unknown (falls back to the primary).
+    weapon_id: int = -1
 
     @classmethod
     def none(cls) -> OwnerRef:

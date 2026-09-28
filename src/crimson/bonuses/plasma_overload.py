@@ -16,6 +16,7 @@ the ammo decrement.
 """
 
 from ..math_parity import f32
+from ..meta.relics_impl.giant_pact import refill_wielded_slots
 from .apply_context import BonusApplyCtx, bonus_apply_seconds
 
 
@@ -37,6 +38,5 @@ def apply_plasma_overload(ctx: BonusApplyCtx) -> None:
     # Same "clear the slate" treatment Fire Bullets gives on pickup - clip
     # tops off immediately instead of waiting out whatever reload was mid-flight.
     ctx.player.weapon_reset_latch = 0
-    ctx.player.weapon.shot_cooldown = 0.0
-    ctx.player.weapon.reload_timer = 0.0
-    ctx.player.weapon.ammo = float(ctx.player.weapon.clip_size)
+    # Every wielded weapon - both slots with Pact of the Giant.
+    refill_wielded_slots(ctx.player, reset_shot_cooldown=True)

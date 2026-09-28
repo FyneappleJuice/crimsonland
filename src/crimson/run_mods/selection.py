@@ -37,12 +37,13 @@ _DAMAGE_TYPE_SUB_ROLL: dict[CreatureDamageType, RunModId] = {
 }
 
 # WEAPON_TYPE_BOOST's sub-roll targets, same idea, keyed by archetype.
-# Not native: SMG and MELEE are deliberately excluded - their only weapons
-# (Submachine Gun, Evil Scythe) are both currently shelved/inactive, so
-# rolling either one would offer a damage bonus with nothing left to apply
-# to. RunModId.SMG_DAMAGE/MELEE_DAMAGE stay defined (same reason
-# ANXIOUS_LOADER stays in PerkId - old replays that already resolved a pick
-# to one of them must still decode), just unreachable from this pool now.
+# Not native: SMG, MELEE and ARC are deliberately excluded - their only
+# weapons (Submachine Gun, Evil Scythe, Arc Gun) are all currently
+# shelved/inactive, so rolling one would offer a damage bonus with nothing
+# left to apply to. RunModId.SMG_DAMAGE/MELEE_DAMAGE/ARC_DAMAGE stay defined
+# (same reason ANXIOUS_LOADER stays in PerkId - old replays that already
+# resolved a pick to one of them must still decode), just unreachable from
+# this pool now.
 _WEAPON_TYPE_SUB_ROLL: dict[WeaponArchetype, RunModId] = {
     WeaponArchetype.PISTOL: RunModId.PISTOL_DAMAGE,
     WeaponArchetype.RIFLE: RunModId.RIFLE_DAMAGE,
@@ -50,7 +51,6 @@ _WEAPON_TYPE_SUB_ROLL: dict[WeaponArchetype, RunModId] = {
     WeaponArchetype.MINIGUN: RunModId.MINIGUN_DAMAGE,
     WeaponArchetype.CANNON: RunModId.CANNON_DAMAGE,
     WeaponArchetype.FLAMETHROWER: RunModId.FLAMETHROWER_DAMAGE,
-    WeaponArchetype.ARC: RunModId.ARC_DAMAGE,
 }
 
 # Current-weapon bias for the sub-rolls below: the entry matching whatever
@@ -100,7 +100,10 @@ def _weighted_sub_roll(
     every other entry."""
 
     ids = list(candidates.values())
-    weights = [_CURRENT_WEAPON_WEIGHT_BIAS if key == current_key else 1.0 for key in candidates]
+    # `current_key` is one key or a set of them (Pact of the Giant: both
+    # weapons' categories). A category both weapons share is still 3x, not 6x.
+    current = current_key if isinstance(current_key, (set, frozenset)) else {current_key}
+    weights = [_CURRENT_WEAPON_WEIGHT_BIAS if key in current else 1.0 for key in candidates]
     return rng.choices(ids, weights=weights, k=1)[0]
 
 
@@ -112,13 +115,33 @@ def _resolve_meta_run_mod(run_mod_id: RunModId, *, players: list[PlayerState], r
 
     if not players:
         return run_mod_id
-    weapon_id = players[0].weapon.weapon_id
-    tags = weapon_tags(weapon_id)
+    from ..meta.relics_impl.giant_pact import wielded_slots
+
+    # Every wielded weapon counts as "current" (both, with Pact of the Giant).
+    tags = [weapon_tags(slot.weapon_id) for slot in wielded_slots(players[0])]
     if run_mod_id == RunModId.DAMAGE_TYPE_BOOST:
-        return _weighted_sub_roll(rng, _DAMAGE_TYPE_SUB_ROLL, tags.damage_type)
+        return _weighted_sub_roll(rng, _DAMAGE_TYPE_SUB_ROLL, frozenset(t.damage_type for t in tags))
     if run_mod_id == RunModId.WEAPON_TYPE_BOOST:
-        return _weighted_sub_roll(rng, _WEAPON_TYPE_SUB_ROLL, tags.archetype)
+        return _weighted_sub_roll(rng, _WEAPON_TYPE_SUB_ROLL, frozenset(t.archetype for t in tags))
     return run_mod_id
+
+
+def _resolve_penalty_run_mod(run_mod_id: RunModId, *, exclude: RunModId, rng: _random.Random) -> RunModId:
+    """Perk Gambler's upgrade penalty, resolved to a concrete run mod. A meta
+    slot (Elemental/Weapon Affinity) used to stay unresolved - shown as
+    "-1x Weapon Affinity", and applying it did nothing, since the meta slots
+    carry no stats. Picked uniformly (not weighted toward the player's weapon,
+    so the penalty doesn't tend to land on what they're using), and never the
+    run mod the same pick is upgrading."""
+
+    if run_mod_id == RunModId.DAMAGE_TYPE_BOOST:
+        targets = list(_DAMAGE_TYPE_SUB_ROLL.values())
+    elif run_mod_id == RunModId.WEAPON_TYPE_BOOST:
+        targets = list(_WEAPON_TYPE_SUB_ROLL.values())
+    else:
+        return run_mod_id
+    targets = [t for t in targets if t != exclude] or targets
+    return rng.choice(targets)
 
 
 def _wildcard_bonus_perks(state: GameplayState, player: PlayerState) -> list[PerkId]:
@@ -188,7 +211,7 @@ def run_mod_generate_choices(
             # already shows all 7) - fall through to a normal slot below.
         elif roll < WILDCARD_REPLACE_CHANCE + WILDCARD_UPGRADE_CHANCE:
             penalty_pool = [rid for rid in _VISIBLE_POOL if rid != run_mod_id]
-            penalty_id = rng.choice(penalty_pool)
+            penalty_id = _resolve_penalty_run_mod(rng.choice(penalty_pool), exclude=run_mod_id, rng=rng)
             choices.append(
                 RunModChoice(
                     kind=RunModChoiceKind.UPGRADED_RUN_MOD,

@@ -81,17 +81,16 @@ def test_prepare_weapon_availability_ignores_quest_progress() -> None:
     assert state.weapon_available[WeaponId.SHOTGUN]
 
 
-def test_prepare_weapon_availability_excludes_special_handout_weapons() -> None:
-    # Shrinkifier 5K and Blade Gun are only ever granted by Survival's own
-    # scripted handout triggers (gameplay.py::survival_update_weapon_handouts)
-    # and immediately revoked back to Pistol if picked up any other way
-    # (survival_enforce_reward_weapon_guard) - rolling them from a normal
-    # Weapon bonus would just be an instant, confusing revert.
+def test_blade_gun_drops_normally_and_shrinkifier_stays_shelved() -> None:
+    # Not native: Blade Gun was a Survival-only handout weapon, revoked back
+    # to Pistol if obtained any other way; that guard is gone and it's a
+    # normal roster weapon now. Shrinkifier 5K stays out via
+    # INACTIVE_WEAPON_IDS until it's reactivated.
     state = GameplayState()
     prepare_weapon_availability(state)
 
+    assert state.weapon_available[WeaponId.BLADE_GUN]
     assert not state.weapon_available[WeaponId.SHRINKIFIER_5K]
-    assert not state.weapon_available[WeaponId.BLADE_GUN]
 
 
 def test_prepare_weapon_availability_excludes_spider_plasma() -> None:

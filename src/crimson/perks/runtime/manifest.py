@@ -5,6 +5,7 @@ from __future__ import annotations
 from ..ids import PerkId
 from ..impl.adrenaline_rush import HOOKS as ADRENALINE_RUSH_HOOKS
 from ..impl.ammo_maniac import HOOKS as AMMO_MANIAC_HOOKS
+from ..impl.ammo_maniac import PLUS_HOOKS as AMMO_MANIAC_PLUS_HOOKS
 from ..impl.bane_of_legends import HOOKS as BANE_OF_LEGENDS_HOOKS
 from ..impl.bandage import HOOKS as BANDAGE_HOOKS
 from ..impl.breathing_room import HOOKS as BREATHING_ROOM_HOOKS
@@ -66,6 +67,7 @@ PERK_HOOKS_IN_ORDER: tuple[PerkHooks, ...] = (
     INFERNAL_CONTRACT_HOOKS,
     GRIM_DEAL_HOOKS,
     AMMO_MANIAC_HOOKS,
+    AMMO_MANIAC_PLUS_HOOKS,
     BANDAGE_HOOKS,
     MY_FAVOURITE_WEAPON_HOOKS,
     PLAGUEBEARER_HOOKS,

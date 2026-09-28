@@ -240,3 +240,37 @@ def test_damage_type_boost_is_biased_toward_the_currently_equipped_weapon() -> N
 
     other_avg = sum(v for k, v in counts.items() if k != RunModId.PLASMA_DAMAGE) / (len(counts) - 1)
     assert counts[RunModId.PLASMA_DAMAGE] > other_avg
+
+
+def test_weapon_affinity_never_rolls_a_shelved_weapon_type() -> None:
+    # SMG/Melee/Arc Damage: their only weapons are shelved, so nothing could
+    # use the bonus - even holding the Arc Gun (debug cycle) never rolls it.
+    import random
+
+    from crimson.run_mods.selection import _resolve_meta_run_mod
+    from crimson.sim.state_types import PlayerState, WeaponSlot
+    from crimson.weapons import WeaponId
+    from grim.geom import Vec2
+
+    player = PlayerState(index=0, pos=Vec2(), weapon=WeaponSlot(weapon_id=WeaponId.RAYGUN))
+    rng = random.Random(7)
+    rolled = {_resolve_meta_run_mod(RunModId.WEAPON_TYPE_BOOST, players=[player], rng=rng) for _ in range(500)}
+    assert not rolled & {RunModId.SMG_DAMAGE, RunModId.MELEE_DAMAGE, RunModId.ARC_DAMAGE}
+
+
+def test_perk_gambler_penalty_is_always_a_concrete_run_mod() -> None:
+    # Regression: a meta-slot penalty stayed unresolved - shown as
+    # "-1x Weapon Affinity" and applying nothing (meta slots carry no stats).
+    import random
+
+    from crimson.run_mods.ids import RUN_MOD_META_SLOTS
+    from crimson.run_mods.selection import _resolve_penalty_run_mod
+
+    rng = random.Random(3)
+    for meta in (RunModId.DAMAGE_TYPE_BOOST, RunModId.WEAPON_TYPE_BOOST):
+        for exclude in (RunModId.RIFLE_DAMAGE, RunModId.BULLET_DAMAGE):
+            for _ in range(100):
+                penalty = _resolve_penalty_run_mod(meta, exclude=exclude, rng=rng)
+                assert penalty not in RUN_MOD_META_SLOTS
+                assert penalty != exclude
+    assert _resolve_penalty_run_mod(RunModId.RIFLE_DAMAGE, exclude=RunModId.BULLET_DAMAGE, rng=rng) == RunModId.RIFLE_DAMAGE

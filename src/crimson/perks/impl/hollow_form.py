@@ -82,6 +82,21 @@ def _spawn_hollow_form_clone(player: PlayerState) -> None:
             reload_timer=0.0,
             shot_cooldown=0.0,
         ),
+        # Not native: Pact of the Giant - the clone's own copy of the alt slot
+        # (a shallow replace would share the player's WeaponSlot, and the
+        # clone firing it would spend the player's alt ammo). Full clip,
+        # ready to fire, same as the primary above.
+        alt_weapon=(
+            msgspec.structs.replace(
+                player.alt_weapon,
+                ammo=max(1.0, float(player.alt_weapon.clip_size)),
+                reload_active=False,
+                reload_timer=0.0,
+                shot_cooldown=0.0,
+            )
+            if player.alt_weapon is not None
+            else None
+        ),
         hollow_form_snapshot=None,
     )
     player.hollow_form_pos = player.pos
@@ -90,7 +105,14 @@ def _spawn_hollow_form_clone(player: PlayerState) -> None:
 
 
 def _tick_hollow_form_clone(ctx: PerksUpdateEffectsCtx, player: PlayerState) -> None:
-    from ...gameplay import advance_weapon_reload, advance_weapon_shot_cooldown, clear_reload_active_if_gate_open
+    from ...gameplay import (
+        advance_giant_pact_alt_slot,
+        advance_weapon_reload,
+        advance_weapon_shot_cooldown,
+        clear_reload_active_if_gate_open,
+        giant_pact_dual_fire,
+    )
+    from ...meta.relics_impl import giant_pact as relic_giant_pact
     from ...weapon_runtime import (
         WeaponFireCtx,
         fire_weapon,
@@ -158,18 +180,36 @@ def _tick_hollow_form_clone(ctx: PerksUpdateEffectsCtx, player: PlayerState) -> 
     # a gap to paper over.
     advance_weapon_shot_cooldown(clone, ctx.state, dt, reload_stationary=True)
     advance_weapon_reload(clone, clone, input_state, dt, ctx.state, clone_players, reload_stationary=True)
+    # Not native: Pact of the Giant - the clone dual-wields too, through the
+    # exact same alt-slot advance and alternating dual-fire the player uses.
+    dual_wielding = relic_giant_pact.dual_wielding(clone)
+    if dual_wielding:
+        advance_giant_pact_alt_slot(
+            clone, clone, input_state, dt, ctx.state, clone_players, reload_stationary=True,
+        )
     clear_reload_active_if_gate_open(clone)
-
-    fire_weapon(
-        WeaponFireCtx(
-            player=clone,
-            input_state=input_state,
-            dt=dt,
-            state=ctx.state,
+    if dual_wielding:
+        relic_giant_pact.clear_alt_reload_active_if_gate_open(clone)
+        giant_pact_dual_fire(
+            clone,
+            input_state,
+            dt,
+            ctx.state,
+            detail_preset=5,
             creatures=ctx.creatures,
             players=ctx.players,
-        ),
-    )
+        )
+    else:
+        fire_weapon(
+            WeaponFireCtx(
+                player=clone,
+                input_state=input_state,
+                dt=dt,
+                state=ctx.state,
+                creatures=ctx.creatures,
+                players=ctx.players,
+            ),
+        )
 
     for i, entry in enumerate(ctx.state.projectiles.entries):
         if entry.active and i not in before_primary:

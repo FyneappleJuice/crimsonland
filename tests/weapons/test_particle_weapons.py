@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import msgspec
+
 import math
 
 from crimson.creatures.runtime import CreatureState
@@ -50,7 +52,8 @@ def test_particle_weapons_spawn_particles_and_use_fractional_ammo() -> None:
         particles = [entry for entry in state.particles.entries if entry.active]
         assert len(particles) == 1
         assert int(particles[0].style_id) == expected_style
-        assert particles[0].owner == OwnerRef.from_player(0)
+        # (Owner also carries the firing weapon's id now - OwnerRef.weapon_id.)
+        assert msgspec.structs.replace(particles[0].owner, weapon_id=-1) == OwnerRef.from_player(0)
         if weapon_id == WeaponId.BUBBLEGUN:
             # Bubblegun particles use the jittered shot angle: native heading is
             # f32(atan2(pos - aim) - half_pi), one ulp below f32 pi/2 here.
@@ -234,6 +237,6 @@ def test_bubblegun_particle_kills_attached_target_on_expire() -> None:
 
     state.particles.update(2.0, creatures=[creature], creature_damage_runtime=damage_runtime)
 
-    assert damage_runtime.kills == [(0, OwnerRef.from_player(0))]
+    assert [(i, msgspec.structs.replace(o, weapon_id=-1)) for i, o in damage_runtime.kills] == [(0, OwnerRef.from_player(0))]
     assert particle.target_id == 0
     assert rng.records[-1].caller == RngCallerStatic.PROJECTILE_UPDATE_PARTICLE_BUBBLEGUN_EXPIRY_SFX

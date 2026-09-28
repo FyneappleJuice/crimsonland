@@ -295,7 +295,12 @@ class BonusPool:
             return None
 
         rng = state.rng
-        force_drop_has_pistol = any(player.weapon.weapon_id == WeaponId.PISTOL for player in players)
+        # Not native: Pact of the Giant counts a starter Pistol in either slot,
+        # but only for its first GIANT_PACT_FORCED_WEAPON_DROPS forced drops.
+        force_drop_has_pistol = any(relic_giant_pact.holding_starter_pistol(player) for player in players)
+        giant_forced = relic_giant_pact.giant_pact_active()
+        if giant_forced and int(state.giant_pact_forced_weapon_drops) >= relic_giant_pact.GIANT_PACT_FORCED_WEAPON_DROPS:
+            force_drop_has_pistol = False
 
         if force_drop_has_pistol:  # noqa: SIM102 - preserve the native branch shape
             if (rng.rand_tagged(RngCallerStatic.BONUS_TRY_SPAWN_ON_KILL_PISTOL_FORCE_WEAPON) & 3) < 3:
@@ -313,6 +318,13 @@ class BonusPool:
                 if weapon_id == WeaponId.PISTOL:
                     weapon_id = weapon_pick_random_available(state)
                     entry.amount = int(weapon_id)
+                # Not native: Pact of the Giant's second forced drop leans
+                # toward the first one's weapon class and damage type.
+                if giant_forced and int(state.giant_pact_forced_weapon_drops) >= 1 and int(
+                    state.giant_pact_first_forced_weapon_id,
+                ) >= 0:
+                    weapon_id = WeaponId(relic_giant_pact.pick_similar_weapon(state, state.giant_pact_first_forced_weapon_id))
+                    entry.amount = int(weapon_id)
 
                 matches = sum(1 for bonus in self._entries if bonus.bonus_id == entry.bonus_id)
                 if matches > 1:
@@ -326,13 +338,17 @@ class BonusPool:
                 if self._is_sentinel_entry(entry):
                     return None
                 self._spawn_on_kill_burst(entry=entry, state=state, detail_preset=detail_preset)
+                if giant_forced:
+                    if int(state.giant_pact_forced_weapon_drops) == 0:
+                        state.giant_pact_first_forced_weapon_id = int(entry.amount)
+                    state.giant_pact_forced_weapon_drops = int(state.giant_pact_forced_weapon_drops) + 1
                 return entry
 
         base_roll = rng.rand_tagged(RngCallerStatic.BONUS_TRY_SPAWN_ON_KILL_BASE_GATE)
         if base_roll % 9 != 1:
             allow_without_magnet = False
             if players:
-                has_pistol = any(player.weapon.weapon_id == WeaponId.PISTOL for player in players)
+                has_pistol = any(relic_giant_pact.holding_starter_pistol(player) for player in players)
                 if has_pistol:
                     allow_without_magnet = (
                         rng.rand_tagged(RngCallerStatic.BONUS_TRY_SPAWN_ON_KILL_PISTOL_ALLOW_WITHOUT_MAGNET) % 5 == 1
