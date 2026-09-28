@@ -62,5 +62,13 @@ ION_TYPES = frozenset(
 
 FIRE_BULLETS_TYPES = frozenset({ProjectileTemplateId.FIRE_BULLETS})
 
+# Not native: Acid Lob affix (creatures/rarity.py) reuses the Ion Minigun's
+# projectile visual (same beam-family glow sprite + comet-tail streak body),
+# tinted green - see primary_beam.py's is_acid_lob branch. Deliberately NOT
+# added to ION_TYPES - that would also turn on the
+# chain-lightning-to-nearby-creatures VFX/logic real Ion weapons get, which
+# doesn't belong on a monster-fired lob.
+ACID_LOB_BEAM_TYPES = frozenset({ProjectileTemplateId.ACID_LOB})
+
 # "Beam" in the original renderer is really the Ion/Fire streak + chain UV family.
-BEAM_TYPES = ION_TYPES | FIRE_BULLETS_TYPES
+BEAM_TYPES = ION_TYPES | FIRE_BULLETS_TYPES | ACID_LOB_BEAM_TYPES

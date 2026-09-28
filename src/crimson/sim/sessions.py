@@ -102,6 +102,14 @@ class PostStepContext(msgspec.Struct, frozen=True):
     detail_preset: int
 
 
+# Not native: dens no longer birth from level/XP 0 - early game was already
+# crowded with ambient waves before a den got mixed in on top. Dens stay
+# fully dormant (cooldown doesn't even tick) until the player reaches this
+# level, then the existing shrinking-interval formula (survival_den_interval_s)
+# takes over exactly as before.
+SURVIVAL_DEN_MIN_LEVEL = 4
+
+
 class SurvivalSpawnState(msgspec.Struct):
     stage: int = 0
     spawn_cooldown_ms: float = 0.0
@@ -112,8 +120,9 @@ class SurvivalSpawnState(msgspec.Struct):
     boss_wave_index: int = 0
     # Not native: recurring Den spawns (see build_survival_den_plan) -
     # seconds left until the next one, reset each time to
-    # survival_den_interval_s(level) (shrinks as level climbs).
-    den_spawn_cooldown_s: float = 5.0
+    # survival_den_interval_s(level) (shrinks as level climbs). Doesn't start
+    # ticking until SURVIVAL_DEN_MIN_LEVEL is reached (see survival_mid_step).
+    den_spawn_cooldown_s: float = 20.0
 
 
 class RushSpawnState(msgspec.Struct):
@@ -222,20 +231,21 @@ def survival_mid_step(ctx: MidStepContext, spawn: SurvivalSpawnState) -> None:
     # Spider creature types they birth) instead of those only ever showing
     # up in quests.
     dt_s = ctx.dt_sim_ms / 1000.0
-    spawn.den_spawn_cooldown_s -= dt_s
-    if spawn.den_spawn_cooldown_s <= 0.0:
-        spawn.den_spawn_cooldown_s += survival_den_interval_s(int(player_level))
-        den_plan = build_survival_den_plan(
-            survival_den_pick_template(),
-            survival_den_pick_position(),
-            float(math.pi),
-            state.rng,
-            ctx.world.creatures.env,
-            player_level=int(player_level),
-            player_experience=int(player_xp),
-            tier=survival_den_rarity_tier(int(player_level)),
-        )
-        ctx.world.creatures.spawn_plan(den_plan, rng=state.rng)
+    if int(player_level) >= SURVIVAL_DEN_MIN_LEVEL:
+        spawn.den_spawn_cooldown_s -= dt_s
+        if spawn.den_spawn_cooldown_s <= 0.0:
+            spawn.den_spawn_cooldown_s += survival_den_interval_s(int(player_level))
+            den_plan = build_survival_den_plan(
+                survival_den_pick_template(int(player_level)),
+                survival_den_pick_position(),
+                float(math.pi),
+                state.rng,
+                ctx.world.creatures.env,
+                player_level=int(player_level),
+                player_experience=int(player_xp),
+                tier=survival_den_rarity_tier(int(player_level)),
+            )
+            ctx.world.creatures.spawn_plan(den_plan, rng=state.rng)
 
     # Not native: once the native milestone ladder (above) is exhausted, keep
     # escalating instead of falling silent - periodic boss waves, growing in

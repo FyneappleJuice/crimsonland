@@ -30,6 +30,12 @@ from .menu_panel import MENU_PANEL_DST_BOTTOM_H, MENU_PANEL_DST_TOP_H, draw_clas
 from .perk_menu import PERK_MENU_ANIM_END_MS, PERK_MENU_ANIM_START_MS, ui_element_slide_x
 
 PERK_HISTORY_PANEL_WIDTH = 220.0
+# Not native: "Stat Bonuses" used to be a bottom section squeezed into the
+# same panel as "Your Perks" (a fixed 190px slice), which cut its own list off
+# fast. It's a full separate panel now, to the left of the perks one, with
+# the whole panel height to itself.
+PERK_HISTORY_STATS_PANEL_WIDTH = 220.0
+PERK_HISTORY_PANEL_GAP = 10.0
 PERK_HISTORY_MARGIN_RIGHT = 12.0
 PERK_HISTORY_MARGIN_TOP = 40.0
 PERK_HISTORY_MARGIN_BOTTOM = 40.0
@@ -42,13 +48,16 @@ PERK_HISTORY_PADDING_X = 10.0
 _PANEL_BORDER_SCALE = PERK_HISTORY_PANEL_WIDTH / 510.0
 _PANEL_TOP_CHROME_H = MENU_PANEL_DST_TOP_H * _PANEL_BORDER_SCALE
 _PANEL_BOTTOM_CHROME_H = MENU_PANEL_DST_BOTTOM_H * _PANEL_BORDER_SCALE
+_STATS_PANEL_BORDER_SCALE = PERK_HISTORY_STATS_PANEL_WIDTH / 510.0
+_STATS_PANEL_TOP_CHROME_H = MENU_PANEL_DST_TOP_H * _STATS_PANEL_BORDER_SCALE
+_STATS_PANEL_BOTTOM_CHROME_H = MENU_PANEL_DST_BOTTOM_H * _STATS_PANEL_BORDER_SCALE
 
 PERK_HISTORY_TITLE_Y = _PANEL_TOP_CHROME_H + 8.0
 PERK_HISTORY_LIST_Y = _PANEL_TOP_CHROME_H + 26.0
 PERK_HISTORY_LIST_STEP = 14.0
-PERK_HISTORY_STATS_SECTION_H = 190.0
-PERK_HISTORY_STATS_TITLE_H = 16.0
-PERK_HISTORY_STATS_ROW_H = 13.0
+PERK_HISTORY_STATS_TITLE_Y = _STATS_PANEL_TOP_CHROME_H + 8.0
+PERK_HISTORY_STATS_LIST_Y = _STATS_PANEL_TOP_CHROME_H + 26.0
+PERK_HISTORY_STATS_ROW_H = 14.0
 
 PERK_HISTORY_TITLE_COLOR = rl.Color(255, 210, 120, 255)
 PERK_HISTORY_TEXT_COLOR = rl.Color(215, 215, 215, 255)
@@ -60,7 +69,9 @@ PERK_HISTORY_STATS_MORE_COLOR = rl.Color(140, 140, 140, 200)
 
 
 def perk_history_panel_slide_x(t_ms: float) -> float:
-    """Slides in from the real screen's right edge (+width -> 0)."""
+    """Slides in from the real screen's right edge (+width -> 0). Both panels
+    (perks and stats) share this offset so they slide in together as one
+    visual unit."""
 
     return ui_element_slide_x(
         t_ms,
@@ -77,9 +88,11 @@ class PerkHistoryPanelComputedLayout(msgspec.Struct):
     list_pos: Vec2
     list_step_y: float
     list_bottom: float
+    stats_panel: Rect
     stats_title_pos: Vec2
     stats_list_pos: Vec2
     stats_row_h: float
+    stats_list_bottom: float
 
 
 def perk_history_panel_compute_layout(
@@ -93,11 +106,16 @@ def perk_history_panel_compute_layout(
     panel_h = max(0.0, screen_h - PERK_HISTORY_MARGIN_TOP - PERK_HISTORY_MARGIN_BOTTOM)
     panel = Rect.from_pos_size(Vec2(panel_x, panel_y), Vec2(PERK_HISTORY_PANEL_WIDTH, panel_h))
 
+    stats_panel_x = panel_x - PERK_HISTORY_PANEL_GAP - PERK_HISTORY_STATS_PANEL_WIDTH
+    stats_panel = Rect.from_pos_size(Vec2(stats_panel_x, panel_y), Vec2(PERK_HISTORY_STATS_PANEL_WIDTH, panel_h))
+
     title_pos = panel.top_left.offset(dx=PERK_HISTORY_PADDING_X, dy=PERK_HISTORY_TITLE_Y)
     list_pos = panel.top_left.offset(dx=PERK_HISTORY_PADDING_X, dy=PERK_HISTORY_LIST_Y)
-    stats_title_pos = Vec2(panel.x + PERK_HISTORY_PADDING_X, panel.bottom - PERK_HISTORY_STATS_SECTION_H)
-    stats_list_pos = stats_title_pos.offset(dy=PERK_HISTORY_STATS_TITLE_H)
-    list_bottom = stats_title_pos.y - 6.0
+    list_bottom = panel.bottom - _PANEL_BOTTOM_CHROME_H - 8.0
+
+    stats_title_pos = stats_panel.top_left.offset(dx=PERK_HISTORY_PADDING_X, dy=PERK_HISTORY_STATS_TITLE_Y)
+    stats_list_pos = stats_panel.top_left.offset(dx=PERK_HISTORY_PADDING_X, dy=PERK_HISTORY_STATS_LIST_Y)
+    stats_list_bottom = stats_panel.bottom - _STATS_PANEL_BOTTOM_CHROME_H - 8.0
 
     return PerkHistoryPanelComputedLayout(
         panel=panel,
@@ -105,9 +123,11 @@ def perk_history_panel_compute_layout(
         list_pos=list_pos,
         list_step_y=PERK_HISTORY_LIST_STEP,
         list_bottom=list_bottom,
+        stats_panel=stats_panel,
         stats_title_pos=stats_title_pos,
         stats_list_pos=stats_list_pos,
         stats_row_h=PERK_HISTORY_STATS_ROW_H,
+        stats_list_bottom=stats_list_bottom,
     )
 
 
@@ -171,13 +191,13 @@ _ARCHETYPE_PREFIX = "damage_mult_archetype_"
 
 def _format_stat(kind: str, value: float) -> str:
     if kind == "pct":
-        return f"{(value - 1.0) * 100.0:+.0f}%"
+        return f"{(value - 1.0) * 100.0:+.1f}%"
     if kind == "inv_pct":
         # <1.0 is the good direction (faster fire/reload, tighter spread) -
         # flip the sign so the displayed percent still reads as a buff.
-        return f"{(1.0 - value) * 100.0:+.0f}%"
+        return f"{(1.0 - value) * 100.0:+.1f}%"
     if kind == "chance":
-        return f"{value * 100.0:+.0f}%"
+        return f"{value * 100.0:+.1f}%"
     if kind == "mult":
         return f"x{value:.2f}"
     if kind == "rate":
@@ -248,6 +268,17 @@ def draw_perk_history_panel(
     )
     draw_menu_panel_hardware(panel_tex, panel=layout.panel.to_rl(), flip_x=True, scale=0.3)
 
+    # Stats panel is its own separate plate, to the left of the perks one -
+    # not sharing a hardware hinge with it (that accent stays anchored to
+    # the perks panel's own corner, same as before the split).
+    draw_classic_menu_panel(
+        panel_tex,
+        dst=layout.stats_panel.to_rl(),
+        shadow=shadows_enabled,
+        flip_x=True,
+        trim_hardware=True,
+    )
+
     font = resources.small_font
     draw_small_text(font, "Your Perks", layout.title_pos, PERK_HISTORY_TITLE_COLOR)
 
@@ -281,7 +312,7 @@ def draw_perk_history_panel(
     draw_small_text(font, "Stat Bonuses", layout.stats_title_pos, PERK_HISTORY_STATS_TITLE_COLOR)
     stat_rows = stat_summary_rows(player.stats)
     pos = layout.stats_list_pos
-    stats_bottom = layout.panel.bottom - _PANEL_BOTTOM_CHROME_H - 8.0
+    stats_bottom = layout.stats_list_bottom
     if not stat_rows:
         draw_small_text(font, "(none yet)", pos, PERK_HISTORY_EMPTY_COLOR)
     else:

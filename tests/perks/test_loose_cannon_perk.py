@@ -73,10 +73,10 @@ def test_loose_cannon_varies_every_non_dot_hit() -> None:
         assert len(samples) > 1
 
 
-def test_loose_cannon_stays_within_its_declared_range_and_averages_to_1_5x() -> None:
+def test_loose_cannon_stays_within_its_declared_range_and_averages_to_1_3x() -> None:
     samples = [_hit(damage_type=CreatureDamageType.BULLET) for _ in range(2000)]
-    assert all(-100.0 <= value <= 400.0 for value in samples)
-    assert statistics.mean(samples) == pytest.approx(150.0, rel=0.1)
+    assert all(-100.0 <= value <= 360.0 for value in samples)
+    assert statistics.mean(samples) == pytest.approx(130.0, rel=0.1)
 
 
 def test_loose_cannon_can_roll_negative_and_heal_the_target() -> None:

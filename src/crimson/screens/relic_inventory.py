@@ -172,6 +172,11 @@ class RelicInventoryView:
         self._play_btn = UiButtonState("Play", force_wide=True)
         self._back_btn = UiButtonState("Back", force_wide=True)
 
+        # Not native: which relic (if any) the mouse is over this frame, set
+        # by _draw_inventory/_draw_grid and read by draw() to show a hover
+        # tooltip - see _draw_relic_tooltip.
+        self._hovered_relic_id: int = 0
+
         # --debug only: live panel-geometry tuner (sliders + numeric readout).
         # Each panel is its own independent x/y/w/h - see _DBG_SLIDERS.
         self._dbg_left_x, self._dbg_left_y, self._dbg_left_w, self._dbg_left_h = _DEFAULT_LEFT
@@ -387,6 +392,7 @@ class RelicInventoryView:
         # While tuning panel geometry, keep the two panels blank (no relic
         # rows / grid cells) so the borders/corners are easy to read.
         if not debug:
+            self._hovered_relic_id = 0
             self._draw_inventory(
                 res, scale, ind_panel=ind_panel, header_pad=_DEFAULT_HEADER_PAD, mp=Vec2(*self._mouse()),
             )
@@ -395,6 +401,10 @@ class RelicInventoryView:
                 grid_top=_DEFAULT_GRID_TOP, header_pad=_DEFAULT_HEADER_PAD,
                 mp=Vec2(*self._mouse()),
             )
+            # Not native: a relic on the cursor is being placed, not
+            # inspected - the tooltip would just cover the placement preview.
+            if self._hovered_relic_id and not self._held:
+                self._draw_relic_tooltip(res, scale, relic_id=self._hovered_relic_id, screen_w=sw, screen_h=sh)
         else:
             self._inv_rects = []
 
@@ -492,6 +502,8 @@ class RelicInventoryView:
             icon_rect = Rect.from_pos_size(Vec2(x, ry), Vec2(icon_w, icon_h))
             self._inv_rects.append((icon_rect, rid))
             hovered = icon_rect.contains(mp)
+            if hovered:
+                self._hovered_relic_id = rid
             _draw_shape_plate(
                 ind_panel, Vec2(x, ry), w_cells, h_cells, cell, _DEFAULT_CELL_GAP,
                 _SLOT_TINT_HOVER if hovered else _SLOT_TINT_IDLE,
@@ -577,6 +589,7 @@ class RelicInventoryView:
             found = relics.placement_at(*hovered_cell)
             if found is not None:
                 hovered_placement_idx = found[0]
+                self._hovered_relic_id = found[1].relic_id
 
         covered: set[tuple[int, int]] = set()
         for placement in st.placements:
@@ -631,6 +644,49 @@ class RelicInventoryView:
             draw_ui_text(
                 res, "only one of each pact can be equipped", Vec2(gx, summary_y + 18.0), scale=scale, color=_WARN,
             )
+
+    def _wrap_relic_text(self, res, scale: float, text: str, *, max_width: float) -> list[str]:
+        words = text.split(" ")
+        lines: list[str] = []
+        current = ""
+        for word in words:
+            candidate = f"{current} {word}".strip()
+            if not current or self._w(res, candidate, scale) <= max_width:
+                current = candidate
+            else:
+                lines.append(current)
+                current = word
+        if current:
+            lines.append(current)
+        return lines
+
+    def _draw_relic_tooltip(self, res, scale: float, *, relic_id: int, screen_w: float, screen_h: float) -> None:
+        """Hover tooltip explaining what a relic actually does - follows the
+        mouse, clamped to stay fully on-screen."""
+
+        blurb = relics.RELIC_BLURB.get(relic_id, "")
+        if not blurb:
+            return
+        title = relics.RELIC_NAME.get(relic_id, f"relic {relic_id}")
+        max_width = 260.0
+        pad = 8.0
+        line_h = 16.0
+        lines = [title, *self._wrap_relic_text(res, scale, blurb, max_width=max_width)]
+        box_w = max_width + pad * 2.0
+        box_h = len(lines) * line_h + pad * 2.0
+
+        mx, my = self._mouse()
+        box_x = max(4.0, min(mx + 18.0, screen_w - box_w - 4.0))
+        box_y = max(4.0, min(my + 18.0, screen_h - box_h - 4.0))
+
+        rl.draw_rectangle(int(box_x), int(box_y), int(box_w), int(box_h), rl.Color(10, 12, 18, 235))
+        rl.draw_rectangle_lines(int(box_x), int(box_y), int(box_w), int(box_h), rl.Color(120, 130, 150, 255))
+
+        ty = box_y + pad
+        for i, line in enumerate(lines):
+            color = _BLUE if i == 0 else _WHITE
+            draw_ui_text(res, line, Vec2(box_x + pad, ty), scale=scale, color=color)
+            ty += line_h
 
     def _draw_sign(self, res) -> None:
         screen_w = float(self.state.config.display.width)

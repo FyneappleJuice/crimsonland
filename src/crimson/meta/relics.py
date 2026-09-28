@@ -106,6 +106,22 @@ RELIC_LABEL: dict[int, str] = {
     RelicId.WARBANNER_LOW: "Bnr",
 }
 
+# Not native: short mechanical summary per relic, same spirit as
+# creatures/rarity.py's AFFIX_BLURB - for hover tooltips (relic inventory
+# screen, sandbox debug panel), not shown anywhere else.
+RELIC_BLURB: dict[int, str] = {
+    RelicId.DEADEYE_PACT_LOW: "damage scales with shot distance: -20% point-blank, +20%+ at long range",
+    RelicId.RICOCHET_LOW: "shots also chain once to a nearby enemy; both hits deal 65% less damage",
+    RelicId.GATHERING_WINDS_LOW: "landing hits builds toward +20% speed/-20% damage taken; getting hit strips half",
+    RelicId.SLAYER_PACT_LOW: "a kill streak opens a window at 1.2x damage taken; 0.8x otherwise",
+    RelicId.CRITICAL_MASS_LOW: "crit chance rises with nearby enemies; crit damage dips below 5 nearby",
+    RelicId.LEECH_LOW: "hits heal a % of damage dealt over time; kills cost a % of current HP",
+    RelicId.IMPALER_LOW: "hits deal -20% damage but stack an Impale that later hits also trigger",
+    RelicId.FIRST_STRIKE_LOW: "first hit on a creature deals +60% damage; until then it hits you 40% harder",
+    RelicId.FORTIFY_LOW: "landing hits builds stacks of damage reduction (up to -12%); -10% move speed",
+    RelicId.WARBANNER_LOW: "each level-up plants a banner; nearby banners give +25% attack & move speed",
+}
+
 # (width, height) in grid cells. Unlisted ids default to 1x1. The pact
 # relics are all 1x1 for now - the 3x4 grid + polyomino footprint rework is
 # a separate, not-yet-built idea; see the relics_impl modules' own docstrings.

@@ -25,7 +25,7 @@ from grim.rand import Crand
 from tests.support.factories import RecordingCreatureDamageRuntime, make_projectile_update_options
 from tests.support.factories import make_creature_state as _creature
 
-_TIERS = [(RelicId.IMPALER_LOW, 1.12)]
+_TIERS = [(RelicId.IMPALER_LOW, 1.25)]
 
 
 def _equip(monkeypatch: pytest.MonkeyPatch, *relic_ids: RelicId) -> None:
@@ -115,7 +115,7 @@ def test_bullets_ramp_up_on_one_target(monkeypatch: pytest.MonkeyPatch) -> None:
     assert impaled[0] == pytest.approx(plain[0] * 0.80, rel=1e-4)
     # (Pistol damage varies a hair with the exact hit point, so the stored
     # Impales from earlier shots don't match the last shot to the digit.)
-    assert impaled[-1] == pytest.approx(plain[-1] * 1.12, rel=5e-3)
+    assert impaled[-1] == pytest.approx(plain[-1] * 1.25, rel=5e-3)
 
 
 def test_rocket_impact_impales_but_its_blast_ticks_dont(monkeypatch: pytest.MonkeyPatch) -> None:

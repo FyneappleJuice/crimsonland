@@ -146,7 +146,7 @@ def _without_relic(monkeypatch: pytest.MonkeyPatch, fn):
 def test_bullet_hit_and_its_bounce_pay_the_penalty(monkeypatch: pytest.MonkeyPatch) -> None:
     first, bounce = _damage_dealt()
     plain, _ = _without_relic(monkeypatch, _damage_dealt)
-    assert first == pytest.approx(plain * 0.40, rel=1e-5)  # 60% less
+    assert first == pytest.approx(plain * 0.35, rel=1e-5)  # 65% less
     assert bounce == pytest.approx(first)
 
 
@@ -168,7 +168,7 @@ def test_ion_bolt_and_its_cloud_pay_the_penalty(monkeypatch: pytest.MonkeyPatch)
     with_relic = _ion_rifle_total_damage()
     plain = _without_relic(monkeypatch, _ion_rifle_total_damage)
     assert plain > 0.0
-    assert with_relic == pytest.approx(plain * 0.40, rel=1e-4)
+    assert with_relic == pytest.approx(plain * 0.35, rel=1e-4)
 
 
 def _ion_rifle_total_damage_with_crit_mult(crit_mult: float) -> float:
@@ -281,4 +281,4 @@ def test_rocket_hit_and_explosion_pay_the_penalty(monkeypatch: pytest.MonkeyPatc
     with_relic = _struck_total()
     plain = _without_relic(monkeypatch, _struck_total)
     assert plain > 0.0
-    assert with_relic == pytest.approx(plain * 0.40, rel=1e-3)
+    assert with_relic == pytest.approx(plain * 0.35, rel=1e-3)

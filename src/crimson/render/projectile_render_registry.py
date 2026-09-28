@@ -87,6 +87,8 @@ BEAM_EFFECT_SCALE_BY_TYPE_ID: dict[int, float] = {
     ProjectileTemplateId.ION_MINIGUN: 1.05,
     ProjectileTemplateId.ION_RIFLE: 2.2,
     ProjectileTemplateId.ION_CANNON: 3.5,
+    # Not native: Acid Lob affix borrows the Ion Minigun's own glow scale.
+    ProjectileTemplateId.ACID_LOB: 1.05,
 }
 
 

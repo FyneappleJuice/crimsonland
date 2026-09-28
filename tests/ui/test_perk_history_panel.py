@@ -42,12 +42,12 @@ def test_stat_summary_rows_formats_percent_and_multiplier_stats() -> None:
 
     rows = dict(stat_summary_rows(stats))
 
-    assert rows["Bullet Dmg"] == "+50%"
+    assert rows["Bullet Dmg"] == "+50.0%"
     # shot_cooldown_mult < 1.0 is a buff (fires faster) - displayed as a
     # positive percent, not a negative one, so it reads as good news.
-    assert rows["Fire Rate"] == "+15%"
+    assert rows["Fire Rate"] == "+15.0%"
     assert rows["Crit Multiplier"] == "x2.50"
-    assert rows["Crit Chance"] == "+10%"
+    assert rows["Crit Chance"] == "+10.0%"
     assert rows["Clip Size"] == "+3"
 
 
@@ -56,4 +56,4 @@ def test_stat_summary_rows_derives_archetype_labels_from_the_field_suffix() -> N
 
     rows = dict(stat_summary_rows(stats))
 
-    assert rows["Shotgun Dmg"] == "+20%"
+    assert rows["Shotgun Dmg"] == "+20.0%"

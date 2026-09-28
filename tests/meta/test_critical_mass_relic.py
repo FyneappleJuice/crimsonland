@@ -27,7 +27,7 @@ def _crowd(count: int, *, distance: float) -> list:
 
 def test_radius_counts_enemies_out_to_400() -> None:
     assert critical_mass.CRITICAL_MASS_RADIUS == 400.0
-    assert critical_mass.crit_bonus_chance(Vec2(), _crowd(7, distance=380.0)) == pytest.approx(0.132)
+    assert critical_mass.crit_bonus_chance(Vec2(), _crowd(7, distance=380.0)) == pytest.approx(0.10)
     assert critical_mass.crit_bonus_chance(Vec2(), _crowd(7, distance=420.0)) == 0.0
 
 
@@ -44,7 +44,7 @@ def _pistol_damage_vs_no_relic(monkeypatch: pytest.MonkeyPatch, relic: RelicId, 
     return (1.0 + chance * (mult - 1.0)) / (1.0 + base * (CRIT_MULTIPLIER - 1.0))
 
 
-@pytest.mark.parametrize(("relic", "gain"), [(RelicId.CRITICAL_MASS_LOW, 0.12)])
+@pytest.mark.parametrize(("relic", "gain"), [(RelicId.CRITICAL_MASS_LOW, 1.0 / 11.0)])
 def test_pistol_gains_the_tier_value_at_seven_enemies(monkeypatch: pytest.MonkeyPatch, relic: RelicId, gain: float) -> None:
     assert _pistol_damage_vs_no_relic(monkeypatch, relic, 7) == pytest.approx(1.0 + gain)
     # Keeps growing to the 10-enemy cap, then stops.

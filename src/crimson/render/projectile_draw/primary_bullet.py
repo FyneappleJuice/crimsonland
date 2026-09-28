@@ -38,11 +38,7 @@ def draw_bullet_trail(ctx: ProjectileDrawCtx) -> bool:
         src = rl.Rectangle(0.0, 0.0, float(bullet.width), float(bullet.height))
         dst = rl.Rectangle(ctx.screen_pos.x, ctx.screen_pos.y, float(size), float(size))
         origin = rl.Vector2(float(size) * 0.5, float(size) * 0.5)
-        from ...projectiles.types import ProjectileTemplateId
-
-        # Not native: Acid Lob affix tints its own round sprite green too.
-        rgb = (110, 230, 120) if type_id == ProjectileTemplateId.ACID_LOB else (220, 220, 220)
-        tint = rl.Color(rgb[0], rgb[1], rgb[2], int(alpha_byte))
+        tint = rl.Color(220, 220, 220, int(alpha_byte))
         rl.draw_texture_pro(bullet, src, dst, origin, ctx.angle * RAD_TO_DEG, tint)
         drawn = True
 

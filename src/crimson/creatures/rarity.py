@@ -18,7 +18,6 @@ from enum import IntEnum
 
 import msgspec
 
-from grim.color import RGBA
 from grim.geom import Vec2
 
 from ..math_parity import NATIVE_HALF_PI, f32
@@ -95,7 +94,9 @@ HATCHING_COUNT = 3
 # _queue_detonation / _tick_pending_detonations below) with a warning ring
 # drawn by render/world/draw.py's draw_pending_detonation_warnings.
 BOMBER_DAMAGE_MULT = 0.6
-BOMBER_FUSE_DELAY_S = 0.75
+# Not native: fuse delays for every on-death effect (Bomber/Pyre/Anchoring)
+# bumped +200% (3x) for a longer, more readable get-clear window.
+BOMBER_FUSE_DELAY_S = 2.25
 
 TICK_RANGE = 100.0
 TICK_FRAC_PER_S = 0.05
@@ -103,13 +104,13 @@ LUNGE_INTERVAL_S = 3.0
 LUNGE_DURATION_S = 0.4
 LUNGE_SPEED_BONUS = 3.0        # +300% -> 4x total during the dash window
 LUNGE_CONTACT_BONUS = 1.0      # +100% -> 2x total during the dash window
-ACID_LOB_INTERVAL_S = 2.0
+ACID_LOB_INTERVAL_S = 5.0
 # Not native: Acid Lob affix deals no direct hit damage (see the
 # ACID_LOB-specific branch in projectiles/runtime/projectile_pool.py's
 # step()) - instead it queues this damage as a drip over
 # ACID_LOB_DOT_DURATION_S, the inverse of the Leech relic's heal-over-time
 # instance (meta/relics_impl/leech.py).
-ACID_LOB_DOT_TOTAL_DAMAGE = 18.0
+ACID_LOB_DOT_TOTAL_DAMAGE = 10.0
 ACID_LOB_DOT_DURATION_S = 4.0
 FEASTING_HEAL_FRACTION = 0.3
 
@@ -140,19 +141,21 @@ STATIC_JAM_EXTRA_RATE = 0.43        # extends an in-progress reload by this much
 GLUTTONY_AURA_RANGE = 300.0
 GLUTTONY_EXTRA_DECAY_MULT = 2.0     # active power-up timers drain at 3x (1 + this) while in range
 
-PYRE_FUSE_DELAY_S = 0.6
+PYRE_FUSE_DELAY_S = 1.8
 PYRE_RADIUS = 90.0
 PYRE_DURATION_S = 4.0
-PYRE_DAMAGE_PER_S = 22.0
+# Not native: total damage the burning ground can deal over its full
+# duration is capped at 10 (2.5/s * 4s), not per-second-unbounded.
+PYRE_DAMAGE_PER_S = 2.5
 
 SOUL_STACK_RANGE = 250.0
 SOUL_DAMAGE_PER_STACK = 0.05
 SOUL_SIZE_PER_STACK = 0.03
 
 VORTEX_RANGE = 300.0
-VORTEX_PULL_FRAC_PER_S = 0.15
+VORTEX_PULL_FRAC_PER_S = 0.08
 
-ANCHORING_FUSE_DELAY_S = 0.4
+ANCHORING_FUSE_DELAY_S = 1.2
 ANCHORING_RADIUS = 200.0
 ANCHORING_DURATION_S = 2.0
 ANCHORING_PULL_FRAC_PER_S = 0.5
@@ -464,8 +467,15 @@ def _resist(init, damage_type: int, mult: float) -> None:
     d[int(damage_type)] = d.get(int(damage_type), 1.0) * mult
 
 
-def apply_rarity(init, *, tier: int, player_experience: int) -> None:
-    """Mutate a survival CreatureInit: apply tier bump + rolled affixes."""
+def apply_rarity(
+    init, *, tier: int, player_experience: int, forced_affixes: tuple[int, ...] | None = None,
+) -> None:
+    """Mutate a survival CreatureInit: apply tier bump + rolled affixes.
+
+    `forced_affixes`, when given, replaces the random roll_affixes(tier, xp)
+    pick with this exact set instead - used by the sandbox debug panel so a
+    tester can pin down a specific affix combination rather than rerolling
+    until one happens to come up (see ui/sandbox_debug_panel.py)."""
     tier = int(tier)
     if tier <= 0:
         return
@@ -477,7 +487,7 @@ def apply_rarity(init, *, tier: int, player_experience: int) -> None:
     speed = float(init.move_speed or 1.0)
     contact = float(init.contact_damage or 0.0)
 
-    affixes = roll_affixes(tier, xp)
+    affixes = tuple(forced_affixes) if forced_affixes is not None else roll_affixes(tier, xp)
     reward_mult = _TIER_REWARD_MULT[tier]
     threat = 0
     for aid in affixes:
@@ -1085,6 +1095,10 @@ class PendingMonsterDetonation(msgspec.Struct):
 
 
 def _queue_detonation(creature, *, state, detail_preset: int) -> None:
+    # Not native: no queue-time nova burst - the fuse-countdown warning ring
+    # (render/world/draw.py's draw_pending_detonation_warnings) already
+    # telegraphs it every frame; a one-shot flash on top of that read as a
+    # second, unrelated "explosion" before the real one.
     try:
         from ..meta.relics_impl.first_strike import incoming_damage_mult
 
@@ -1098,9 +1112,6 @@ def _queue_detonation(creature, *, state, detail_preset: int) -> None:
                 player_damage=player_damage,
                 detail_preset=int(detail_preset),
             ),
-        )
-        state.effects.spawn_ring(
-            pos=creature.pos, detail_preset=int(detail_preset), color=RGBA(0.95, 0.4, 0.15, 1.0),
         )
     except Exception:
         pass
@@ -1196,19 +1207,8 @@ def _queue_area_effect(
                 detail_preset=int(detail_preset),
             ),
         )
-        color = RGBA(0.95, 0.35, 0.1, 1.0) if kind == _AreaEffectKind.PYRE else RGBA(0.6, 0.25, 0.85, 1.0)
-        state.effects.spawn_ring(pos=pos, detail_preset=int(detail_preset), color=color)
     except Exception:
         pass
-
-
-def _trigger_area_effect(effect: PendingMonsterAreaEffect, *, state) -> None:
-    try:
-        color = RGBA(1.0, 0.5, 0.15, 1.0) if effect.kind == _AreaEffectKind.PYRE else RGBA(0.7, 0.3, 0.95, 1.0)
-        state.effects.spawn_ring(pos=effect.pos, detail_preset=int(effect.detail_preset), color=color)
-    except Exception:
-        pass
-
 
 def _apply_area_effect_tick(effect: PendingMonsterAreaEffect, dt: float, *, state, players) -> None:
     from ..player_damage import player_take_damage
@@ -1221,7 +1221,10 @@ def _apply_area_effect_tick(effect: PendingMonsterAreaEffect, dt: float, *, stat
         if math.hypot(px - cx, py - cy) > float(effect.radius):
             continue
         if effect.kind == _AreaEffectKind.PYRE:
-            player_take_damage(state, p, PYRE_DAMAGE_PER_S * dt, players=players)
+            # Not native: a continuous DoT tick, not a discrete hit - skip the
+            # per-hit heading-jitter/spread-heat stagger so standing in the
+            # burning ground doesn't visibly flinch the player every tick.
+            player_take_damage(state, p, PYRE_DAMAGE_PER_S * dt, players=players, hit_reaction=False)
         elif effect.kind == _AreaEffectKind.ANCHOR:
             frac = min(1.0, ANCHORING_PULL_FRAC_PER_S * dt)
             p.pos = Vec2(px + (cx - px) * frac, py + (cy - py) * frac)
@@ -1239,7 +1242,6 @@ def _tick_pending_area_effects(players, dt: float, *, state) -> None:
                 remaining.append(effect)
                 continue
             effect.triggered = True
-            _trigger_area_effect(effect, state=state)
         effect.duration = float(effect.duration) - float(dt)
         _apply_area_effect_tick(effect, dt, state=state, players=players)
         if effect.duration > 0.0:

@@ -53,6 +53,20 @@ def test_den_pick_template_and_position_return_valid_values() -> None:
     assert isinstance(pos, Vec2)
 
 
+def test_den_pick_template_withholds_the_plasma_shooter_spider_den_before_level_26() -> None:
+    # Native doesn't introduce the ranged/shooting spider (SPIDER_PLASMA_SHOOTER_3C)
+    # until player_level 26 - the Den that births it shouldn't hand it out
+    # any earlier than that from a level-blind random pick.
+    for _ in range(500):
+        assert survival_den_pick_template(0) != SpawnId.DEN_SPIDER_PLASMA_SHOOTERS_0B
+        assert survival_den_pick_template(25) != SpawnId.DEN_SPIDER_PLASMA_SHOOTERS_0B
+
+
+def test_den_pick_template_allows_the_plasma_shooter_spider_den_from_level_26() -> None:
+    picks = {survival_den_pick_template(26) for _ in range(500)}
+    assert SpawnId.DEN_SPIDER_PLASMA_SHOOTERS_0B in picks
+
+
 def test_build_survival_den_plan_scales_hp_and_interval_with_level() -> None:
     env = _spawn_env()
 

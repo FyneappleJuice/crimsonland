@@ -134,7 +134,7 @@ def test_damage_type1_global_perks_apply_with_non_player_owner() -> None:
     )
 
     assert killed is True
-    assert creature.hp == -80.43323516845703
+    assert creature.hp == -45.4925651550293
 
 
 def test_damage_perks_use_any_player_owning_them() -> None:
@@ -156,13 +156,13 @@ def test_damage_perks_use_any_player_owning_them() -> None:
     )
 
     assert killed is False
-    assert_float_close(creature.hp, 85.0)
+    assert_float_close(creature.hp, 87.5)
 
 
 def test_stacked_bullet_damage_perks_fold_into_one_multiply() -> None:
-    # Barrel Greaser (x1.4) and Doctor (x1.2) now both feed
+    # Barrel Greaser (x1.3) and Doctor (x1.2) now both feed
     # stats.damage_mult_bullet (crimson.progression) and resolve to a single
-    # x1.68 multiply instead of the original two sequential pc24 multiplies -
+    # x1.56 multiply instead of the original two sequential pc24 multiplies -
     # a deliberate, documented ULP change (build content no longer chases
     # native float parity). A single perk still matches its old constant
     # exactly; see tests/progression/test_migrated_perks.py.
@@ -187,8 +187,8 @@ def test_stacked_bullet_damage_perks_fold_into_one_multiply() -> None:
         rng=ScriptedCrand(0, fallback=ScriptedCrand.Fallback.REPEAT_LAST),
     )
 
-    assert killed is True
-    assert creature.hp == -3.9215087890625
+    assert killed is False
+    assert creature.hp == 27.49676513671875
 
 
 def test_owner_exempt_from_run_mod_affinity_ignores_elemental_affinity_run_mod() -> None:

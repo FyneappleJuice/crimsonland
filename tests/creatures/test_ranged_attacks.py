@@ -253,12 +253,9 @@ def test_acid_lob_phases_through_creatures_and_queues_a_dot_instead_of_a_direct_
     assert player.acid_dot_pending_timers == [pytest.approx(monster_rarity.ACID_LOB_DOT_DURATION_S)]
 
 
-def test_acid_lob_projectile_steers_partially_toward_the_player_each_tick() -> None:
-    from crimson.projectiles.runtime.projectile_pool import _ACID_LOB_TURN_RATE_RAD_PER_S
-
+def test_acid_lob_projectile_flies_straight_with_no_homing() -> None:
     state = GameplayState()
-    # Placed diagonally so the desired turn is unambiguous (not the exact
-    # +-pi edge case a straight-behind target would hit).
+    # Placed diagonally so a steer-toward-player bug would be unambiguous.
     player = PlayerState(index=0, pos=Vec2(100.0, 100.0))
 
     state.projectiles.spawn(
@@ -272,10 +269,9 @@ def test_acid_lob_projectile_steers_partially_toward_the_player_each_tick() -> N
     proj = state.projectiles.entries[0]
     start_angle = float(proj.angle)
 
-    dt = 0.05
     state.projectiles.step(
         PrimaryStepCtx(
-            dt=dt,
+            dt=0.05,
             creatures=[],
             options=make_projectile_update_options(
                 world_size=1024.0,
@@ -286,8 +282,5 @@ def test_acid_lob_projectile_steers_partially_toward_the_player_each_tick() -> N
         ),
     )
 
-    turned = float(proj.angle) - start_angle
-    # The true bearing to the player is far more than one tick's max turn can
-    # cover, so the steering should be clamped to exactly the turn rate - not
-    # a full snap (only "some" homing capability was asked for).
-    assert turned == pytest.approx(_ACID_LOB_TURN_RATE_RAD_PER_S * dt, abs=1e-6)
+    # Homing was removed - it's a plain straight-line lob now, angle untouched.
+    assert float(proj.angle) == pytest.approx(start_angle, abs=1e-6)

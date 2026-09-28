@@ -150,15 +150,10 @@ def build_world_render_ctx(
 
 
 def _is_bullet_trail_type(type_id: int) -> bool:
-    # Not native: Acid Lob affix reuses the plain bullet-trail draw (a small
-    # tinted streak + round sprite) instead of the Ion beam it used to borrow -
-    # deliberately weaker VFX than a real weapon bolt (see _draw_bullet_trail's
-    # green branch and primary_bullet.py's tint override below).
-    return (
-        0 <= type_id < 8
-        or type_id == ProjectileTemplateId.SPLITTER_GUN
-        or type_id == ProjectileTemplateId.ACID_LOB
-    )
+    # Not native: Acid Lob affix now uses the Ion Minigun-style beam draw
+    # instead (see sim/world_defs.py's BEAM_TYPES and primary_beam.py's
+    # is_acid_lob branch), not this plain bullet-trail path.
+    return 0 <= type_id < 8 or type_id == ProjectileTemplateId.SPLITTER_GUN
 
 
 def _bullet_sprite_size(type_id: int, *, scale: float) -> float:

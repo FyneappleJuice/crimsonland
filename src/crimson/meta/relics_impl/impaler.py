@@ -12,7 +12,7 @@ timer, so one shared timer per creature is enough: the stack only drops if
 the target goes that long unhit.
 
 At steady state (5 Impales up, from the 6th hit onward) a hit deals
-0.8 * (1 + 5 * stored) = 1.12 of normal. One-shot kills only ever pay the
+0.8 * (1 + 5 * stored) = 1.25 of normal. One-shot kills only ever pay the
 -20%; focused fire on tough targets is where it pays off. Ticking damage
 (explosion blast, ion cloud, ignite) never applies or triggers Impales - it
 would burn the hit counts in frames.
@@ -36,7 +36,7 @@ IMPALER_MAX_HITS = 5
 IMPALER_DURATION = 8.0
 
 _STORED_FRACTION_BY_RELIC: dict[int, float] = {
-    RelicId.IMPALER_LOW: 0.08,  # 0.8 * (1 + 5 * 0.08) = 1.12
+    RelicId.IMPALER_LOW: 0.1125,  # 0.8 * (1 + 5 * 0.1125) = 1.25
 }
 
 

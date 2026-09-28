@@ -117,6 +117,13 @@ class AlienSpawnerSpec(msgspec.Struct, frozen=True):
     tint: TintRGBA
 
 
+# Not native: every Den's own tint is plain white regardless of which
+# species it births - the native per-species den dye (tan for Lizard/Spider
+# dens, red for the Plasma Shooter den - see spawn_templates.py's reference
+# table for those original values) read as arbitrary/confusing once dens
+# could also be rarity-tainted. A Normal-rarity Den now always stays pure
+# white; only creatures/rarity.py's apply_rarity (tier > 0) recolors it, so
+# color alone tells you whether a Den is plain or Tainted/Mutated/Apex.
 ALIEN_SPAWNER_TEMPLATES: dict[SpawnId, AlienSpawnerSpec] = {
     SpawnId.DEN_ALIEN_BASIC_07: AlienSpawnerSpec(
         timer=1.0,
@@ -160,7 +167,7 @@ ALIEN_SPAWNER_TEMPLATES: dict[SpawnId, AlienSpawnerSpec] = {
         health=1000.0,
         move_speed=1.5,
         reward_value=3000.0,
-        tint=(0.8, 0.7, 0.4, 1.0),
+        tint=(1.0, 1.0, 1.0, 1.0),
     ),
     SpawnId.DEN_SPIDER_PLASMA_SHOOTERS_0B: AlienSpawnerSpec(
         timer=2.0,
@@ -171,7 +178,7 @@ ALIEN_SPAWNER_TEMPLATES: dict[SpawnId, AlienSpawnerSpec] = {
         health=3500.0,
         move_speed=1.5,
         reward_value=5000.0,
-        tint=(0.9, 0.1, 0.1, 1.0),
+        tint=(1.0, 1.0, 1.0, 1.0),
     ),
     SpawnId.DEN_LIZARD_WEAK_0C: AlienSpawnerSpec(
         timer=1.5,
@@ -182,7 +189,7 @@ ALIEN_SPAWNER_TEMPLATES: dict[SpawnId, AlienSpawnerSpec] = {
         health=50.0,
         move_speed=2.8,
         reward_value=1000.0,
-        tint=(0.9, 0.8, 0.4, 1.0),
+        tint=(1.0, 1.0, 1.0, 1.0),
     ),
     SpawnId.DEN_LIZARD_WEAK_SLOWER_0D: AlienSpawnerSpec(
         timer=2.0,
@@ -193,7 +200,7 @@ ALIEN_SPAWNER_TEMPLATES: dict[SpawnId, AlienSpawnerSpec] = {
         health=50.0,
         move_speed=1.3,
         reward_value=1000.0,
-        tint=(0.9, 0.8, 0.4, 1.0),
+        tint=(1.0, 1.0, 1.0, 1.0),
     ),
     SpawnId.DEN_SPIDER_WEAK_10: AlienSpawnerSpec(
         timer=1.5,
@@ -204,7 +211,7 @@ ALIEN_SPAWNER_TEMPLATES: dict[SpawnId, AlienSpawnerSpec] = {
         health=50.0,
         move_speed=2.8,
         reward_value=800.0,
-        tint=(0.9, 0.8, 0.4, 1.0),
+        tint=(1.0, 1.0, 1.0, 1.0),
     ),
 }
 
@@ -1191,8 +1198,10 @@ def _survival_rarity_divisor(base: int, floor: int, xp: int, *, xp_per_step: int
 # with CreatureTypeId's own values (zombie=0, lizard=1, alien=2,
 # spider_sp1=3, spider_sp2=4).
 _SURVIVAL_TYPE_WEIGHT_BRACKETS: tuple[tuple[int, tuple[int, int, int, int, int]], ...] = (
-    (12_000, (3, 2, 3, 1, 1)),
-    (25_000, (2, 2, 3, 2, 1)),
+    # Alien (index 2) bumped up in the earliest two brackets so it's more
+    # common in the opening minutes specifically, not just tied-highest.
+    (12_000, (2, 2, 4, 1, 1)),
+    (25_000, (2, 1, 4, 2, 1)),
     (42_000, (1, 2, 3, 2, 2)),
     (90_000, (1, 1, 3, 2, 3)),
     (160_000, (2, 2, 2, 2, 2)),
@@ -1765,10 +1774,30 @@ def survival_den_rarity_tier(player_level: int) -> int:
     return 0
 
 
-def survival_den_pick_template() -> SpawnId:
+# Not native: the plasma-shooter spider Den (DEN_SPIDER_PLASMA_SHOOTERS_0B)
+# births SPIDER_PLASMA_SHOOTER_3C - the same ranged/shooting spider the
+# native game's own milestone ladder doesn't introduce until player_level 26
+# (docs/crimsonland-exe/survival.md's stage 8->9 milestone). A level-blind
+# uniform Den pick could hand that out as early as SURVIVAL_DEN_MIN_LEVEL,
+# far earlier than the shooting spider ever "first came" natively - keep it
+# out of the pool until the native gate, then fold it back in at normal odds.
+_SPIDER_PLASMA_SHOOTER_DEN_MIN_LEVEL = 26
+_SURVIVAL_DEN_TEMPLATES_EARLY: tuple[SpawnId, ...] = tuple(
+    t for t in _SURVIVAL_DEN_TEMPLATES if t != SpawnId.DEN_SPIDER_PLASMA_SHOOTERS_0B
+)
+
+
+def survival_den_pick_template(player_level: int = 0) -> SpawnId:
     """Which Den variant spawns - uniformly drawn from the same pool the
-    quest tiers use."""
-    return _DEN_PICK_RNG.choice(_SURVIVAL_DEN_TEMPLATES)
+    quest tiers use, except the ranged/plasma-shooter spider Den stays out of
+    the pool until player_level reaches _SPIDER_PLASMA_SHOOTER_DEN_MIN_LEVEL
+    (see module comment above)."""
+    pool = (
+        _SURVIVAL_DEN_TEMPLATES
+        if int(player_level) >= _SPIDER_PLASMA_SHOOTER_DEN_MIN_LEVEL
+        else _SURVIVAL_DEN_TEMPLATES_EARLY
+    )
+    return _DEN_PICK_RNG.choice(pool)
 
 
 def survival_den_pick_position() -> Vec2:

@@ -33,7 +33,7 @@ def test_barrel_greaser_increases_bullet_damage() -> None:
     )
 
     assert killed is False
-    assert_float_close(creature.hp, 86.0)
+    assert_float_close(creature.hp, 87.0)
 
 
 def _step_pistol_projectile(

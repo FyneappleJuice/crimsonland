@@ -50,12 +50,20 @@ def player_take_damage(
     players: Sequence[PlayerState] | None = None,
     death_runtime: PlayerDeathRuntime | None = None,
     floor: float = 0.0,
+    hit_reaction: bool = True,
 ) -> float:
     """Apply damage to a player, returning the actual damage applied.
 
     `floor` lower-bounds the resulting health (e.g. 1.0 for self-inflicted,
     non-enemy costs like Ammunition Within, which must never be lethal on
     their own). Real enemy damage always leaves it at the default of 0.0.
+
+    `hit_reaction` gates the pain-sfx/heading-jitter/spread-heat-growth "just
+    got hit" feedback below - set False for a continuous per-tick damage
+    source (a burning-ground DoT, say) so standing in it doesn't repeatedly
+    play a pain grunt or visibly stagger the
+    player every single tick the way a discrete hit should. Damage math,
+    dodge/mitigation, and death handling are unaffected either way.
     """
 
     raw_damage = float(f32(damage))
@@ -188,9 +196,10 @@ def player_take_damage(
 
     # Native emits pain/death VO before heading jitter + low-health timer RNG work.
     if not lethal_hit:
-        state.sfx_queue.append(
-            _PLAYER_PAIN_SFX[state.rng.rand_tagged(RngCallerStatic.PLAYER_TAKE_DAMAGE_PAIN_SFX) % len(_PLAYER_PAIN_SFX)],
-        )
+        if hit_reaction:
+            state.sfx_queue.append(
+                _PLAYER_PAIN_SFX[state.rng.rand_tagged(RngCallerStatic.PLAYER_TAKE_DAMAGE_PAIN_SFX) % len(_PLAYER_PAIN_SFX)],
+            )
         if not was_alive:
             return max(0.0, health_before - float(player.health))
     else:
@@ -202,7 +211,7 @@ def player_take_damage(
             death_runtime.on_player_lethal(player, dt=0.0 if dt is None else float(dt))
 
     if not dodged:
-        if not perk_player.stats.has("no_hit_stagger"):  # Unstoppable
+        if hit_reaction and not perk_player.stats.has("no_hit_stagger"):  # Unstoppable
             heading_jitter = x87_pc24_mul(
                 float((state.rng.rand_tagged(RngCallerStatic.PLAYER_TAKE_DAMAGE_HEADING) % 100) - 50),
                 f32(0.04),

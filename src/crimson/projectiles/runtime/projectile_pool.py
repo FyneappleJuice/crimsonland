@@ -226,17 +226,20 @@ _PROJECTILE_COLLISION_PROFILE_BY_TYPE_ID: dict[ProjectileTemplateId, ProjectileC
     ProjectileTemplateId.GAUSS_GUN: ProjectileCollisionProfile(hit_radius=1.0, initial_damage_pool=300.0),
     ProjectileTemplateId.FIRE_BULLETS: ProjectileCollisionProfile(hit_radius=1.0, initial_damage_pool=240.0),
     ProjectileTemplateId.BLADE_GUN: ProjectileCollisionProfile(hit_radius=1.0, initial_damage_pool=50.0),
-    # Not native: Acid Lob affix - a bit more forgiving than the default so its
-    # partial homing (see the steering block in step(), below) can actually
-    # connect.
-    ProjectileTemplateId.ACID_LOB: ProjectileCollisionProfile(hit_radius=5.0, initial_damage_pool=1.0),
+    # Not native: Acid Lob affix - bigger and more forgiving than the default,
+    # so it visibly reads as a slow lobbed glob rather than a bullet.
+    ProjectileTemplateId.ACID_LOB: ProjectileCollisionProfile(hit_radius=9.0, initial_damage_pool=1.0),
 }
 
-# Not native: Acid Lob affix - only some homing capability, not a lock-on
-# (the user asked for "only some"), so the turn rate is deliberately modest -
-# it can curve toward a player who's strafing but won't chase one at a hard
-# angle behind it.
-_ACID_LOB_TURN_RATE_RAD_PER_S = 2.2
+# Not native: Acid Lob was originally the same speed as every other
+# projectile (speed_scale=1.0, no per-type override existed) - too fast for a
+# lobbed glob. This codebase has no per-weapon travel-speed stat to borrow
+# from (every projectile - including Ion Minigun - shares the same base
+# speed_scale=1.0; only travel_budget, its max travel distance, differs per
+# weapon), so this is picked directly as "very slow, heavy cannonball lob"
+# rather than matched to a real Ion Minigun speed constant. Applied directly
+# on spawn (see ProjectilePool.spawn) rather than as a per-frame multiplier.
+ACID_LOB_SPEED_SCALE = 0.1
 
 
 def _projectile_damage_amount_f32(dist: float, damage_scale: float) -> float:
@@ -316,7 +319,7 @@ class ProjectilePool:
         entry.perk_damage_mult = 1.0
         entry.did_crit = False
         entry.pierce_left = 0.0
-        entry.speed_scale = 1.0
+        entry.speed_scale = ACID_LOB_SPEED_SCALE if type_id == ProjectileTemplateId.ACID_LOB else 1.0
         entry.travel_budget = float(travel_budget)
         weapon_entry = weapon_entry_for_projectile_type_id(type_id)
         entry.travel_budget = float(weapon_entry.travel_budget)
@@ -648,34 +651,6 @@ class ProjectilePool:
             steps = int(proj.travel_budget)
             if barrel_greaser_active and proj.owner.is_player():
                 steps *= 2
-
-            if int(proj.type_id) == int(ProjectileTemplateId.ACID_LOB):
-                # Not native: Acid Lob affix - only some homing, not a lock-on.
-                # Steers a little toward the nearest living player each tick
-                # instead of recomputing an exact intercept, and skips
-                # entirely once no player qualifies (so it just flies straight
-                # if it already missed everyone).
-                nearest = None
-                nearest_dist = math.inf
-                for candidate in players:
-                    if float(candidate.health) <= 0.0:
-                        continue
-                    d = candidate.pos.distance_to(proj.pos)
-                    if d < nearest_dist:
-                        nearest_dist = d
-                        nearest = candidate
-                if nearest is not None:
-                    desired = math.atan2(
-                        float(nearest.pos.y) - float(proj.pos.y),
-                        float(nearest.pos.x) - float(proj.pos.x),
-                    ) + NATIVE_HALF_PI
-                    delta = (desired - float(proj.angle) + math.pi) % (2.0 * math.pi) - math.pi
-                    max_turn = _ACID_LOB_TURN_RATE_RAD_PER_S * dt
-                    if delta > max_turn:
-                        delta = max_turn
-                    elif delta < -max_turn:
-                        delta = -max_turn
-                    proj.angle = float(proj.angle) + delta
 
             # Decompile parity (`projectile_update`, 0x00420b90):
             #   local_cc += (float)(cos(angle - pi/2) * frame_dt * 20.0f) * speed_scale * 3.0f

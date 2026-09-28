@@ -73,6 +73,11 @@ def draw_beam_effect(ctx: ProjectileDrawCtx) -> bool:
 
     is_fire_bullets = type_id == ProjectileTemplateId.FIRE_BULLETS.value
     is_ion = type_id in ION_TYPES
+    # Not native: Acid Lob affix reuses the Ion Minigun's own glow sprite,
+    # tinted green - see BEAM_EFFECT_SCALE_BY_TYPE_ID/BEAM_TYPES. Never in
+    # ION_TYPES, so is_ion stays False and it never gets the chain-lightning
+    # -to-nearby-creatures VFX/logic real Ion weapons get further below.
+    is_acid_lob = type_id == ProjectileTemplateId.ACID_LOB.value
 
     origin = proj_origin(ctx.proj, ctx.pos)
     beam = ctx.pos - origin
@@ -98,8 +103,13 @@ def draw_beam_effect(ctx: ProjectileDrawCtx) -> bool:
     if base_alpha <= 1e-3:
         return True
 
-    streak_rgb = (1.0, 0.6, 0.1) if is_fire_bullets else (0.5, 0.6, 1.0)
-    head_rgb = (1.0, 1.0, 0.7)
+    if is_fire_bullets:
+        streak_rgb = (1.0, 0.6, 0.1)
+    elif is_acid_lob:
+        streak_rgb = (0.35, 1.0, 0.4)
+    else:
+        streak_rgb = (0.5, 0.6, 1.0)
+    head_rgb = (0.45, 1.0, 0.5) if is_acid_lob else (1.0, 1.0, 0.7)
 
     # Only draw the last 256 units of the path.
     start = 0.0
@@ -190,7 +200,7 @@ def draw_beam_effect(ctx: ProjectileDrawCtx) -> bool:
                     rl.draw_texture_pro(particles_texture, src, dst, origin, ctx.angle * RAD_TO_DEG, tint)
     else:
         # Native draws a small blue "core" at the head during the fade stage (life_timer < 0.4).
-        core_rgb = (0.5, 0.6, 1.0)
+        core_rgb = (0.4, 0.9, 0.45) if is_acid_lob else (0.5, 0.6, 1.0)
         if render_frame.rtx_mode is RtxRenderMode.RTX:
             draw_beam_fast_stamped_head(
                 center_screen=ctx.screen_pos,

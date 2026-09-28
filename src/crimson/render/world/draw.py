@@ -132,6 +132,7 @@ def draw_world(
         draw_warbanners(render_ctx, ctx=draw_ctx)
         draw_pending_detonation_warnings(render_ctx, ctx=draw_ctx)
         draw_pending_area_effect_warnings(render_ctx, ctx=draw_ctx)
+        draw_vortex_pull_trails(render_ctx, ctx=draw_ctx)
         with profile_pass("players_alive"):
             draw_players(render_ctx, ctx=draw_ctx, alive=True)
             # Not native: Hollow Form's clone, drawn dimmed right after the
@@ -682,64 +683,195 @@ def draw_critical_mass_radius(render_ctx: WorldRenderCtx, *, ctx: WorldDrawConte
 
 _BOMBER_WARNING_COLOR = (255, 90, 30)
 
+# Not native: fuse countdown ring geometry, styled after the player's own
+# depleting health ring (render/world/player_status.py) instead of the old
+# fast-pulsing full-blast-radius circle - a calm, small clock above the spot
+# instead of a loud flashing zone. World px before view scale, same
+# convention as _RING_INNER/_RING_OUTER there.
+_FUSE_RING_INNER = 8.0
+_FUSE_RING_OUTER = 11.5
+_FUSE_RING_SEGMENTS = 32
+_FUSE_RING_BACKING_ALPHA = 140
+_FUSE_RING_FILL_ALPHA = 230
+# The blast/zone outline itself is now a static, low-alpha ring (no pulse,
+# no fill) - just enough to mark the danger area without being distracting.
+_FUSE_ZONE_RING_ALPHA = 0.14
+_FUSE_ZONE_TRIGGERED_FILL_ALPHA = 0.12
+_FUSE_ZONE_TRIGGERED_RING_ALPHA = 0.35
+
+# Not native: Gravemark (Anchoring) live-zone fill - concentric bands
+# stepping from a brighter center down to fully transparent at the outer
+# edge, approximating a radial gradient without a shader.
+_GRAVEMARK_FADE_BANDS = 10
+_GRAVEMARK_FADE_PEAK_ALPHA = 0.24
+
+
+def _draw_radial_fade_fill(
+    center: rl.Vector2, radius: float, *, color: tuple[int, int, int], peak_alpha: float,
+) -> None:
+    r, g, b = color
+    band_w = radius / _GRAVEMARK_FADE_BANDS
+    for i in range(_GRAVEMARK_FADE_BANDS):
+        inner = band_w * i
+        outer = band_w * (i + 1)
+        t = (i + 0.5) / _GRAVEMARK_FADE_BANDS  # this band's own distance from center, 0..1
+        band_alpha = peak_alpha * (1.0 - t)
+        if band_alpha <= 1e-3:
+            continue
+        rl.draw_ring(center, inner, outer, 0.0, 360.0, 48, rl.Color(r, g, b, int(clamp(band_alpha, 0.0, 1.0) * 255.0)))
+
+
+def _draw_fuse_countdown_ring(
+    render_ctx: WorldRenderCtx,
+    *,
+    ctx: WorldDrawContext,
+    pos,
+    ratio: float,
+    color: tuple[int, int, int],
+) -> None:
+    """A small depleting ring hovering above `pos`, clockwise from 12 o'clock -
+    same sweep convention as draw_player_status's health ring - showing time
+    left before the queued effect actually triggers."""
+
+    center = render_ctx._world_to_screen_with(pos, camera=ctx.camera, view_scale=ctx.view_scale)
+    r_in = max(1.0, _FUSE_RING_INNER * ctx.scale)
+    r_out = max(r_in + 1.0, _FUSE_RING_OUTER * ctx.scale)
+    c = rl.Vector2(float(center.x), float(center.y) - r_out - 6.0 * ctx.scale)
+    r, g, b = color
+    a = ctx.entity_alpha
+    rl.draw_ring(c, r_in, r_out, 0.0, 360.0, _FUSE_RING_SEGMENTS, rl.Color(15, 8, 4, int(_FUSE_RING_BACKING_ALPHA * a)))
+    ratio = clamp(ratio, 0.0, 1.0)
+    if ratio <= 0.0:
+        return
+    start = -90.0
+    end = start + 360.0 * ratio
+    rl.draw_ring(c, r_in, r_out, start, end, _FUSE_RING_SEGMENTS, rl.Color(r, g, b, int(_FUSE_RING_FILL_ALPHA * a)))
+
 
 def draw_pending_detonation_warnings(render_ctx: WorldRenderCtx, *, ctx: WorldDrawContext) -> None:
-    """Not native: Bomber (Detonating) monster affix - a pulsing orange ring at
-    the blast radius over the fuse delay before a queued explosion actually
-    goes off (creatures/rarity.py's PendingMonsterDetonation), so it reads as
-    a warning instead of an instant, un-telegraphed hit."""
+    """Not native: Bomber (Detonating) monster affix - a small countdown ring
+    over the fuse delay before a queued explosion actually goes off
+    (creatures/rarity.py's PendingMonsterDetonation), plus a quiet static
+    outline at the blast radius, so it reads as a telegraphed warning without
+    the old fast-pulsing flash."""
     pending = getattr(render_ctx.frame.state, "pending_monster_detonations", None)
     if not pending:
         return
     r, g, b = _BOMBER_WARNING_COLOR
     for det in pending:
         fuse_left = clamp(float(det.timer) / float(monster_rarity.BOMBER_FUSE_DELAY_S), 0.0, 1.0)
-        pulse = math.sin(float(rl.get_time()) * 14.0) * 0.5 + 0.5
         radius = float(det.radius) * ctx.scale
-        if radius <= 1.0:
-            continue
-        center = render_ctx._world_to_screen_with(det.pos, camera=ctx.camera, view_scale=ctx.view_scale)
-        c = rl.Vector2(float(center.x), float(center.y))
-        # Fades in and pulses faster as the fuse runs down, so the last
-        # instant before it goes off reads as urgent.
-        ring_alpha = (0.25 + 0.35 * pulse) * (1.0 - fuse_left * 0.5) * ctx.entity_alpha
-        fill_alpha = 0.06 * (1.0 - fuse_left * 0.5) * ctx.entity_alpha
-        rl.draw_circle_v(c, radius, rl.Color(r, g, b, int(fill_alpha * 255.0)))
-        rl.draw_ring(c, radius - 2.0, radius + 2.0, 0.0, 360.0, 64, rl.Color(r, g, b, int(clamp(ring_alpha, 0.0, 1.0) * 255.0)))
+        if radius > 1.0:
+            center = render_ctx._world_to_screen_with(det.pos, camera=ctx.camera, view_scale=ctx.view_scale)
+            c = rl.Vector2(float(center.x), float(center.y))
+            rl.draw_ring(
+                c, radius - 1.5, radius + 1.5, 0.0, 360.0, 64,
+                rl.Color(r, g, b, int(_FUSE_ZONE_RING_ALPHA * 255.0 * ctx.entity_alpha)),
+            )
+        _draw_fuse_countdown_ring(render_ctx, ctx=ctx, pos=det.pos, ratio=fuse_left, color=(r, g, b))
 
 
 _AREA_EFFECT_COLORS = {
     int(monster_rarity._AreaEffectKind.PYRE): (255, 110, 30),
     int(monster_rarity._AreaEffectKind.ANCHOR): (160, 70, 220),
 }
+_AREA_EFFECT_FUSE_TOTAL_S = {
+    int(monster_rarity._AreaEffectKind.PYRE): monster_rarity.PYRE_FUSE_DELAY_S,
+    int(monster_rarity._AreaEffectKind.ANCHOR): monster_rarity.ANCHORING_FUSE_DELAY_S,
+}
 
 
 def draw_pending_area_effect_warnings(render_ctx: WorldRenderCtx, *, ctx: WorldDrawContext) -> None:
     """Not native: Pyre (Cinderburst) / Anchoring (Gravemark) monster affixes -
-    same fused warning ring as Bomber's while queued; once triggered, a
-    steadier filled zone for as long as the burning field / pull zone is
-    actually live (creatures/rarity.py's PendingMonsterAreaEffect)."""
+    same small countdown ring as Bomber's while queued; once triggered, a
+    steady (non-pulsing) filled zone for as long as the burning field / pull
+    zone is actually live (creatures/rarity.py's PendingMonsterAreaEffect)."""
     pending = getattr(render_ctx.frame.state, "pending_monster_area_effects", None)
     if not pending:
         return
     for effect in pending:
         r, g, b = _AREA_EFFECT_COLORS.get(int(effect.kind), _BOMBER_WARNING_COLOR)
         radius = float(effect.radius) * ctx.scale
+        if not effect.triggered:
+            fuse_total = _AREA_EFFECT_FUSE_TOTAL_S.get(int(effect.kind), 1.0)
+            fuse_left = clamp(float(effect.fuse) / float(fuse_total), 0.0, 1.0) if fuse_total > 0.0 else 0.0
+            if radius > 1.0:
+                center = render_ctx._world_to_screen_with(effect.pos, camera=ctx.camera, view_scale=ctx.view_scale)
+                c = rl.Vector2(float(center.x), float(center.y))
+                rl.draw_ring(
+                    c, radius - 1.5, radius + 1.5, 0.0, 360.0, 64,
+                    rl.Color(r, g, b, int(_FUSE_ZONE_RING_ALPHA * 255.0 * ctx.entity_alpha)),
+                )
+            _draw_fuse_countdown_ring(render_ctx, ctx=ctx, pos=effect.pos, ratio=fuse_left, color=(r, g, b))
+            continue
         if radius <= 1.0:
             continue
         center = render_ctx._world_to_screen_with(effect.pos, camera=ctx.camera, view_scale=ctx.view_scale)
         c = rl.Vector2(float(center.x), float(center.y))
-        if not effect.triggered:
-            pulse = math.sin(float(rl.get_time()) * 14.0) * 0.5 + 0.5
-            ring_alpha = (0.25 + 0.35 * pulse) * ctx.entity_alpha
-            fill_alpha = 0.06 * ctx.entity_alpha
-        else:
-            # Live and persisting - a steadier, more solid fill than the
-            # pre-trigger warning pulse.
-            ring_alpha = 0.5 * ctx.entity_alpha
-            fill_alpha = 0.16 * ctx.entity_alpha
-        rl.draw_circle_v(c, radius, rl.Color(r, g, b, int(fill_alpha * 255.0)))
-        rl.draw_ring(c, radius - 2.0, radius + 2.0, 0.0, 360.0, 64, rl.Color(r, g, b, int(clamp(ring_alpha, 0.0, 1.0) * 255.0)))
+        if int(effect.kind) == int(monster_rarity._AreaEffectKind.ANCHOR):
+            # Not native: Gravemark - no outer ring border, and the purple
+            # fill fades out toward the edge instead of one flat alpha, so
+            # the pull zone reads as a soft radial pull rather than a hard
+            # drawn circle.
+            _draw_radial_fade_fill(c, radius, color=(r, g, b), peak_alpha=_GRAVEMARK_FADE_PEAK_ALPHA * ctx.entity_alpha)
+            continue
+        rl.draw_circle_v(c, radius, rl.Color(r, g, b, int(_FUSE_ZONE_TRIGGERED_FILL_ALPHA * 255.0 * ctx.entity_alpha)))
+        rl.draw_ring(
+            c, radius - 2.0, radius + 2.0, 0.0, 360.0, 64,
+            rl.Color(r, g, b, int(_FUSE_ZONE_TRIGGERED_RING_ALPHA * 255.0 * ctx.entity_alpha)),
+        )
+
+
+# Not native: Gravity Well (Vortex) affix - a dark trail from a pulled player
+# toward the creature pulling them, so the pull reads as directional instead
+# of an unexplained drift. Near-black with a faint purple cast to match the
+# affix's own theme colour.
+_VORTEX_TRAIL_COLOR = (18, 10, 22)
+_VORTEX_TRAIL_SEGMENTS = 12
+_VORTEX_TRAIL_WIDTH = 3.0
+_VORTEX_TRAIL_MIN_ALPHA = 0.06
+_VORTEX_TRAIL_MAX_ALPHA = 0.6
+
+
+def draw_vortex_pull_trails(render_ctx: WorldRenderCtx, *, ctx: WorldDrawContext) -> None:
+    creatures = render_ctx.frame.creatures.entries
+    players = render_ctx.frame.players
+    if not players:
+        return
+    for creature in creatures:
+        if not creature.active or float(creature.hp) <= 0.0:
+            continue
+        if monster_rarity.AffixId.VORTEX not in creature.affixes:
+            continue
+        creature_screen = render_ctx._world_to_screen_with(creature.pos, camera=ctx.camera, view_scale=ctx.view_scale)
+        for player in players:
+            if float(player.health) <= 0.0:
+                continue
+            if player.pos.distance_to(creature.pos) > monster_rarity.VORTEX_RANGE:
+                continue
+            player_screen = render_ctx._world_to_screen_with(player.pos, camera=ctx.camera, view_scale=ctx.view_scale)
+            _draw_vortex_trail_segments(
+                start=player_screen, end=creature_screen, scale=ctx.scale, alpha=ctx.entity_alpha,
+            )
+
+
+def _draw_vortex_trail_segments(*, start: Vec2, end: Vec2, scale: float, alpha: float) -> None:
+    dx, dy = float(end.x) - float(start.x), float(end.y) - float(start.y)
+    dist = math.hypot(dx, dy)
+    if dist <= 1e-3:
+        return
+    r, g, b = _VORTEX_TRAIL_COLOR
+    width = max(1.0, _VORTEX_TRAIL_WIDTH * scale)
+    for i in range(_VORTEX_TRAIL_SEGMENTS):
+        t0 = i / _VORTEX_TRAIL_SEGMENTS
+        t1 = (i + 1) / _VORTEX_TRAIL_SEGMENTS
+        p0 = rl.Vector2(float(start.x) + dx * t0, float(start.y) + dy * t0)
+        p1 = rl.Vector2(float(start.x) + dx * t1, float(start.y) + dy * t1)
+        # Faint at the player's end, darkest right at the creature - reads as
+        # being drawn INTO it rather than radiating out from the player.
+        seg_t = (t0 + t1) * 0.5
+        seg_alpha = (_VORTEX_TRAIL_MIN_ALPHA + (_VORTEX_TRAIL_MAX_ALPHA - _VORTEX_TRAIL_MIN_ALPHA) * seg_t) * alpha
+        rl.draw_line_ex(p0, p1, width, rl.Color(r, g, b, int(clamp(seg_alpha, 0.0, 1.0) * 255.0)))
 
 
 _WARBANNER_COLOR = (255, 225, 90)

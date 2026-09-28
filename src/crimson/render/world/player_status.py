@@ -22,6 +22,7 @@ from grim.math import clamp
 from grim.raylib_api import rl
 
 from ...bonuses.ids import BonusId
+from ...creatures.rarity import ACID_LOB_DOT_DURATION_S
 from ...meta.relics_impl import fortify as relic_fortify
 from ...meta.relics_impl import gathering_winds as relic_gathering_winds
 from ...meta.relics_impl import leech as relic_leech
@@ -144,7 +145,17 @@ def draw_player_status(
         # if left to finish. The inverse of the Leech preview above: that one
         # extends past the ring to show a gain still coming; this one bites
         # inward from the boundary to show a loss still coming.
-        pending_dot = sum(player.acid_dot_pending_damage)
+        #
+        # Each instance's own total_damage stays fixed at its original amount
+        # for the life of the instance (tick_acid_dot uses it to compute a
+        # constant per-second drip rate) - it does NOT shrink as the DoT
+        # drains, so summing it directly over-reports what's actually still
+        # left to come. Scale each instance by its own remaining-time
+        # fraction to get the true remaining amount instead.
+        pending_dot = sum(
+            total * (remaining / ACID_LOB_DOT_DURATION_S)
+            for total, remaining in zip(player.acid_dot_pending_damage, player.acid_dot_pending_timers)
+        )
         if pending_dot > 0.0:
             dot_ratio = clamp(pending_dot / 100.0, 0.0, ratio)
             if dot_ratio > 0.0:

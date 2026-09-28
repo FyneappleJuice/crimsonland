@@ -26,6 +26,7 @@ from typing import TYPE_CHECKING
 import msgspec
 from grim.geom import Vec2
 
+from . import rarity as _rarity
 from .spawn import CreatureInit
 from .spawn_ids import CreatureTypeId
 
@@ -49,9 +50,23 @@ STATIONARY_MONSTER_RESPAWN_DELAY_S = 5.0
 class PendingTestMonsterRespawn(msgspec.Struct):
     pos: Vec2
     timer: float
+    # Not native: carries the rarity tier/affixes the monster had when it
+    # died, so an auto-respawn reproduces the same test setup instead of
+    # losing it - the sandbox debug panel's own current selection may have
+    # moved on to preparing something else by the time this fires.
+    tier: int = 0
+    affixes: tuple[int, ...] = ()
 
 
-def _spawn_single(pool: CreaturePool, pos: Vec2, *, health: float, is_test_dummy: bool) -> int | None:
+def _spawn_single(
+    pool: CreaturePool,
+    pos: Vec2,
+    *,
+    health: float,
+    is_test_dummy: bool,
+    tier: int = 0,
+    forced_affixes: tuple[int, ...] = (),
+) -> int | None:
     init = CreatureInit(
         origin_template_id=0,
         pos=pos,
@@ -66,6 +81,14 @@ def _spawn_single(pool: CreaturePool, pos: Vec2, *, health: float, is_test_dummy
         # vanish cleanly, not linger as a fading corpse.
         sandbox_no_corpse=True,
     )
+    # Not native: sandbox debug panel's Monster Mods tab (see
+    # ui/sandbox_debug_panel.py) - a picked tier > 0 applies the exact same
+    # rarity system real monsters get (HP/size/reward scaling + the chosen
+    # affixes), just with an explicit affix list instead of a random roll.
+    # Picking Normal (tier 0, the default) leaves the dummy/monster exactly
+    # as before this feature existed.
+    if int(tier) > 0:
+        _rarity.apply_rarity(init, tier=int(tier), player_experience=0, forced_affixes=tuple(forced_affixes))
     idx = pool.spawn_init(init)
     if idx is None:
         return None
@@ -75,12 +98,18 @@ def _spawn_single(pool: CreaturePool, pos: Vec2, *, health: float, is_test_dummy
     return idx
 
 
-def spawn_test_dummy(pool: CreaturePool, pos: Vec2) -> int | None:
-    return _spawn_single(pool, pos, health=DUMMY_HEALTH, is_test_dummy=True)
+def spawn_test_dummy(
+    pool: CreaturePool, pos: Vec2, *, tier: int = 0, forced_affixes: tuple[int, ...] = (),
+) -> int | None:
+    return _spawn_single(pool, pos, health=DUMMY_HEALTH, is_test_dummy=True, tier=tier, forced_affixes=forced_affixes)
 
 
-def spawn_stationary_test_monster(pool: CreaturePool, pos: Vec2) -> int | None:
-    return _spawn_single(pool, pos, health=STATIONARY_MONSTER_HEALTH, is_test_dummy=False)
+def spawn_stationary_test_monster(
+    pool: CreaturePool, pos: Vec2, *, tier: int = 0, forced_affixes: tuple[int, ...] = (),
+) -> int | None:
+    return _spawn_single(
+        pool, pos, health=STATIONARY_MONSTER_HEALTH, is_test_dummy=False, tier=tier, forced_affixes=forced_affixes,
+    )
 
 
 def dummy_on_hit(creature, damage: float) -> None:
@@ -133,18 +162,27 @@ def sandbox_keep_corpse(entries, idx: int, state) -> bool:
     if not creature.sandbox_no_corpse:
         return True
     if not creature.is_test_dummy:
-        queue_stationary_monster_respawn(state, creature.pos)
+        queue_stationary_monster_respawn(
+            state, creature.pos, tier=int(creature.rarity), affixes=tuple(creature.affixes),
+        )
     return False
 
 
-def queue_stationary_monster_respawn(state, pos: Vec2) -> None:
+def queue_stationary_monster_respawn(
+    state, pos: Vec2, *, tier: int = 0, affixes: tuple[int, ...] = (),
+) -> None:
     """Called from the on_creature_lethal call sites (creatures/runtime.py,
     sim/world_state.py) right before a stationary test monster's death goes
     through, if it's actually dying to a hit (not an RMB delete)."""
     pending = getattr(state, "pending_test_monster_respawns", None)
     if pending is None:
         return
-    pending.append(PendingTestMonsterRespawn(pos=Vec2(float(pos.x), float(pos.y)), timer=STATIONARY_MONSTER_RESPAWN_DELAY_S))
+    pending.append(
+        PendingTestMonsterRespawn(
+            pos=Vec2(float(pos.x), float(pos.y)), timer=STATIONARY_MONSTER_RESPAWN_DELAY_S,
+            tier=int(tier), affixes=tuple(affixes),
+        ),
+    )
 
 
 def tick_test_monster_respawns(pool: CreaturePool, state, dt: float) -> None:
@@ -162,7 +200,7 @@ def tick_test_monster_respawns(pool: CreaturePool, state, dt: float) -> None:
         if respawn.timer > 0.0:
             remaining.append(respawn)
         else:
-            spawn_stationary_test_monster(pool, respawn.pos)
+            spawn_stationary_test_monster(pool, respawn.pos, tier=respawn.tier, forced_affixes=respawn.affixes)
     state.pending_test_monster_respawns = remaining
 
 

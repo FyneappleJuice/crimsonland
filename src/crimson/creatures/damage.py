@@ -56,15 +56,16 @@ OVERDUE_BONUS_DAMAGE = 0.20
 COLD_SNAP_FROZEN_TARGET_BONUS = 0.30
 
 # Loose Cannon: every non-DoT hit rolls a multiplier in this range instead of
-# dealing its flat value. Average of [-1, 4] is 1.5, i.e. +50% average damage -
-# the same "presentation/build variance, not run state" reasoning as
-# weapon_runtime/crit.py's own private RNG applies here too: this fires on
-# essentially every hit in the game once owned, so it needs a long-lived,
-# continuously-advancing RNG (not a fresh reseed per hit, which would give
-# every hit within the same tick the identical roll whenever nothing else
-# happened to advance the shared sim RNG in between).
+# dealing its flat value. Average of [-1, 3.6] is 1.3, i.e. +30% average
+# damage (the lower end stays -100% - a hit can still land as a total dud, or
+# even heal the target) - the same "presentation/build variance, not run
+# state" reasoning as weapon_runtime/crit.py's own private RNG applies here
+# too: this fires on essentially every hit in the game once owned, so it
+# needs a long-lived, continuously-advancing RNG (not a fresh reseed per hit,
+# which would give every hit within the same tick the identical roll
+# whenever nothing else happened to advance the shared sim RNG in between).
 LOOSE_CANNON_MIN_MULT = -1.0
-LOOSE_CANNON_MAX_MULT = 4.0
+LOOSE_CANNON_MAX_MULT = 3.6
 _LOOSE_CANNON_RNG = _random.Random(0x100CA33)
 
 # Not native: run mods (crimson.run_mods) - per-weapon-archetype damage bonus,

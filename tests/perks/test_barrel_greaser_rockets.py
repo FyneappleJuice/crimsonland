@@ -58,7 +58,7 @@ def test_barrel_greaser_boosts_a_rocket_direct_hit_via_the_shared_pipeline() -> 
         is_projectile_hit=True,
     )
 
-    assert 1000.0 - float(creature.hp) == pytest.approx(14.0, rel=1e-5)
+    assert 1000.0 - float(creature.hp) == pytest.approx(13.0, rel=1e-5)
 
 
 def test_barrel_greaser_does_not_affect_non_rocket_explosion_damage() -> None:
@@ -118,7 +118,7 @@ def test_barrel_greaser_boosts_rocket_blast_tick_damage() -> None:
     assert plain == greased  # sanity: identical inputs, identical output
     boosted = _step_detonation(barrel_greaser_rocket=True, barrel_greaser_perk=True)
     assert plain > 0.0
-    assert boosted == pytest.approx(plain * 1.4, rel=1e-5)
+    assert boosted == pytest.approx(plain * 1.3, rel=1e-5)
 
 
 def test_barrel_greaser_blast_bonus_is_scoped_to_rocket_weapons() -> None:

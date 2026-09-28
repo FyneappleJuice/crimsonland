@@ -65,24 +65,24 @@ PERK_STAT_MODS: dict[PerkId, tuple[StatMod, ...]] = {
     # rule stays a raw perk check in bonuses/selection.py + bonuses/pool.py.)
     PerkId.MY_FAVOURITE_WEAPON: (flat("clip_size_add", 2.0, source="perk:my_favourite_weapon"),),
     # --- outgoing damage ---------------------------------------
-    # creatures/damage.py: projectile-bucket damage *= 1.5. Reworked from a
-    # bullet-only x2/x3 to the shared "projectile" bucket (x1.5/x2) - every
-    # damage type's direct-hit half (Bullet/Plasma/Energy always, Ion/Fire/
-    # Explosion when is_projectile_hit is set) rides this same bucket as
+    # creatures/damage.py: projectile-bucket damage *= 1.25. Reworked from a
+    # bullet-only x2/x3 to the shared "projectile" bucket - every damage
+    # type's direct-hit half (Bullet/Plasma/Energy always, Ion/Fire/Explosion
+    # when is_projectile_hit is set) rides this same bucket as
     # Doctor/Barrel Greaser, so it no longer goes dead on non-kinetic weapons.
-    PerkId.URANIUM_FILLED_BULLETS: (more("damage_mult_projectile", 0.5, source="perk:uranium_filled_bullets"),),
+    PerkId.URANIUM_FILLED_BULLETS: (more("damage_mult_projectile", 0.25, source="perk:uranium_filled_bullets"),),
     # Tier upgrade (rewrite-only): combined with URANIUM_FILLED_BULLETS this
-    # brings damage_mult_projectile to *2.0 total (double, up from x1.5): 1.5*(4/3)=2.0.
+    # brings damage_mult_projectile to *1.5 total (up from x1.25 alone): 1.25*1.2=1.5.
     PerkId.URANIUM_FILLED_BULLETS_PLUS: (
-        more("damage_mult_projectile", 1.0 / 3.0, source="perk:uranium_filled_bullets_plus"),
+        more("damage_mult_projectile", 0.2, source="perk:uranium_filled_bullets_plus"),
     ),
     # creatures/damage.py: projectile damage *= 1.2. "You know where to aim" is
     # ammo-agnostic, so it rides the projectile layer (kinetic bullet + energy).
     PerkId.DOCTOR: (more("damage_mult_projectile", 0.2, source="perk:doctor"),),
-    # creatures/damage.py: projectile damage *= 1.4 ; also doubles projectile step
+    # creatures/damage.py: projectile damage *= 1.3 ; also doubles projectile step
     # count. Smoother barrel / faster shots - applies to any main-pool projectile.
     PerkId.BARREL_GREASER: (
-        more("damage_mult_projectile", 0.4, source="perk:barrel_greaser"),
+        more("damage_mult_projectile", 0.3, source="perk:barrel_greaser"),
         flag("projectile_double_steps", source="perk:barrel_greaser"),
     ),
     # creatures/damage.py: fire damage *= 1.5
@@ -278,14 +278,14 @@ _EFFICACY_SCALED_PERK_STAT_MODS: dict[PerkId, Callable[[float], tuple[StatMod, .
         flat("clip_size_add", 2.0 * eff, source="perk:my_favourite_weapon"),
     ),
     PerkId.URANIUM_FILLED_BULLETS: lambda eff: (
-        more("damage_mult_projectile", 0.5 * eff, source="perk:uranium_filled_bullets"),
+        more("damage_mult_projectile", 0.25 * eff, source="perk:uranium_filled_bullets"),
     ),
     PerkId.URANIUM_FILLED_BULLETS_PLUS: lambda eff: (
-        more("damage_mult_projectile", (1.0 / 3.0) * eff, source="perk:uranium_filled_bullets_plus"),
+        more("damage_mult_projectile", 0.2 * eff, source="perk:uranium_filled_bullets_plus"),
     ),
     PerkId.DOCTOR: lambda eff: (more("damage_mult_projectile", 0.2 * eff, source="perk:doctor"),),
     PerkId.BARREL_GREASER: lambda eff: (
-        more("damage_mult_projectile", 0.4 * eff, source="perk:barrel_greaser"),
+        more("damage_mult_projectile", 0.3 * eff, source="perk:barrel_greaser"),
         flag("projectile_double_steps", source="perk:barrel_greaser"),
     ),
     PerkId.PYROMANIAC: lambda eff: (more("damage_mult_fire", 0.5 * eff, source="perk:pyromaniac"),),

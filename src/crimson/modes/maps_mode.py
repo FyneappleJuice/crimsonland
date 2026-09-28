@@ -22,9 +22,12 @@ from .survival_mode import SurvivalMode
 
 __all__ = ["MAP_MODIFIERS", "MapModifier", "MapsMode", "MapsSessionRuntime", "SandboxSessionRuntime"]
 
-_MAPS_BANNER_POS = Vec2(18.0, 4.0)
+# Not native: pushed below the HUD's weapon-icon block and XP panel (which
+# together run up to ~Y170 at the largest HUD scale setting) so this text no
+# longer overlaps them.
+_MAPS_BANNER_POS = Vec2(18.0, 180.0)
 _MAPS_BANNER_COLOR = rl.Color(220, 190, 140, 220)
-_SANDBOX_HINT_POS = Vec2(18.0, 20.0)
+_SANDBOX_HINT_POS = Vec2(18.0, 196.0)
 _SANDBOX_HINT_COLOR = rl.Color(150, 210, 255, 220)
 # Not native: sandbox placement/drag - how close (world px) a click needs to
 # land to an existing test entity to grab it instead of doing nothing.
@@ -40,7 +43,7 @@ _SANDBOX_CURSOR_RADIUS = 5.0
 # replay_playback_mode.py's own speed control already scales its dt.
 _TIME_SCALE_STEPS: tuple[float, ...] = (0.1, 0.25, 0.5, 1.0, 1.5, 2.0, 3.0, 5.0)
 _DEFAULT_TIME_SCALE_INDEX = _TIME_SCALE_STEPS.index(1.0)
-_TIME_SCALE_HINT_POS = Vec2(18.0, 36.0)
+_TIME_SCALE_HINT_POS = Vec2(18.0, 212.0)
 _TIME_SCALE_HINT_COLOR = rl.Color(230, 210, 140, 220)
 
 
@@ -236,31 +239,41 @@ class MapsMode(SurvivalMode):
         if rl.is_key_pressed(rl.KeyboardKey.KEY_ZERO):
             self._sandbox_time_scale_index = _DEFAULT_TIME_SCALE_INDEX
 
+        # Not native: F4 (panel)/F6 (edit mode) are independent toggles, not a
+        # mutually-exclusive pair - both can be on at once, so you can leave
+        # the Monster Mods panel open (to see/tweak the current tier+affix
+        # pick) while also placing test entities with F7/F8, instead of
+        # having to close the panel first every time.
         if rl.is_key_pressed(rl.KeyboardKey.KEY_F4):
             self._sandbox_panel.toggle()
             self._paused = self._sandbox_panel.open or self._sandbox_edit_mode
-
-        if self._sandbox_panel.open:
-            self._sandbox_panel.handle_input(
-                players=self.sim_world.players, state=self.state, creatures=self.creatures.entries,
-            )
-            return  # panel owns the mouse while it's open
 
         if rl.is_key_pressed(rl.KeyboardKey.KEY_F6):
             self._sandbox_edit_mode = not self._sandbox_edit_mode
             # Edit mode pauses the sim outright (same flag TAB already toggles)
             # so a click-drag can never double as a trigger-pull or movement
             # input underneath it.
-            self._paused = self._sandbox_edit_mode
+            self._paused = self._sandbox_panel.open or self._sandbox_edit_mode
             self._sandbox_drag_index = None
+
+        if self._sandbox_edit_mode:
+            if rl.is_key_pressed(rl.KeyboardKey.KEY_F7):
+                tier, affixes = self._sandbox_panel.monster_mod_selection()
+                spawn_test_dummy(self.creatures, self._sandbox_mouse_world(), tier=tier, forced_affixes=affixes)
+            if rl.is_key_pressed(rl.KeyboardKey.KEY_F8):
+                tier, affixes = self._sandbox_panel.monster_mod_selection()
+                spawn_stationary_test_monster(
+                    self.creatures, self._sandbox_mouse_world(), tier=tier, forced_affixes=affixes,
+                )
+
+        if self._sandbox_panel.open:
+            self._sandbox_panel.handle_input(
+                players=self.sim_world.players, state=self.state, creatures=self.creatures.entries,
+            )
+            return  # panel owns the mouse while it's open (world click-drag/delete stays blocked)
 
         if not self._sandbox_edit_mode:
             return
-
-        if rl.is_key_pressed(rl.KeyboardKey.KEY_F7):
-            spawn_test_dummy(self.creatures, self._sandbox_mouse_world())
-        if rl.is_key_pressed(rl.KeyboardKey.KEY_F8):
-            spawn_stationary_test_monster(self.creatures, self._sandbox_mouse_world())
 
         self._sandbox_update_drag()
 
@@ -277,6 +290,26 @@ class MapsMode(SurvivalMode):
         # and animations uniformly - same lever replay_playback_mode.py's own
         # speed control already pulls (scaling dt before the tick advances).
         super().update(float(dt) * self._sandbox_time_scale())
+        self._sandbox_revive_dead_players()
+
+    def _death_transition_ready(self) -> bool:
+        # Not native: sandbox is a testing ground, not a real run - dying here
+        # shouldn't trigger SurvivalMode's normal game-over flow (high-score
+        # record, replay save, game-over UI), which assumes a real run's
+        # context. _sandbox_revive_dead_players heals the player back up
+        # before this would ever matter anyway; this is the hard guarantee in
+        # case a single large frame dt (e.g. under a fast time-scale setting)
+        # ever pushed death_timer negative before that heal-check runs.
+        return False
+
+    def _sandbox_revive_dead_players(self) -> None:
+        """Heals any player back to full HP the instant they'd otherwise die,
+        so sandbox testing never ends a session (and can't hit whatever the
+        normal death/game-over path assumes about a real run's state)."""
+        for player in self.sim_world.players:
+            if float(player.health) <= 0.0:
+                player.health = 100.0
+                player.death_timer = 16.0
 
     def _sandbox_mouse_world(self) -> Vec2:
         return self.screen_to_world(Vec2.from_xy(rl.get_mouse_position()))
@@ -342,7 +375,7 @@ class MapsMode(SurvivalMode):
         hint = (
             "Edit mode ON (paused) - F7 dummy, F8 monster, LMB drag, RMB delete, F6 to exit"
             if self._sandbox_edit_mode
-            else "F6: sandbox edit mode (place/drag/delete test dummies)  F4: perk/relic/run-mod/weapon panel"
+            else "F6: sandbox edit mode (place/drag/delete test dummies)  F4: perk/relic/run-mod/weapon/monster-mods panel"
         )
         self._draw_ui_text(hint, _SANDBOX_HINT_POS, _SANDBOX_HINT_COLOR, scale=0.75)
         self._draw_ui_text(

@@ -38,9 +38,9 @@ def draw_dummy_stats(
         gap = _LINE_GAP * scale
 
         lines = (
-            (f"damage: {creature.dummy_damage_total:.0f}", rl.Color(255, 210, 90, int(255 * alpha))),
-            (f"dps: {dummy_dps(creature):.0f}", rl.Color(255, 120, 90, int(255 * alpha))),
-            (f"last hit: {creature.dummy_last_hit_amount:.0f}", rl.Color(200, 200, 255, int(255 * alpha))),
+            (f"damage: {creature.dummy_damage_total:.1f}", rl.Color(255, 210, 90, int(255 * alpha))),
+            (f"dps: {dummy_dps(creature):.1f}", rl.Color(255, 120, 90, int(255 * alpha))),
+            (f"last hit: {creature.dummy_last_hit_amount:.1f}", rl.Color(200, 200, 255, int(255 * alpha))),
         )
 
         font = render_ctx.frame.resources.small_font

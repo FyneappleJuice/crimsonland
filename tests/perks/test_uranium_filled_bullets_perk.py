@@ -11,7 +11,7 @@ from grim.geom import Vec2
 from tests.support.helpers import ScriptedCrand, assert_float_close
 
 
-def test_uranium_filled_bullets_boosts_bullet_damage_by_half() -> None:
+def test_uranium_filled_bullets_boosts_bullet_damage_by_a_quarter() -> None:
     creature = CreatureState(active=True, hp=100.0, size=50.0)
     player = PlayerState(index=0, pos=Vec2())
     player.perk_counts[int(PerkId.URANIUM_FILLED_BULLETS)] = 1
@@ -28,10 +28,10 @@ def test_uranium_filled_bullets_boosts_bullet_damage_by_half() -> None:
     )
 
     assert killed is False
-    assert_float_close(creature.hp, 85.0)
+    assert_float_close(creature.hp, 87.5)
 
 
-def test_uranium_filled_bullets_plus_doubles_bullet_plasma_and_energy() -> None:
+def test_uranium_filled_bullets_plus_brings_bullet_plasma_and_energy_to_1_5x() -> None:
     # Reworked onto the shared "projectile" bucket (damage_mult_projectile) -
     # Plasma/Energy ride the same bucket as Bullet, unconditionally (Ion has
     # its own test below since it's flag-gated, like Fire/Explosion).
@@ -56,7 +56,7 @@ def test_uranium_filled_bullets_plus_doubles_bullet_plasma_and_energy() -> None:
             rng=ScriptedCrand(0, fallback=ScriptedCrand.Fallback.REPEAT_LAST),
         )
 
-        assert_float_close(creature.hp, 800.0)
+        assert_float_close(creature.hp, 850.0)
 
 
 def test_uranium_filled_bullets_boosts_fire_explosion_and_ion_only_on_the_direct_hit() -> None:
@@ -92,7 +92,7 @@ def test_uranium_filled_bullets_boosts_fire_explosion_and_ion_only_on_the_direct
             is_projectile_hit=False,
         )
 
-        assert_float_close(direct_hit.hp, 850.0)
+        assert_float_close(direct_hit.hp, 875.0)
         assert_float_close(dot_tick.hp, 900.0)
 
 

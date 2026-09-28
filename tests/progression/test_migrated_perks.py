@@ -79,8 +79,8 @@ def test_single_damage_perks_match_their_old_constants() -> None:
     # shared "projectile" bucket (kinetic bullet + energy/plasma/ion, plus
     # fire/explosion's direct-hit half only).
     assert _player_with(PerkId.DOCTOR).stats.damage_mult_projectile == pytest.approx(1.2)
-    assert _player_with(PerkId.BARREL_GREASER).stats.damage_mult_projectile == pytest.approx(1.4)
-    assert _player_with(PerkId.URANIUM_FILLED_BULLETS).stats.damage_mult_projectile == pytest.approx(1.5)
+    assert _player_with(PerkId.BARREL_GREASER).stats.damage_mult_projectile == pytest.approx(1.3)
+    assert _player_with(PerkId.URANIUM_FILLED_BULLETS).stats.damage_mult_projectile == pytest.approx(1.25)
     assert _player_with(PerkId.DOCTOR).stats.damage_mult_bullet == pytest.approx(1.0)
     assert _player_with(PerkId.URANIUM_FILLED_BULLETS).stats.damage_mult == pytest.approx(1.0)
     assert _player_with(PerkId.URANIUM_FILLED_BULLETS).stats.damage_mult_bullet == pytest.approx(1.0)
@@ -88,12 +88,12 @@ def test_single_damage_perks_match_their_old_constants() -> None:
 
 def test_stacked_damage_perks_fold_per_layer() -> None:
     stats = _player_with(PerkId.DOCTOR, PerkId.BARREL_GREASER, PerkId.URANIUM_FILLED_BULLETS).stats
-    assert stats.damage_mult_projectile == pytest.approx(1.2 * 1.4 * 1.5)
+    assert stats.damage_mult_projectile == pytest.approx(1.2 * 1.3 * 1.25)
 
 
-def test_uranium_filled_bullets_plus_doubles_the_projectile_bucket() -> None:
+def test_uranium_filled_bullets_plus_brings_the_projectile_bucket_to_1_5x() -> None:
     stats = _player_with(PerkId.URANIUM_FILLED_BULLETS, PerkId.URANIUM_FILLED_BULLETS_PLUS).stats
-    assert stats.damage_mult_projectile == pytest.approx(2.0)
+    assert stats.damage_mult_projectile == pytest.approx(1.5)
 
 
 def test_fire_and_ion_damage_perks_feed_their_own_stats() -> None:
