@@ -2,11 +2,11 @@ from __future__ import annotations
 
 """Not native: read-only sidebar shown alongside the perk-selection screen.
 
-Lists every perk the player has picked this run (top half) and the player's
-actual current stats - HP, crit, move speed, reload (bottom half, see
-ui/player_stats_readout.py) - plus a compact summary of resolved
-`PlayerStats` buckets (progression/stats.py) that currently differ from their
-identity default, in its own panel to the left. Purely informational - no picks, no input
+Lists every perk the player has picked this run, plus - in its own panel to
+the left - a compact summary of resolved `PlayerStats` buckets
+(progression/stats.py) that currently differ from their identity default
+(top half) and the player's actual current stats - HP, crit, move speed,
+reload (bottom half, see ui/player_stats_readout.py). Purely informational - no picks, no input
 handling - so unlike ui/perk_menu.py and ui/run_mod_menu.py this has no
 "controller" of its own; it just mirrors PerkMenuController's own
 open/timeline state (see survival_mode.py/quest_mode.py's draw calls).
@@ -119,17 +119,18 @@ def perk_history_panel_compute_layout(
 
     title_pos = panel.top_left.offset(dx=PERK_HISTORY_PADDING_X, dy=PERK_HISTORY_TITLE_Y)
     list_pos = panel.top_left.offset(dx=PERK_HISTORY_PADDING_X, dy=PERK_HISTORY_LIST_Y)
-    # Not native: the perk list gets the top half; the player's current stats
-    # ("Current Stats", ui/player_stats_readout.py) the bottom half.
-    half_y = panel.y + panel.h * 0.5
-    list_bottom = half_y - 4.0
-    current_title_pos = Vec2(panel.x + PERK_HISTORY_PADDING_X, half_y + 4.0)
-    current_list_pos = current_title_pos.offset(dy=PERK_HISTORY_LIST_Y - PERK_HISTORY_TITLE_Y)
-    current_value_right_x = panel.right - PERK_HISTORY_PADDING_X
+    list_bottom = panel.bottom - _PANEL_BOTTOM_CHROME_H - 8.0
 
     stats_title_pos = stats_panel.top_left.offset(dx=PERK_HISTORY_PADDING_X, dy=PERK_HISTORY_STATS_TITLE_Y)
     stats_list_pos = stats_panel.top_left.offset(dx=PERK_HISTORY_PADDING_X, dy=PERK_HISTORY_STATS_LIST_Y)
-    stats_list_bottom = stats_panel.bottom - _STATS_PANEL_BOTTOM_CHROME_H - 8.0
+    # Not native: the stat-bonus list gets the stats panel's top half; the
+    # player's current stats ("Current Stats", ui/player_stats_readout.py) the
+    # bottom half.
+    stats_half_y = stats_panel.y + stats_panel.h * 0.5
+    stats_list_bottom = stats_half_y - 4.0
+    current_title_pos = Vec2(stats_panel.x + PERK_HISTORY_PADDING_X, stats_half_y + 4.0)
+    current_list_pos = current_title_pos.offset(dy=PERK_HISTORY_STATS_LIST_Y - PERK_HISTORY_STATS_TITLE_Y)
+    current_value_right_x = stats_panel.right - PERK_HISTORY_PADDING_X
 
     return PerkHistoryPanelComputedLayout(
         panel=panel,
@@ -334,7 +335,7 @@ def draw_perk_history_panel(
         draw_small_text(font, label, pos, PERK_HISTORY_CURRENT_LABEL_COLOR)
         value_x = layout.current_value_right_x - _text_width(value, resources)
         draw_small_text(font, value, Vec2(value_x, pos.y), PERK_HISTORY_CURRENT_VALUE_COLOR)
-        pos = pos.offset(dy=layout.list_step_y)
+        pos = pos.offset(dy=layout.stats_row_h)
 
     draw_small_text(font, "Stat Bonuses", layout.stats_title_pos, PERK_HISTORY_STATS_TITLE_COLOR)
     stat_rows = stat_summary_rows(player.stats)
