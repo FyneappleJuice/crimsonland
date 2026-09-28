@@ -62,6 +62,7 @@ nav = [
       { "Rendering pipeline" = "rewrite/rendering-pipeline.md" },
       { "Terrain" = "rewrite/terrain.md" },
       { "Beam rendering (classic + RTX)" = "rewrite/beam-rendering.md" },
+      { "Custom visuals" = "rewrite/custom-visuals.md" },
     ]},
     { "Parity" = [
       { "Overview" = "rewrite/parity/index.md" },
