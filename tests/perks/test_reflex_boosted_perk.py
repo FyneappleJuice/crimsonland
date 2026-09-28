@@ -7,6 +7,7 @@ from crimson.math_parity import f32
 from crimson.perks import PerkId
 from crimson.sim.input import PlayerInput
 from crimson.sim.session_builders import build_survival_session
+from crimson.sim.sessions import SURVIVAL_WAVE_SPAWN_RATE_MULT
 from crimson.sim.state_types import PlayerState
 from crimson.sim.world_state import WorldState
 from grim.geom import Vec2
@@ -71,7 +72,8 @@ def test_survival_session_shares_reflex_boosted_dt_with_mode_timers() -> None:
     # truncation path produces 89 ms.
     assert tick.step.timing.dt_sim_ms_i32 == 89
     assert tick.elapsed_ms == 89.0
-    assert spawn.spawn_cooldown_ms == 911.0
+    # The wave-spawn cooldown runs at SURVIVAL_WAVE_SPAWN_RATE_MULT of sim time.
+    assert_float_close(spawn.spawn_cooldown_ms, 1000.0 - 89.0 * SURVIVAL_WAVE_SPAWN_RATE_MULT)
 
 
 def test_world_step_uses_player_roundtrip_dt_for_post_player_bonus_timers() -> None:

@@ -144,7 +144,7 @@ def test_boss_wave_composition_escalates_count_every_three_waves() -> None:
 def test_boss_wave_rarity_tier_grows_less_normal_over_waves() -> None:
     # Deterministic at the extremes: wave 0 has zero apex/mutated odds and a
     # low tainted floor, so a near-1.0 roll always misses every bucket.
-    for wave in range(0, 40):
+    for wave in range(40):
         tier = survival_boss_wave_rarity_tier(wave)
         assert 0 <= tier <= 3
 
@@ -157,7 +157,7 @@ def test_boss_wave_rarity_tier_grows_less_normal_over_waves() -> None:
         p_tainted = min(0.9, 0.25 + 0.08 * wave)
         return p_apex + p_mutated + p_tainted
 
-    values = [_p_not_normal(w) for w in range(0, 15)]
+    values = [_p_not_normal(w) for w in range(15)]
     assert values == sorted(values)
 
 
@@ -220,3 +220,14 @@ def test_survival_mid_step_spawns_an_escalated_boss_wave_through_the_real_pipeli
     bosses = [e for e in world.creatures.entries if e.active and e.max_hp >= 1000.0]
     assert len(bosses) == 1
     assert 0 <= bosses[0].rarity <= 3
+
+
+def test_den_pick_position_is_inside_the_arena_and_away_from_players() -> None:
+    from crimson.creatures.spawn import SURVIVAL_DEN_MIN_PLAYER_DISTANCE, SURVIVAL_DEN_POSITION_MARGIN
+
+    player = Vec2(512.0, 512.0)
+    for _ in range(200):
+        pos = survival_den_pick_position(world_size=1024.0, avoid=(player,))
+        assert SURVIVAL_DEN_POSITION_MARGIN <= pos.x <= 1024.0 - SURVIVAL_DEN_POSITION_MARGIN
+        assert SURVIVAL_DEN_POSITION_MARGIN <= pos.y <= 1024.0 - SURVIVAL_DEN_POSITION_MARGIN
+        assert pos.distance_to(player) >= SURVIVAL_DEN_MIN_PLAYER_DISTANCE

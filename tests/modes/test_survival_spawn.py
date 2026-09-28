@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from crimson.creatures.spawn import (
+    SURVIVAL_RARITY_RAMP_START_LEVEL,
     CreatureFlags,
     CreatureTypeId,
     _survival_creature_type_weights,
@@ -10,9 +11,9 @@ from crimson.creatures.spawn import (
     _survival_weighted_type_pick,
     build_survival_spawn_creature,
 )
+from crimson.gameplay import survival_level_threshold
 from crimson.math_parity import f32, f32_from_bits
 from grim.geom import Vec2
-from grim.rand import Crand
 from tests.support.helpers import ScriptedCrand, assert_float_close
 
 
@@ -169,7 +170,10 @@ def test_rarity_divisor_shrinks_with_xp_and_floors() -> None:
     assert _survival_rarity_divisor(30, 8, 0, xp_per_step=20_000) == 30
     assert _survival_rarity_divisor(58, 12, 0, xp_per_step=25_000) == 58
 
-    # Climbs (shrinks the divisor => raises the hit chance) with XP...
-    assert _survival_rarity_divisor(19, 6, 45_000, xp_per_step=15_000) == 16
+    # Stays flat right up to reaching SURVIVAL_RARITY_RAMP_START_LEVEL...
+    ramp_xp = survival_level_threshold(SURVIVAL_RARITY_RAMP_START_LEVEL - 1)
+    assert _survival_rarity_divisor(19, 6, ramp_xp, xp_per_step=15_000) == 19
+    # ...then climbs (shrinks the divisor => raises the hit chance) with XP past it...
+    assert _survival_rarity_divisor(19, 6, ramp_xp + 45_000, xp_per_step=15_000) == 16
     # ...and never drops below the floor, however high XP goes.
     assert _survival_rarity_divisor(19, 6, 10_000_000, xp_per_step=15_000) == 6

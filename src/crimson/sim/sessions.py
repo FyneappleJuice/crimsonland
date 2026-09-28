@@ -109,6 +109,10 @@ class PostStepContext(msgspec.Struct, frozen=True):
 # takes over exactly as before.
 SURVIVAL_DEN_MIN_LEVEL = 4
 
+# Not native: ambient wave spawns run at this fraction of their normal rate,
+# at every level (the late-game ramp below multiplies on top of it).
+SURVIVAL_WAVE_SPAWN_RATE_MULT = 0.75
+
 
 class SurvivalSpawnState(msgspec.Struct):
     stage: int = 0
@@ -237,7 +241,10 @@ def survival_mid_step(ctx: MidStepContext, spawn: SurvivalSpawnState) -> None:
             spawn.den_spawn_cooldown_s += survival_den_interval_s(int(player_level))
             den_plan = build_survival_den_plan(
                 survival_den_pick_template(int(player_level)),
-                survival_den_pick_position(),
+                survival_den_pick_position(
+                    world_size=float(ctx.world_size),
+                    avoid=tuple(p.pos for p in ctx.world.players if p.health > 0.0),
+                ),
                 float(math.pi),
                 state.rng,
                 ctx.world.creatures.env,
@@ -264,7 +271,7 @@ def survival_mid_step(ctx: MidStepContext, spawn: SurvivalSpawnState) -> None:
         )
         ctx.world.creatures.spawn_plan(plan, rng=state.rng)
 
-    spawn_dt_ms = ctx.dt_sim_ms * _survival_spawn_dt_mult(player_level)
+    spawn_dt_ms = ctx.dt_sim_ms * SURVIVAL_WAVE_SPAWN_RATE_MULT * _survival_spawn_dt_mult(player_level)
     cooldown, wave_spawns = tick_survival_wave_spawns(
         spawn.spawn_cooldown_ms,
         spawn_dt_ms,

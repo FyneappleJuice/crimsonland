@@ -59,6 +59,10 @@ __all__ = [
     "RANDOM_HEADING_SENTINEL",
     "SPAWN_ID_TO_TEMPLATE",
     "SPAWN_TEMPLATES",
+    "SURVIVAL_BOSS_WAVE_LEVEL_INTERVAL",
+    "SURVIVAL_BOSS_WAVE_START_LEVEL",
+    "SURVIVAL_DEN_BASE_INTERVAL_S",
+    "SURVIVAL_DEN_MIN_INTERVAL_S",
     "TYPE_ID_TO_NAME",
     "BurstEffect",
     "CreatureAiMode",
@@ -72,10 +76,6 @@ __all__ = [
     "SpawnTemplate",
     "SpawnTemplateCall",
     "UnsupportedSpawnTemplateError",
-    "SURVIVAL_BOSS_WAVE_LEVEL_INTERVAL",
-    "SURVIVAL_BOSS_WAVE_START_LEVEL",
-    "SURVIVAL_DEN_BASE_INTERVAL_S",
-    "SURVIVAL_DEN_MIN_INTERVAL_S",
     "advance_survival_boss_waves",
     "advance_survival_spawn_stage",
     "build_rush_mode_spawn_creature",
@@ -83,18 +83,18 @@ __all__ = [
     "build_survival_boss_wave_plan",
     "build_survival_den_plan",
     "build_survival_spawn_creature",
-    "survival_boss_wave_composition",
-    "survival_boss_wave_rarity_tier",
-    "survival_den_interval_s",
-    "survival_den_pick_position",
-    "survival_den_pick_template",
-    "survival_den_rarity_tier",
     "build_tutorial_stage3_fire_spawns",
     "build_tutorial_stage4_clear_spawns",
     "build_tutorial_stage5_repeat_spawns",
     "build_tutorial_stage6_perks_done_spawns",
     "resolve_tint",
     "spawn_id_label",
+    "survival_boss_wave_composition",
+    "survival_boss_wave_rarity_tier",
+    "survival_den_interval_s",
+    "survival_den_pick_position",
+    "survival_den_pick_template",
+    "survival_den_rarity_tier",
     "tick_rush_mode_spawns",
     "tick_spawn_slot",
     "tick_survival_wave_spawns",
@@ -1182,11 +1182,25 @@ def _survival_tint_inverse_bucket(xp: int, divisor: int) -> float:
     return x87_pc24_div(f32(1.0), x87_pc24_add(float(xp // divisor), f32(10.0)))
 
 
+# Not native: monster rarity odds stay at their base rate until the player
+# reaches this level, and only start climbing from there.
+SURVIVAL_RARITY_RAMP_START_LEVEL = 15
+
+
+def _survival_rarity_ramp_xp(xp: int) -> int:
+    """XP earned past the point the player reached
+    SURVIVAL_RARITY_RAMP_START_LEVEL (0 before it)."""
+    from ..gameplay import survival_level_threshold
+
+    return max(0, int(xp) - survival_level_threshold(SURVIVAL_RARITY_RAMP_START_LEVEL - 1))
+
+
 def _survival_rarity_divisor(base: int, floor: int, xp: int, *, xp_per_step: int) -> int:
     """Not native: shrinks a rarity roll's modulo divisor (raising its hit
-    chance, since P(hit) = 1/divisor) as XP climbs, floored at `floor` so the
-    odds never exceed 1/floor and Normal always stays possible."""
-    return max(floor, base - int(xp) // xp_per_step)
+    chance, since P(hit) = 1/divisor) as XP climbs past
+    SURVIVAL_RARITY_RAMP_START_LEVEL, floored at `floor` so the odds never
+    exceed 1/floor and Normal always stays possible."""
+    return max(floor, base - _survival_rarity_ramp_xp(xp) // xp_per_step)
 
 
 # Not native: replaces the original XP-bracket cascade entirely. Every type
@@ -1398,9 +1412,9 @@ def build_survival_spawn_creature(pos: Vec2, rng: CrandLike, *, player_experienc
         # Rewrite-only odds, tuned well above the native rare-variant rate
         # (which this replaced - see the `if not MONSTER_RARITY_ENABLED`
         # branch above for those original 1-in-90/120/180/330/405 rolls).
-        # At xp=0 the divisors below are 19/30/58 (Tainted 5.26%, Mutated
+        # Until level 15 the divisors below are 19/30/58 (Tainted 5.26%, Mutated
         # 3.33%, Apex 1.67%) - the original flat odds - and they shrink (so
-        # the roll's hit chance rises) as XP climbs, floored so a run never
+        # the roll's hit chance rises) as XP climbs past it, floored so a run never
         # guarantees a mod and Normal always stays possible. The whole
         # tier-1 roll is folded into RED (GREEN/BLUE always miss now, kept
         # only so this still consumes the same RNG calls as the native
@@ -1738,7 +1752,11 @@ SURVIVAL_DEN_CHILD_SPEEDUP_PER_LEVEL = 0.985  # children spawn ~1.5%/level faste
 SURVIVAL_DEN_CHILD_INTERVAL_FLOOR_MULT = 0.25  # never faster than 4x the template's base rate
 
 _SURVIVAL_DEN_TEMPLATES: tuple[SpawnId, ...] = tuple(ALIEN_SPAWNER_TEMPLATES.keys())
-_DEN_POSITIONS: tuple[Vec2, ...] = (Vec2(-64.0, 512.0), Vec2(1088.0, 512.0), Vec2(512.0, -64.0), Vec2(512.0, 1088.0))
+# Dens land at a random spot inside the arena, kept at least this far from
+# every player so one never appears right on top of them.
+SURVIVAL_DEN_POSITION_MARGIN = 64.0
+SURVIVAL_DEN_MIN_PLAYER_DISTANCE = 300.0
+_DEN_POSITION_ATTEMPTS = 16
 
 # Private RNGs (which den/position/rarity) - cosmetic/threat-escalation rolls,
 # same reasoning as crit.py's own private RNG / meta/relics_impl's pact rolls.
@@ -1758,9 +1776,10 @@ def survival_den_interval_s(player_level: int) -> float:
 
 
 def survival_den_rarity_tier(player_level: int) -> int:
-    """0 (Normal) .. 3 (Apex) - a Den's own rarity odds, climbing with level
+    """0 (Normal) .. 3 (Apex) - a Den's own rarity odds, flat until
+    SURVIVAL_RARITY_RAMP_START_LEVEL, then climbing with each level past it
     (same shape as the boss-wave escalation)."""
-    level = max(0, int(player_level))
+    level = max(0, int(player_level) - SURVIVAL_RARITY_RAMP_START_LEVEL)
     p_apex = min(0.30, 0.006 * level)
     p_mutated = min(0.5, 0.02 + 0.01 * level)
     p_tainted = min(0.85, 0.10 + 0.02 * level)
@@ -1800,8 +1819,22 @@ def survival_den_pick_template(player_level: int = 0) -> SpawnId:
     return _DEN_PICK_RNG.choice(pool)
 
 
-def survival_den_pick_position() -> Vec2:
-    return _DEN_POSITION_RNG.choice(_DEN_POSITIONS)
+def survival_den_pick_position(*, world_size: float = 1024.0, avoid: tuple[Vec2, ...] = ()) -> Vec2:
+    """Random arena position for a fresh Den, at least
+    SURVIVAL_DEN_MIN_PLAYER_DISTANCE from every `avoid` point (falls back to
+    the farthest candidate tried if the arena is too crowded for that)."""
+    lo = SURVIVAL_DEN_POSITION_MARGIN
+    hi = max(lo, float(world_size) - SURVIVAL_DEN_POSITION_MARGIN)
+    best = Vec2(lo, lo)
+    best_dist = -1.0
+    for _ in range(_DEN_POSITION_ATTEMPTS):
+        pos = Vec2(_DEN_POSITION_RNG.uniform(lo, hi), _DEN_POSITION_RNG.uniform(lo, hi))
+        nearest = min((pos.distance_to(p) for p in avoid), default=float("inf"))
+        if nearest >= SURVIVAL_DEN_MIN_PLAYER_DISTANCE:
+            return pos
+        if nearest > best_dist:
+            best, best_dist = pos, nearest
+    return best
 
 
 def build_survival_den_plan(
