@@ -44,6 +44,7 @@ from .perks.runtime.player_ticks import apply_player_perk_ticks
 from .perks.state import PerkEffectIntervals, PerkSelectionState
 from .run_mods.state import RunModSelectionState
 from .creatures import rarity as monster_rarity
+from .creatures.barrels import BarrelBreakEffect
 from .creatures.damage_runtime import CreatureDamageRuntime
 from .creatures.dummy import PendingTestMonsterRespawn
 from .creatures.rarity import PendingMonsterAreaEffect, PendingMonsterDetonation
@@ -184,6 +185,10 @@ class GameplayState(msgspec.Struct):
     # respawns 5s after it dies to a hit, so it's ready for another on-death
     # proc test without needing to be replaced.
     pending_test_monster_respawns: list[PendingTestMonsterRespawn] = msgspec.field(default_factory=list)
+    # Not native: destructible Barrel break VFX (creatures/barrels.py) - one
+    # entry per Barrel that broke this tick, aged out once its 4-frame
+    # destruction strip finishes playing.
+    pending_barrel_breaks: list[BarrelBreakEffect] = msgspec.field(default_factory=list)
     shock_chain_links_left: int = 0
     shock_chain_projectile_id: int = -1
     survival_reward_handout_enabled: bool = True

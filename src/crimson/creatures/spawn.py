@@ -768,6 +768,9 @@ class CreatureInit(msgspec.Struct):
     is_test_dummy: bool = False
     sandbox_no_corpse: bool = False
 
+    # Rewrite-only: destructible Barrel prop (creatures/barrels.py).
+    is_barrel: bool = False
+
 
 class SpawnSlotInit(msgspec.Struct):
     owner_creature: int

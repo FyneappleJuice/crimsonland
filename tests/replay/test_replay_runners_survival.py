@@ -7,6 +7,7 @@ from crimson.perks import PerkId
 from crimson.replay.driver.playback_driver import PlaybackDriver, build_verify_playback_driver
 from crimson.rng_caller_static import RngCallerStatic
 from crimson.sim.bootstrap import advance_unlock_terrain
+from crimson.terrain_slots import choose_survival_random_terrain_slots
 from crimson.sim.input_providers import (
     GameFrameRngAdvanceOperation,
     PerkMenuOpenCommand,
@@ -164,8 +165,13 @@ def test_survival_runner_uses_header_seed_for_startup_terrain_prelude() -> None:
 
     terrain_setup = driver.terrain_setup
     assert terrain_setup is not None
-    assert terrain_setup.terrain_slots == terrain.terrain_slots
+    # Not native: Survival overrides the raw unlock-gated pick with a uniform
+    # random choice across all 4 terrain sets, seeded from the same
+    # terrain_seed - see terrain_slots.choose_survival_random_terrain_slots.
+    assert terrain_setup.terrain_slots == choose_survival_random_terrain_slots(terrain.terrain_seed)
     assert terrain_setup.terrain_seed == int(terrain.terrain_seed)
+    # The override doesn't consume any RNG itself, so the lockstep stream
+    # position after terrain setup is unaffected.
     assert int(driver.world.state.rng.state) == int(rng.state)
 
 

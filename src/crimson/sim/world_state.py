@@ -10,6 +10,7 @@ from grim.sfx_map import SfxId
 
 from ..bonuses.blade_orbit import update_blade_orbits
 from ..bonuses.ion_overload import update_ion_overload_clouds
+from ..creatures.barrels import barrel_keep_corpse, tick_barrel_break_effects
 from ..creatures.dummy import sandbox_keep_corpse, tick_test_monster_respawns, update_test_dummies
 from ..creatures.rarity import update_monster_affixes
 from ..weapon_runtime.arc_gun import update_arc_gun
@@ -140,8 +141,11 @@ class _WorldStepRuntime(ProjectileHitRuntime, CreatureDamageRuntime, PlayerDeath
         idx = int(creature_index)
         # Not native: sandbox mode test entities never keep a corpse, and the
         # stationary test monster queues its own 5s respawn here - see
-        # creatures/dummy.py.
-        keep_corpse = sandbox_keep_corpse(self.world.creatures.entries, idx, self.world.state)
+        # creatures/dummy.py. Barrels never keep one either - see
+        # creatures/barrels.py.
+        keep_corpse = sandbox_keep_corpse(self.world.creatures.entries, idx, self.world.state) and barrel_keep_corpse(
+            self.world.creatures.entries, idx,
+        )
         self.world._record_creature_death(
             creature_index=idx,
             dt=float(self.dt),
@@ -495,6 +499,9 @@ class WorldState(msgspec.Struct):
         update_test_dummies(self.creatures, dt)
         # Not native: sandbox mode stationary test monster - auto-respawn timer.
         tick_test_monster_respawns(self.creatures, self.state, dt)
+        # Not native: destructible Barrel break VFX - ages out pending break
+        # animations (creatures/barrels.py).
+        tick_barrel_break_effects(self.state, dt)
         # Not native: advance orbiting-blade bonuses and apply their contact hits.
         update_blade_orbits(
             self.players,

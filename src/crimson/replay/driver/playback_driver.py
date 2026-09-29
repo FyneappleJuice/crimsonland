@@ -36,6 +36,7 @@ from ...sim.sessions import (
     enforce_rush_loadout,
 )
 from ...sim.world_state import WorldState
+from ...terrain_slots import choose_survival_random_terrain_slots
 from ...typo.state import typo_shot_counts
 from ...weapons import WeaponId
 from ...world.sim_world_state import apply_creature_pool_residue, reset_world_players
@@ -218,7 +219,25 @@ class PlaybackDriver:
         self._quest_start_weapon_resolved = None
 
         match self.mode_id:
-            case GameMode.SURVIVAL | GameMode.RUSH:
+            case GameMode.SURVIVAL:
+                terrain = advance_unlock_terrain(
+                    world.state.rng,
+                    unlock_index=int(self.replay.header.status.quest_unlock_index),
+                    width=int(self.world_size),
+                    height=int(self.world_size),
+                )
+                # Not native: mirrors the live-play override in
+                # modes/survival_mode.py - Survival picks uniformly among all
+                # 4 terrain sets rather than native's Q1-heavy, unlock-gated
+                # cascade. Seeded from terrain.terrain_seed (itself derived
+                # from the replayed lockstep RNG stream), so playback
+                # reproduces the exact same pick the original run made.
+                terrain = msgspec.structs.replace(
+                    terrain,
+                    terrain_slots=choose_survival_random_terrain_slots(terrain.terrain_seed),
+                )
+                self._terrain_setup = terrain
+            case GameMode.RUSH:
                 terrain = advance_unlock_terrain(
                     world.state.rng,
                     unlock_index=int(self.replay.header.status.quest_unlock_index),

@@ -65,6 +65,7 @@ from ..sim.state_types import GameplayState, PlayerState
 from ..sim.timing import ftol_ms_i32
 from ..weapons import weapon_entry_for_projectile_type_id
 from .ai import creature_ai7_tick_link_timer, creature_ai_update_target
+from .barrels import barrel_keep_corpse, on_barrel_broken
 from .damage_runtime import CreatureDamageRuntime
 from .damage_types import CreatureDamageType
 from .dummy import sandbox_keep_corpse
@@ -530,6 +531,14 @@ class CreatureState(msgspec.Struct):
     # (see CreaturePool.handle_death / on_creature_lethal call sites).
     sandbox_no_corpse: bool = False
 
+    # Rewrite-only: destructible Barrel prop (creatures/barrels.py). A plain
+    # CreatureState entry otherwise - real HP, real collision/damage, no AI
+    # movement (move_speed forced to 0 the same way the sandbox entities
+    # above do it) - just flagged so rendering swaps in the Barrel sprite
+    # instead of its borrowed type_id's native one, and death routes to a
+    # loot roll instead of the ordinary kill-XP/bonus-chance path.
+    is_barrel: bool = False
+
     # Rewrite-only: Cold Snap freezes the target on a crit (weapon_runtime/
     # crit.py, projectiles/runtime/projectile_pool.py). > 0 blocks movement.
     crit_freeze_timer: float = 0.0
@@ -640,8 +649,11 @@ class _CreatureInteractionCreatureDamageRuntime(CreatureDamageRuntime):
         idx = int(creature_index)
         # Not native: sandbox mode test entities never keep a corpse, and the
         # stationary test monster queues its own 5s respawn here - see
-        # creatures/dummy.py.
-        keep_corpse = sandbox_keep_corpse(ctx.pool.entries, idx, ctx.state)
+        # creatures/dummy.py. Barrels never keep one either - see
+        # creatures/barrels.py.
+        keep_corpse = sandbox_keep_corpse(ctx.pool.entries, idx, ctx.state) and barrel_keep_corpse(
+            ctx.pool.entries, idx,
+        )
         ctx.deaths.append(
             ctx.pool.handle_death(
                 idx,
@@ -683,8 +695,11 @@ class _CreaturePoolCreatureDamageRuntime(CreatureDamageRuntime):
         idx = int(creature_index)
         # Not native: sandbox mode test entities never keep a corpse, and the
         # stationary test monster queues its own 5s respawn here - see
-        # creatures/dummy.py.
-        keep_corpse = sandbox_keep_corpse(self.pool.entries, idx, self.state)
+        # creatures/dummy.py. Barrels never keep one either - see
+        # creatures/barrels.py.
+        keep_corpse = sandbox_keep_corpse(self.pool.entries, idx, self.state) and barrel_keep_corpse(
+            self.pool.entries, idx,
+        )
         self.deaths.append(
             self.pool.handle_death(
                 idx,
@@ -1755,12 +1770,19 @@ class CreaturePool:
                 sfx=sfx,
                 contact_distance=float(target_dist),
             )
-            for step in _CREATURE_INTERACTION_STEPS:
-                step(interaction_ctx)
+            # Not native: Barrels (creatures/barrels.py) are a plain prop, not
+            # a monster - none of these steps make sense for one (bite SFX +
+            # "blood spill" FX burst even at contact_damage=0.0, Energizer
+            # eating it, Plaguebearer infecting it, the size<=16 auto-kill).
+            # They're excluded here instead of threading an is_barrel check
+            # through each individual step.
+            if not creature.is_barrel:
+                for step in _CREATURE_INTERACTION_STEPS:
+                    step(interaction_ctx)
+                    if interaction_ctx.skip_creature:
+                        break
                 if interaction_ctx.skip_creature:
-                    break
-            if interaction_ctx.skip_creature:
-                continue
+                    continue
 
         return CreatureUpdateResult(deaths=tuple(deaths), spawned=tuple(spawned), sfx=tuple(sfx))
 
@@ -1936,6 +1958,7 @@ class CreaturePool:
         entry.dummy_last_hit_elapsed_s = 0.0
         entry.dummy_no_hit_timer = 0.0
         entry.sandbox_no_corpse = bool(getattr(init, "sandbox_no_corpse", False))
+        entry.is_barrel = bool(getattr(init, "is_barrel", False))
         entry.crit_freeze_timer = 0.0
         entry.is_frozen = False
         relic_impaler.clear(entry)
@@ -2212,7 +2235,17 @@ class CreaturePool:
             else:
                 xp_awarded = award_experience_from_reward(state, killer, float(creature.reward_value) * xp_mult)
 
-        if players:
+        if players and creature.is_barrel:
+            on_barrel_broken(
+                self,
+                creature,
+                state=state,
+                players=players,
+                detail_preset=detail_preset,
+                world_width=world_width,
+                world_height=world_height,
+            )
+        elif players:
             state.bonus_pool.try_spawn_on_kill(
                 pos=creature.pos,
                 state=state,

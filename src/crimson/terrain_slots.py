@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import random as _random
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
@@ -65,6 +66,33 @@ def choose_unlock_terrain_slots(
     return DEFAULT_TERRAIN_SLOTS
 
 
+_SURVIVAL_TERRAIN_CHOICES: tuple[TerrainSlotTriplet, ...] = (
+    Q1_TERRAIN_SLOTS,
+    Q2_TERRAIN_SLOTS,
+    Q3_TERRAIN_SLOTS,
+    Q4_TERRAIN_SLOTS,
+)
+
+
+def choose_survival_random_terrain_slots(seed: int) -> TerrainSlotTriplet:
+    """Not native: Survival rolls uniformly across all 4 terrain sets instead
+    of native `terrain_generate_random()`'s heavily Q1-biased, Quest-progress-
+    gated cascade (choose_unlock_terrain_slots) - a fresh/Quest-unstarted
+    player only ever saw Q1 in Survival under that gate, even though terrain
+    is purely cosmetic (no collision/movement/hazard effect - see
+    grim/terrain_render.py) and has no reason to be tied to Quest progress.
+
+    Seeded from the `terrain_seed` `advance_unlock_terrain` already captures
+    (the lockstep RNG's state at that point) rather than drawing from the
+    shared RNG itself - this keeps the pick reproducible for replay playback
+    (same recorded RNG stream -> same terrain_seed -> same pick here) without
+    changing the shared RNG's draw count, so it can be layered on as a pure
+    override of `TerrainSetup.terrain_slots` (see modes/survival_mode.py and
+    replay/driver/playback_driver.py) with zero effect on anything else that
+    depends on the native RNG sequence."""
+    return _random.Random(int(seed)).choice(_SURVIVAL_TERRAIN_CHOICES)
+
+
 def terrain_slots_to_texture_ids(
     slots: TerrainSlotTriplet,
 ) -> tuple[TextureId, TextureId, TextureId]:
@@ -91,6 +119,7 @@ __all__ = [
     "Q4_TERRAIN_SLOTS",
     "UNLOCK_TERRAIN_SLOTS",
     "TerrainSlotTriplet",
+    "choose_survival_random_terrain_slots",
     "choose_unlock_terrain_slots",
     "resolve_terrain_slots",
     "terrain_slots_for_quest",

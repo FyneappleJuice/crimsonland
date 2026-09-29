@@ -114,6 +114,16 @@ class TextureId(Enum):
     # (render/world/draw.py). Absent from a stock PAQ - always served from the
     # committed fallback copy.
     WARBANNER = auto()
+    # Rewrite-only content: the destructible Barrel's idle sprite and its
+    # 4-frame break strip (creatures/barrels.py, render/world/draw.py). Absent
+    # from a stock PAQ - always served from the committed fallback copy.
+    BARREL = auto()
+    BARREL_BREAK = auto()
+    # Rewrite-only content: Cinderburst's live burning-ground decal, a
+    # 10-frame strip from hot cracked embers cooling to charred ash
+    # (render/world/draw.py's draw_pending_area_effect_warnings). Absent from
+    # a stock PAQ - always served from the committed fallback copy.
+    CINDERBURST_GROUND = auto()
 
 
 class TextureSpec(msgspec.Struct, frozen=True):
@@ -206,6 +216,9 @@ OPTIONAL_TEXTURE_SPECS: Final[dict[TextureId, TextureSpec]] = {
     TextureId.EVIL_SCYTHE_WEAPON_ICON: TextureSpec("game/evil_scythe_weapon_icon.png", clamp=True),
     TextureId.TENET_GUN_WEAPON_ICON: TextureSpec("game/tenet_gun_weapon_icon.png", clamp=True),
     TextureId.WARBANNER: TextureSpec("game/warbanner.png", clamp=True, point_filter=True),
+    TextureId.BARREL: TextureSpec("game/barrel.png", clamp=True, point_filter=True),
+    TextureId.BARREL_BREAK: TextureSpec("game/barrel_break.png", clamp=True, point_filter=True),
+    TextureId.CINDERBURST_GROUND: TextureSpec("game/cinderburst_ground.png", clamp=True),
 }
 _OPTIONAL_TEXTURE_FALLBACK_DIR: Final[Path] = Path(__file__).resolve().parent / "optional_textures"
 

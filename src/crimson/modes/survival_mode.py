@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Literal
 
+import msgspec
+
 from grim.assets import TextureId
 from grim.audio import AudioState
 from grim.config import (
@@ -34,6 +36,7 @@ from ..run_mods.selection import run_mod_selection_prepared_choices
 from ..sim.bootstrap import advance_unlock_terrain
 from ..sim.session_builders import build_survival_session
 from ..sim.sessions import DeterministicSession, DeterministicSessionTick, SurvivalSpawnState
+from ..terrain_slots import choose_survival_random_terrain_slots
 from ..ui.cursor import draw_menu_cursor
 from ..ui.hud import HudRenderContext, draw_hud_overlay, hud_flags_for_game_mode
 from ..ui.perk_history_panel import draw_perk_history_panel
@@ -306,6 +309,16 @@ class SurvivalMode(BaseGameplayMode):
             unlock_index=int(quest_unlock_index),
             width=int(self.world_size),
             height=int(self.world_size),
+        )
+        # Not native: Survival picks uniformly among all 4 terrain sets
+        # instead of native random-terrain's Q1-heavy, Quest-progress-gated
+        # cascade - see terrain_slots.choose_survival_random_terrain_slots.
+        # Pure override of the slots advance_unlock_terrain picked; its RNG
+        # consumption above is untouched, so this has no effect on the
+        # lockstep stream or anything else derived from it.
+        terrain = msgspec.structs.replace(
+            terrain,
+            terrain_slots=choose_survival_random_terrain_slots(terrain.terrain_seed),
         )
         lan_debug_log(
             "terrain_prelude",

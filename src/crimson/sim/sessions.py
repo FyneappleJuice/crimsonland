@@ -9,6 +9,12 @@ from grim.rand import CrandLike, RecordingCrand
 from grim.sfx_map import SfxId
 
 from ..bonuses.blade_orbit import blade_sound_loop_index
+from ..creatures.barrels import (
+    BARREL_BASE_INTERVAL_S,
+    barrel_interval_s,
+    barrel_pick_position,
+    spawn_barrel,
+)
 from ..creatures.spawn import (
     SURVIVAL_BOSS_WAVE_START_LEVEL,
     advance_survival_boss_waves,
@@ -127,6 +133,10 @@ class SurvivalSpawnState(msgspec.Struct):
     # survival_den_interval_s(level) (shrinks as level climbs). Doesn't start
     # ticking until SURVIVAL_DEN_MIN_LEVEL is reached (see survival_mid_step).
     den_spawn_cooldown_s: float = 20.0
+    # Not native: recurring destructible Barrels (see creatures/barrels.py) -
+    # same shrinking-interval shape as Dens, but active from the very start
+    # of a run (Barrels are a reward to find, not a threat).
+    barrel_spawn_cooldown_s: float = BARREL_BASE_INTERVAL_S
 
 
 class RushSpawnState(msgspec.Struct):
@@ -253,6 +263,21 @@ def survival_mid_step(ctx: MidStepContext, spawn: SurvivalSpawnState) -> None:
                 tier=survival_den_rarity_tier(int(player_level)),
             )
             ctx.world.creatures.spawn_plan(den_plan, rng=state.rng)
+
+    # Not native: recurring destructible Barrels (see creatures/barrels.py) -
+    # active from level 1 (unlike Dens), since a Barrel is a reward to find,
+    # not a threat that needs the early game clear of it first.
+    spawn.barrel_spawn_cooldown_s -= dt_s
+    if spawn.barrel_spawn_cooldown_s <= 0.0:
+        spawn.barrel_spawn_cooldown_s += barrel_interval_s(int(player_level))
+        spawn_barrel(
+            ctx.world.creatures,
+            barrel_pick_position(
+                world_size=float(ctx.world_size),
+                avoid=tuple(p.pos for p in ctx.world.players if p.health > 0.0),
+            ),
+            player_level=int(player_level),
+        )
 
     # Not native: once the native milestone ladder (above) is exhausted, keep
     # escalating instead of falling silent - periodic boss waves, growing in

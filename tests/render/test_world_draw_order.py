@@ -29,6 +29,9 @@ class _ResourcesStub:
     def texture(self, _texture_id: object) -> _TextureStub:
         return _TextureStub()
 
+    def texture_optional(self, _texture_id: object) -> _TextureStub | None:
+        return None
+
 
 def _render_ctx_for_creatures(creatures: Sequence[object]):
     frame = RenderFrame(

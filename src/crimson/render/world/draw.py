@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import random as _random
 from collections.abc import Callable, Iterator, Sequence
 from typing import TYPE_CHECKING
 
@@ -113,6 +114,12 @@ def draw_world(
             scale=scale,
             entity_alpha=entity_alpha,
         )
+        # Not native: War Banner's planted sprite and Cinderburst's scorched-
+        # ground decal both live on the ground, so they draw here - above the
+        # terrain/blood decals baked into draw_background above, but below
+        # dead players, creatures and everything drawn after them.
+        draw_warbanners(render_ctx, ctx=draw_ctx)
+        draw_cinderburst_ground_decals(render_ctx, ctx=draw_ctx)
         with profile_pass("players_dead"):
             draw_players(render_ctx, ctx=draw_ctx, alive=False)
         with profile_pass("creatures"):
@@ -129,7 +136,6 @@ def draw_world(
         # break-even distance, under the players.
         draw_critical_mass_radius(render_ctx, ctx=draw_ctx)
         draw_deadeye_neutral_ring(render_ctx, ctx=draw_ctx)
-        draw_warbanners(render_ctx, ctx=draw_ctx)
         draw_pending_detonation_warnings(render_ctx, ctx=draw_ctx)
         draw_pending_area_effect_warnings(render_ctx, ctx=draw_ctx)
         draw_vortex_pull_trails(render_ctx, ctx=draw_ctx)
@@ -325,14 +331,17 @@ def draw_hollow_form_clones(render_ctx: WorldRenderCtx, *, ctx: WorldDrawContext
 
 def iter_active_creature_overlay_pass(creatures: Sequence[CreatureState]) -> Iterator[CreatureState]:
     for creature in creatures:
-        if creature.active:
+        if creature.active and not creature.is_barrel:
             yield creature
 
 
 def iter_native_creature_sprite_pass(creatures: Sequence[CreatureState]) -> Iterator[CreatureState]:
+    # Barrels borrow a native type_id purely for damage/collision bookkeeping
+    # (see creatures/barrels.py) - they draw through _draw_barrels instead, so
+    # they're excluded here the same way the overlay pass excludes them.
     for type_id in _NATIVE_CREATURE_SPRITE_DRAW_ORDER:
         for creature in creatures:
-            if creature.active and creature.type_id == type_id:
+            if creature.active and creature.type_id == type_id and not creature.is_barrel:
                 yield creature
 
 
@@ -536,6 +545,59 @@ def draw_creatures(render_ctx: WorldRenderCtx, *, ctx: WorldDrawContext) -> None
             shadow=shadow,
         )
 
+    _draw_barrels(render_ctx, ctx=ctx)
+    _draw_barrel_breaks(render_ctx, ctx=ctx)
+
+
+# Rewrite-only: destructible Barrel prop (creatures/barrels.py). Drawn as a
+# plain static sprite rather than through draw_creature_sprite's native
+# frame-strip/mirroring machinery - a barrel never animates while alive, it
+# just sits there until it's broken. 64.0 matches both the native "size==64
+# -> scale 1.0" convention every other creature sprite uses and the actual
+# pixel size of the source art, so a barrel with creature.size == 64 reads at
+# 1:1 scale.
+_BARREL_REFERENCE_SIZE = 64.0
+_BARREL_BREAK_FRAME_COUNT = 4
+_BARREL_BREAK_FRAME_S = 0.09
+
+
+def _draw_barrels(render_ctx: WorldRenderCtx, *, ctx: WorldDrawContext) -> None:
+    frame = render_ctx.frame
+    texture = frame.resources.texture_optional(TextureId.BARREL)
+    if texture is None:
+        return
+    tint = rl.Color(255, 255, 255, int(clamp(ctx.entity_alpha, 0.0, 1.0) * 255.0 + 0.5))
+    src = rl.Rectangle(0, 0, texture.width, texture.height)
+    for creature in frame.creatures.entries:
+        if not creature.active or not creature.is_barrel:
+            continue
+        screen = render_ctx._world_to_screen_with(creature.pos, camera=ctx.camera, view_scale=ctx.view_scale)
+        size_scale = clamp(float(creature.size) / _BARREL_REFERENCE_SIZE, 0.25, 2.0)
+        side = _BARREL_REFERENCE_SIZE * size_scale * ctx.scale
+        dst = rl.Rectangle(screen.x - side * 0.5, screen.y - side * 0.5, side, side)
+        rl.draw_texture_pro(texture, src, dst, rl.Vector2(0, 0), 0.0, tint)
+
+
+def _draw_barrel_breaks(render_ctx: WorldRenderCtx, *, ctx: WorldDrawContext) -> None:
+    frame = render_ctx.frame
+    texture = frame.resources.texture_optional(TextureId.BARREL_BREAK)
+    if texture is None:
+        return
+    pending = getattr(frame.state, "pending_barrel_breaks", None)
+    if not pending:
+        return
+    frame_w = texture.width / _BARREL_BREAK_FRAME_COUNT
+    tint = rl.Color(255, 255, 255, int(clamp(ctx.entity_alpha, 0.0, 1.0) * 255.0 + 0.5))
+    side = _BARREL_REFERENCE_SIZE * ctx.scale
+    for effect in pending:
+        tick = int(float(effect.elapsed) / _BARREL_BREAK_FRAME_S)
+        if tick >= _BARREL_BREAK_FRAME_COUNT:
+            continue
+        screen = render_ctx._world_to_screen_with(effect.pos, camera=ctx.camera, view_scale=ctx.view_scale)
+        dst = rl.Rectangle(screen.x - side * 0.5, screen.y - side * 0.5, side, side)
+        src = rl.Rectangle(frame_w * tick, 0, frame_w, texture.height)
+        rl.draw_texture_pro(texture, src, dst, rl.Vector2(0, 0), 0.0, tint)
+
 
 _IMPALE_TALLY_COLOR = (225, 225, 235)
 _FIRST_STRIKE_MARK_COLOR = (235, 60, 50)
@@ -695,9 +757,10 @@ _FUSE_RING_BACKING_ALPHA = 140
 _FUSE_RING_FILL_ALPHA = 230
 # The blast/zone outline itself is now a static, low-alpha ring (no pulse,
 # no fill) - just enough to mark the danger area without being distracting.
+# Only used for the pre-trigger fuse warning now - Cinderburst's own live
+# zone is a real decal (_draw_cinderburst_ground) and Gravemark's is a radial
+# fade fill, neither wants a flat ring/fill anymore.
 _FUSE_ZONE_RING_ALPHA = 0.14
-_FUSE_ZONE_TRIGGERED_FILL_ALPHA = 0.12
-_FUSE_ZONE_TRIGGERED_RING_ALPHA = 0.35
 
 # Not native: Gravemark (Anchoring) live-zone fill - concentric bands
 # stepping from a brighter center down to fully transparent at the outer
@@ -780,12 +843,85 @@ _AREA_EFFECT_FUSE_TOTAL_S = {
     int(monster_rarity._AreaEffectKind.ANCHOR): monster_rarity.ANCHORING_FUSE_DELAY_S,
 }
 
+# Not native: Cinderburst's live-zone decal. Multi-frame playback (both a
+# live cross-fade and a baked-in-betweens strip) kept showing some kind of
+# visible pop or flicker every attempt, because the source frames are "lacy"
+# (lots of small transparent gaps between embers, not solid blobs) - any
+# scheme with more than one texture in play at a time let one peek through
+# the other's gaps and then vanish abruptly at the cut. A single static
+# sprite with a plain linear alpha fade has none of that: nothing ever
+# switches, so there's nothing to pop.
+_CINDERBURST_GROUND_START_ALPHA = 1.0
+_CINDERBURST_GROUND_EXPAND_S = 0.075
+# Sized a flat 5% larger in area (not just matched to the hit radius) so the
+# decal reads as fully covering the burn zone rather than sitting exactly
+# flush with its edge. Area scales with the square of linear size, so a 5%
+# area increase is a sqrt(1.05) increase in width/height.
+_CINDERBURST_GROUND_SIZE_SCALE = 1.05**0.5
+
+
+def _draw_cinderburst_ground(
+    render_ctx: WorldRenderCtx, *, ctx: WorldDrawContext, effect, center: rl.Vector2, radius: float,
+) -> None:
+    texture = render_ctx.frame.resources.texture_optional(TextureId.CINDERBURST_GROUND)
+    if texture is None:
+        return
+    elapsed = max(0.0, monster_rarity.PYRE_DURATION_S - float(effect.duration))
+    life_left = clamp(1.0 - elapsed / monster_rarity.PYRE_DURATION_S, 0.0, 1.0)
+    base_alpha = clamp(_CINDERBURST_GROUND_START_ALPHA * life_left * ctx.entity_alpha, 0.0, 1.0)
+    if base_alpha <= 0.0:
+        return
+
+    # Pops in over the first _CINDERBURST_GROUND_EXPAND_S seconds instead of
+    # appearing at full size instantly - grows from the AoE's own center
+    # point, which falls out for free here since dst/origin are already built
+    # around `center` at every scale.
+    spawn_scale = clamp(elapsed / _CINDERBURST_GROUND_EXPAND_S, 0.0, 1.0) if _CINDERBURST_GROUND_EXPAND_S > 0.0 else 1.0
+    if spawn_scale <= 0.0:
+        return
+    dst_h = radius * 2.0 * _CINDERBURST_GROUND_SIZE_SCALE * spawn_scale
+    dst_w = dst_h * texture.width / texture.height
+    # Not native: each burn gets its own fixed random orientation so several
+    # Cinderbursts on screen don't all show the identical scorch pattern -
+    # seeded from the effect's own position (never the sim RNG - that would
+    # desync replays), so it's stable for this instance's whole lifetime
+    # without needing to store the angle anywhere.
+    rng = _random.Random(hash((round(float(effect.pos.x), 3), round(float(effect.pos.y), 3))))
+    angle_deg = rng.uniform(0.0, 360.0)
+    dst = rl.Rectangle(center.x, center.y, dst_w, dst_h)
+    origin = rl.Vector2(dst_w * 0.5, dst_h * 0.5)
+    src = rl.Rectangle(0, 0, texture.width, texture.height)
+    tint = rl.Color(255, 255, 255, int(base_alpha * 255.0 + 0.5))
+    rl.draw_texture_pro(texture, src, dst, origin, angle_deg, tint)
+
+
+def draw_cinderburst_ground_decals(render_ctx: WorldRenderCtx, *, ctx: WorldDrawContext) -> None:
+    """Not native: Cinderburst's triggered scorched-ground decal only - split
+    out from draw_pending_area_effect_warnings so it can be drawn in its own
+    earlier pass (above the terrain/blood decals, below creatures/players/
+    everything else), while the fuse countdown ring (still meant to float
+    above whatever it's warning about) and Gravemark's pull-zone fill stay in
+    the later pass."""
+    pending = getattr(render_ctx.frame.state, "pending_monster_area_effects", None)
+    if not pending:
+        return
+    for effect in pending:
+        if not effect.triggered or int(effect.kind) != int(monster_rarity._AreaEffectKind.PYRE):
+            continue
+        radius = float(effect.radius) * ctx.scale
+        if radius <= 1.0:
+            continue
+        center = render_ctx._world_to_screen_with(effect.pos, camera=ctx.camera, view_scale=ctx.view_scale)
+        c = rl.Vector2(float(center.x), float(center.y))
+        _draw_cinderburst_ground(render_ctx, ctx=ctx, effect=effect, center=c, radius=radius)
+
 
 def draw_pending_area_effect_warnings(render_ctx: WorldRenderCtx, *, ctx: WorldDrawContext) -> None:
     """Not native: Pyre (Cinderburst) / Anchoring (Gravemark) monster affixes -
-    same small countdown ring as Bomber's while queued; once triggered, a
-    steady (non-pulsing) filled zone for as long as the burning field / pull
-    zone is actually live (creatures/rarity.py's PendingMonsterAreaEffect)."""
+    same small countdown ring as Bomber's while queued; once triggered,
+    Gravemark gets a steady (non-pulsing) filled pull zone here (Cinderburst's
+    own triggered decal draws separately and earlier - see
+    draw_cinderburst_ground_decals)."""
     pending = getattr(render_ctx.frame.state, "pending_monster_area_effects", None)
     if not pending:
         return
@@ -806,20 +942,14 @@ def draw_pending_area_effect_warnings(render_ctx: WorldRenderCtx, *, ctx: WorldD
             continue
         if radius <= 1.0:
             continue
-        center = render_ctx._world_to_screen_with(effect.pos, camera=ctx.camera, view_scale=ctx.view_scale)
-        c = rl.Vector2(float(center.x), float(center.y))
         if int(effect.kind) == int(monster_rarity._AreaEffectKind.ANCHOR):
+            center = render_ctx._world_to_screen_with(effect.pos, camera=ctx.camera, view_scale=ctx.view_scale)
+            c = rl.Vector2(float(center.x), float(center.y))
             # Not native: Gravemark - no outer ring border, and the purple
             # fill fades out toward the edge instead of one flat alpha, so
             # the pull zone reads as a soft radial pull rather than a hard
             # drawn circle.
             _draw_radial_fade_fill(c, radius, color=(r, g, b), peak_alpha=_GRAVEMARK_FADE_PEAK_ALPHA * ctx.entity_alpha)
-            continue
-        rl.draw_circle_v(c, radius, rl.Color(r, g, b, int(_FUSE_ZONE_TRIGGERED_FILL_ALPHA * 255.0 * ctx.entity_alpha)))
-        rl.draw_ring(
-            c, radius - 2.0, radius + 2.0, 0.0, 360.0, 64,
-            rl.Color(r, g, b, int(_FUSE_ZONE_TRIGGERED_RING_ALPHA * 255.0 * ctx.entity_alpha)),
-        )
 
 
 # Not native: Gravity Well (Vortex) affix - a dark trail from a pulled player
@@ -878,7 +1008,16 @@ _WARBANNER_COLOR = (255, 225, 90)
 _WARBANNER_FILL_ALPHA = 28
 _WARBANNER_FILL_ALPHA_INSIDE = 55
 _WARBANNER_BORDER_ALPHA = 170
-_WARBANNER_SPRITE_SIZE = 34.0  # world px, before view scale
+# World px, before view scale. The sprite (game/warbanner.png) is a tall
+# pole+flag, not a square icon, so it's sized by height and drawn anchored at
+# its bottom edge (the pole's tip) on the planted position, with width
+# derived from the texture's own aspect ratio instead of being squashed into
+# a square.
+_WARBANNER_SPRITE_HEIGHT = 90.0
+# Not native: nudges just the sprite (not the fill/ring, which stay centered
+# on the actual planted position) - the art's own pole tip doesn't line up
+# exactly with its canvas edge.
+_WARBANNER_SPRITE_OFFSET = (10.0, 30.0)
 
 
 def draw_warbanners(render_ctx: WorldRenderCtx, *, ctx: WorldDrawContext) -> None:
@@ -893,7 +1032,8 @@ def draw_warbanners(render_ctx: WorldRenderCtx, *, ctx: WorldDrawContext) -> Non
     a = clamp(ctx.entity_alpha, 0.0, 1.0)
     border = rl.Color(r, g, b, int(_WARBANNER_BORDER_ALPHA * a))
     texture = render_ctx.frame.resources.texture_optional(TextureId.WARBANNER)
-    size = _WARBANNER_SPRITE_SIZE * ctx.scale
+    sprite_h = _WARBANNER_SPRITE_HEIGHT * ctx.scale
+    sprite_w = sprite_h * texture.width / texture.height if texture is not None else 0.0
     for player in render_ctx.frame.players:
         if not player.warbanner_positions:
             continue
@@ -906,7 +1046,12 @@ def draw_warbanners(render_ctx: WorldRenderCtx, *, ctx: WorldDrawContext) -> Non
             rl.draw_ring(c, radius - 1.5, radius + 1.5, 0.0, 360.0, 96, border)
             if texture is not None:
                 src = rl.Rectangle(0.0, 0.0, float(texture.width), float(texture.height))
-                dst = rl.Rectangle(c.x - size * 0.5, c.y - size * 0.5, size, size)
+                # Bottom-center anchor: the pole's tip sits exactly on the
+                # planted position, same as a real flagpole in the ground -
+                # plus the fixed sprite-only offset above.
+                off_x = _WARBANNER_SPRITE_OFFSET[0] * ctx.scale
+                off_y = _WARBANNER_SPRITE_OFFSET[1] * ctx.scale
+                dst = rl.Rectangle(c.x - sprite_w * 0.5 + off_x, c.y - sprite_h + off_y, sprite_w, sprite_h)
                 rl.draw_texture_pro(texture, src, dst, rl.Vector2(0.0, 0.0), 0.0, rl.Color(255, 255, 255, int(255 * a)))
 
 
