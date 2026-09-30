@@ -13,7 +13,10 @@ Each hit's leech is its own independent instance (its own total amount, its
 own LEECH_HEAL_DURATION-second timer) - instances never pool into or refresh
 each other, so a burst of hits (a shotgun blast, a piercing bolt through a
 pack) queues up several drips ticking down in parallel, same shape as
-Fortify's stack instances but without the pooling window.
+Fortify's stack instances but without the pooling window. Capped at
+LEECH_MAX_INSTANCES concurrent drips - a proc past that just heals nothing,
+rather than the list (and the heal-over-time math paid out) growing without
+bound against a fast-firing weapon.
 
 The kill cost is a straight HP loss, not damage taken - it deliberately
 bypasses player_take_damage, so nothing that reacts to a hit (Thick Skinned,
@@ -29,6 +32,7 @@ from ..relics import RelicId, relic_owned
 
 LEECH_HP_COST_PER_KILL = 0.05  # 5% of current HP
 LEECH_HEAL_DURATION = 5.0  # seconds each hit's leeched heal drips over
+LEECH_MAX_INSTANCES = 10  # a hit beyond this many already-active drips heals nothing
 
 _HEAL_PCT_BY_RELIC: dict[int, float] = {
     RelicId.LEECH_LOW: 0.00756,
@@ -42,6 +46,14 @@ def _active_relic_id() -> int | None:
     return None
 
 
+def active_heal_pct() -> float | None:
+    """The active Leech relic's heal-per-damage-dealt fraction, or None if
+    Leech isn't equipped. Exposed for meta/relics_impl/turret.py's own
+    (player-independent) heal-on-hit bookkeeping."""
+    relic_id = _active_relic_id()
+    return None if relic_id is None else _HEAL_PCT_BY_RELIC[relic_id]
+
+
 def heal_on_hit(player: PlayerState, damage_dealt: float) -> None:
     """Called from creatures/damage.py's shooter-perk block, after the final
     resolved damage is known (post-variance), once per damage instance.
@@ -49,6 +61,12 @@ def heal_on_hit(player: PlayerState, damage_dealt: float) -> None:
     see tick()."""
     relic_id = _active_relic_id()
     if relic_id is None or float(damage_dealt) <= 0.0:
+        return
+    if len(player.leech_pending_timers) >= LEECH_MAX_INSTANCES:
+        # Not native: a shotgun blast or a piercing bolt through a pack can
+        # queue several instances in a single tick - past this many already
+        # ticking at once, a fresh proc just doesn't queue rather than
+        # growing the list without bound.
         return
     total_heal = float(x87_pc24_mul(f32(float(damage_dealt)), _HEAL_PCT_BY_RELIC[relic_id]))
     if total_heal <= 0.0:
@@ -96,4 +114,12 @@ def hp_cost_on_kill(player: PlayerState) -> None:
     player.health = max(0.0, float(x87_pc24_sub(f32(float(player.health)), cost)))
 
 
-__all__ = ["LEECH_HEAL_DURATION", "LEECH_HP_COST_PER_KILL", "heal_on_hit", "hp_cost_on_kill", "tick"]
+__all__ = [
+    "LEECH_HEAL_DURATION",
+    "LEECH_HP_COST_PER_KILL",
+    "LEECH_MAX_INSTANCES",
+    "active_heal_pct",
+    "heal_on_hit",
+    "hp_cost_on_kill",
+    "tick",
+]

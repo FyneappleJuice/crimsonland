@@ -61,7 +61,7 @@ from ..player_damage import PlayerDeathRuntime, player_take_damage
 from ..progression import resolve_team_stats
 from ..projectiles.types import ProjectileTemplateId
 from ..rng_caller_static import RngCallerStatic
-from ..sim.state_types import GameplayState, PlayerState
+from ..sim.state_types import GameplayState, PlayerState, WeaponSlot
 from ..sim.timing import ftol_ms_i32
 from ..weapons import weapon_entry_for_projectile_type_id
 from .ai import creature_ai7_tick_link_timer, creature_ai_update_target
@@ -131,6 +131,7 @@ CREATURE_TURN_RATE_SCALE = NATIVE_TURN_RATE_SCALE
 CREATURE_DEATH_TIMER_DECAY = 28.0
 CREATURE_CORPSE_FADE_DECAY = 20.0
 CREATURE_DEATH_SLIDE_SCALE = 9.0
+
 _TARGET_REEVAL_PERIOD = 0x46
 _FLAG_SELF_DAMAGE_TICK = int(CreatureFlags.SELF_DAMAGE_TICK)
 _FLAG_SELF_DAMAGE_TICK_STRONG = int(CreatureFlags.SELF_DAMAGE_TICK_STRONG)
@@ -539,6 +540,62 @@ class CreatureState(msgspec.Struct):
     # loot roll instead of the ordinary kill-XP/bonus-chance path.
     is_barrel: bool = False
 
+    # Rewrite-only: Relic of the Turret (meta/relics_impl/turret.py). A plain
+    # CreatureState otherwise - real HP, ai_mode=HOLD_TIMER so the generic
+    # movement/turn code below never drives its heading/pos, freeing them up
+    # for the turret's own gun rotation instead. turret_weapon is the
+    # turret's own persistent ammo/cooldown/reload state - it fires on its
+    # own schedule, only *reading* the owning player's live stats/perks every
+    # tick, never sharing player.weapon directly.
+    is_turret: bool = False
+    turret_owner_player_index: int = -1
+    turret_weapon: WeaponSlot | None = None
+    # -1 = no target locked. Re-rolled on turret_retarget_timer expiry (or
+    # immediately if the current target dies/leaves range), not every tick -
+    # otherwise the turn-rate-limited gun could never catch up before the
+    # target changed again.
+    turret_target_index: int = -1
+    turret_retarget_timer: float = 0.0
+    # Not native: a turret's own independent copies of the 4 periodic
+    # self-triggered perk timers (Man Bomb, Hot Tempered, Fire Cough, Living
+    # Fortress) - meta/relics_impl/turret.py copies these into its throwaway
+    # per-tick shooter view before calling apply_player_perk_ticks and copies
+    # the result back out, so the turret runs its own independent cycle
+    # instead of sharing (and clobbering) the real player's.
+    turret_man_bomb_timer: float = 0.0
+    turret_hot_tempered_timer: float = 0.0
+    turret_fire_cough_timer: float = 0.0
+    turret_living_fortress_timer: float = 0.0
+    # Not native: the turret's own independent Seeker Rounds dedup counter -
+    # without its own persistent shot_seq, every turret shot would stamp the
+    # same (never-advancing) value from the throwaway shooter clone, so the
+    # hit-confirmation dedup check would never see a "new" shot after the
+    # first and Seeker Rounds would get permanently stuck at 1 hit.
+    turret_shot_seq: int = 0
+    # Not native: the turret's own independent Pendulum phase/snapshot-phase -
+    # without these, the phase would flip on the throwaway shooter clone and
+    # never persist, so a turret's Pendulum would be stuck in whichever phase
+    # the real player's own (frozen, since they can't fire) phase happened to
+    # be in.
+    turret_pendulum_phase: bool = False
+    turret_pendulum_snapshot_phase: bool = False
+    # Not native: the turret's own independent Leech instances - a turret's
+    # own hits build these (healing its own hp), separate from the real
+    # player's own leech_pending_heal/leech_pending_timers (which a turret's
+    # hits also feed, by owner-index credit at hit-time - both happen, per
+    # the owner's explicit call that turret and player both benefit/pay).
+    turret_leech_pending_heal: list[float] = msgspec.field(default_factory=list)
+    turret_leech_pending_timers: list[float] = msgspec.field(default_factory=list)
+    # Not native: Pact of the Giant - the turret's own copy of the alt weapon
+    # slot (synced from the real player's alt_weapon the same way
+    # turret_weapon mirrors the primary) and its own persistent alternation
+    # turn tracker (mirrors PlayerState.giant_pact_next_slot - without its
+    # own copy, the turret's alternation would reset every tick from the real
+    # player's frozen value, same discard-bug pattern as everything else
+    # here, since the player can never fire to advance it themselves).
+    turret_alt_weapon: WeaponSlot | None = None
+    turret_giant_pact_next_slot: int = 0
+
     # Rewrite-only: Cold Snap freezes the target on a crit (weapon_runtime/
     # crit.py, projectiles/runtime/projectile_pool.py). > 0 blocks movement.
     crit_freeze_timer: float = 0.0
@@ -650,9 +707,12 @@ class _CreatureInteractionCreatureDamageRuntime(CreatureDamageRuntime):
         # Not native: sandbox mode test entities never keep a corpse, and the
         # stationary test monster queues its own 5s respawn here - see
         # creatures/dummy.py. Barrels never keep one either - see
-        # creatures/barrels.py.
-        keep_corpse = sandbox_keep_corpse(ctx.pool.entries, idx, ctx.state) and barrel_keep_corpse(
-            ctx.pool.entries, idx,
+        # creatures/barrels.py. Turrets (Relic of the Turret) don't either -
+        # no bloody-corpse fade makes sense for a machine.
+        keep_corpse = (
+            sandbox_keep_corpse(ctx.pool.entries, idx, ctx.state)
+            and barrel_keep_corpse(ctx.pool.entries, idx)
+            and not ctx.pool.entries[idx].is_turret
         )
         ctx.deaths.append(
             ctx.pool.handle_death(
@@ -696,9 +756,12 @@ class _CreaturePoolCreatureDamageRuntime(CreatureDamageRuntime):
         # Not native: sandbox mode test entities never keep a corpse, and the
         # stationary test monster queues its own 5s respawn here - see
         # creatures/dummy.py. Barrels never keep one either - see
-        # creatures/barrels.py.
-        keep_corpse = sandbox_keep_corpse(self.pool.entries, idx, self.state) and barrel_keep_corpse(
-            self.pool.entries, idx,
+        # creatures/barrels.py. Turrets (Relic of the Turret) don't either -
+        # no bloody-corpse fade makes sense for a machine.
+        keep_corpse = (
+            sandbox_keep_corpse(self.pool.entries, idx, self.state)
+            and barrel_keep_corpse(self.pool.entries, idx)
+            and not self.pool.entries[idx].is_turret
         )
         self.deaths.append(
             self.pool.handle_death(
@@ -863,6 +926,43 @@ def _creature_interaction_contact_damage(ctx: _CreatureInteractionCtx) -> None:
         )
 
     creature.attack_cooldown = x87_pc24_add(f32(creature.attack_cooldown), f32(1.0))
+
+
+_TURRET_CONTACT_RANGE = 30.0  # matches the player's own bite gate above
+
+
+def _apply_turret_contact_damage(entries: list[CreatureState], *, state: GameplayState, dt: float) -> None:
+    """Not native: Relic of the Turret (meta/relics_impl/turret.py). A turret
+    is a plain CreatureState like any other, but it's never a creature's
+    `target_player` - so it can't go through `_creature_interaction_contact_damage`
+    above (keyed to a single player) the way a real player bite does. This is
+    the parallel pass: any live, hostile creature adjacent to a turret bites
+    it for its ordinary contact_damage, on the same ~1/sec cooldown a player
+    bite uses - but skips Mr. Melee counterattack and Feasting lifesteal
+    (those are player-body-specific; a turret has no defensive perks of its
+    own, per the owner's explicit call)."""
+    del dt  # attack_cooldown was already decremented for this tick above.
+    turrets = [c for c in entries if c.active and c.is_turret and float(c.hp) > 0.0]
+    if not turrets:
+        return
+    energized = float(state.bonuses.energizer) > 0.0
+    if energized:
+        return
+    for creature in entries:
+        if not creature.active or creature.is_turret or creature.is_barrel:
+            continue
+        if float(creature.size) <= 16.0:
+            continue
+        if float(creature.attack_cooldown) > 0.0:
+            continue
+        for turret in turrets:
+            if float(turret.hp) <= 0.0:
+                continue
+            if creature.pos.distance_to(turret.pos) >= _TURRET_CONTACT_RANGE:
+                continue
+            turret.hp = f32(float(turret.hp) - float(creature.contact_damage))
+            creature.attack_cooldown = x87_pc24_add(f32(creature.attack_cooldown), f32(1.0))
+            break
 
 
 def _creature_interaction_plaguebearer_contact_flag(ctx: _CreatureInteractionCtx) -> None:
@@ -1582,6 +1682,12 @@ class CreaturePool:
                     # Native path (flags without 0x4): no bounds clamp here; offscreen spawns
                     # remain offscreen until their own velocity moves them in.
                     creature.pos = _advance_pos_by_delta_f32(creature.pos, move_delta)
+                # Not native: Relic of the Turret's own knockback integration
+                # (a HOLD_TIMER creature otherwise never moves) lives in
+                # meta/relics_impl/turret.py's tick_turret instead of here -
+                # this whole per-creature loop is skipped entirely while the
+                # Freeze bonus is active (see the `continue` above), and a
+                # turret should still get shoved by knockback during Freeze.
             else:
                 # Spawner/short-strip creatures clamp to bounds using `size` as a radius; most are stationary
                 # unless ANIM_LONG_STRIP is set (see creature_update_all).
@@ -1683,7 +1789,11 @@ class CreaturePool:
             # player 1, and the timer-fire requires the creature to still be
             # alive (hp > 0).
             radioactive_active = bool(players) and any(perk_active(p, PerkId.RADIOACTIVE) for p in players)
-            if radioactive_active and target_dist < 100.0:
+            # Not native: Relic of the Turret - this pulse mutates creature.hp
+            # directly (no OwnerRef, no damage-runtime call), so the is_turret
+            # guard in creature_apply_damage_with_lethal_followup can't reach
+            # it; exclude turrets here explicitly instead.
+            if radioactive_active and target_dist < 100.0 and not creature.is_turret:
                 pulse_timer_step = x87_pc24_mul(float(dt), f32(1.5))
                 creature.collision_timer = x87_pc24_sub(
                     float(creature.collision_timer),
@@ -1770,19 +1880,24 @@ class CreaturePool:
                 sfx=sfx,
                 contact_distance=float(target_dist),
             )
-            # Not native: Barrels (creatures/barrels.py) are a plain prop, not
-            # a monster - none of these steps make sense for one (bite SFX +
-            # "blood spill" FX burst even at contact_damage=0.0, Energizer
-            # eating it, Plaguebearer infecting it, the size<=16 auto-kill).
-            # They're excluded here instead of threading an is_barrel check
-            # through each individual step.
-            if not creature.is_barrel:
+            # Not native: Barrels (creatures/barrels.py) and turrets (meta/
+            # relics_impl/turret.py) are both a plain prop, not a monster -
+            # none of these steps make sense for one (bite SFX + "blood
+            # spill" FX burst even at contact_damage=0.0, Energizer eating
+            # it, Plaguebearer infecting it, the size<=16 auto-kill) - a
+            # turret standing right next to the player would otherwise be
+            # treated as if it were biting them, same bug class as the
+            # barrel one. Excluded here instead of threading an is_barrel/
+            # is_turret check through each individual step.
+            if not creature.is_barrel and not creature.is_turret:
                 for step in _CREATURE_INTERACTION_STEPS:
                     step(interaction_ctx)
                     if interaction_ctx.skip_creature:
                         break
                 if interaction_ctx.skip_creature:
                     continue
+
+        _apply_turret_contact_damage(self._entries, state=state, dt=dt)
 
         return CreatureUpdateResult(deaths=tuple(deaths), spawned=tuple(spawned), sfx=tuple(sfx))
 
@@ -1959,6 +2074,22 @@ class CreaturePool:
         entry.dummy_no_hit_timer = 0.0
         entry.sandbox_no_corpse = bool(getattr(init, "sandbox_no_corpse", False))
         entry.is_barrel = bool(getattr(init, "is_barrel", False))
+        entry.is_turret = bool(getattr(init, "is_turret", False))
+        entry.turret_owner_player_index = -1
+        entry.turret_weapon = None
+        entry.turret_target_index = -1
+        entry.turret_retarget_timer = 0.0
+        entry.turret_man_bomb_timer = 0.0
+        entry.turret_hot_tempered_timer = 0.0
+        entry.turret_fire_cough_timer = 0.0
+        entry.turret_living_fortress_timer = 0.0
+        entry.turret_shot_seq = 0
+        entry.turret_pendulum_phase = False
+        entry.turret_pendulum_snapshot_phase = False
+        entry.turret_leech_pending_heal = []
+        entry.turret_leech_pending_timers = []
+        entry.turret_alt_weapon = None
+        entry.turret_giant_pact_next_slot = 0
         entry.crit_freeze_timer = 0.0
         entry.is_frozen = False
         relic_impaler.clear(entry)
@@ -2245,6 +2376,16 @@ class CreaturePool:
                 world_width=world_width,
                 world_height=world_height,
             )
+        elif creature.is_turret:
+            # Not native: Relic of the Turret - no loot roll, no XP beyond the
+            # (already zero, reward_value=0.0) award above; just stop tracking
+            # the dead slot so a build can replace it.
+            owner_idx = int(creature.turret_owner_player_index)
+            if players and 0 <= owner_idx < len(players):
+                try:
+                    players[owner_idx].turret_indices.remove(int(idx))
+                except ValueError:
+                    pass
         elif players:
             state.bonus_pool.try_spawn_on_kill(
                 pos=creature.pos,
@@ -2291,6 +2432,17 @@ class CreaturePool:
         if killer is not None:
             relic_slayer_pact.register_kill(killer)
             relic_leech.hp_cost_on_kill(killer)
+            # Not native: a turret's own kill ALSO costs that specific
+            # turret's own hp, on top of the real player's cost above - per
+            # the owner's explicit call that turret and player both pay.
+            if creature.last_hit_owner.via_turret:
+                turret_idx = creature.last_hit_owner.turret_creature_index
+                if 0 <= turret_idx < len(self._entries):
+                    turret_creature = self._entries[turret_idx]
+                    if turret_creature.active and turret_creature.is_turret:
+                        from ..meta.relics_impl.turret import turret_leech_hp_cost_on_kill
+
+                        turret_leech_hp_cost_on_kill(turret_creature)
 
         # Rewrite-only: The Hit List - crossing off the marked Apex monster
         # pays out a small permanent damage bonus, capped (perks/impl/hit_list.py

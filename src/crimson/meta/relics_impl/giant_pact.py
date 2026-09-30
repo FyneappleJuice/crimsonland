@@ -143,6 +143,27 @@ def fire_rate_cost_mult(player: PlayerState) -> float:
     return GIANT_PACT_FIRE_RATE_COST_MULT if giant_pact_active() else 1.0
 
 
+def dual_fire_suppressed(player: PlayerState) -> bool:
+    """Fire Bullets and Plasma Overload (bonuses/fire_bullets.py,
+    bonuses/plasma_overload.py) override *every* wielded weapon's fire
+    recipe to the exact same fixed-rate, zero-ammo-cost shot - so while
+    dual-wielding, "alternating" between the two slots is no longer
+    alternating between two distinct real guns (where a slow partner
+    naturally rate-limits a fast one, e.g. Mini-Rocket Swarmers paired with
+    anything else still fires at its own normal pace regardless of the
+    other slot). Both slots being identically fast lets the turn-based
+    alternation (gameplay.py's giant_pact_dual_fire) clear a shot every
+    0.75x a single weapon's cooldown instead of every 1x, netting a ~33%
+    "free" DPS bump - free because neither bonus costs ammo - that a real
+    weapon pair never gets. Suppressing dual-fire while either bonus is
+    active - fire from the primary slot alone, at the bonus's own normal
+    rate, exactly like a solo (non-dual-wielding) player - removes that
+    free bump without touching either bonus's own tuning or the relic's
+    ordinary (real-weapon) behavior."""
+
+    return float(player.fire_bullets_timer) > 0.0 or float(player.plasma_overload_timer) > 0.0
+
+
 def active_slot(player: PlayerState) -> WeaponSlot:
     """Which slot a floor weapon pickup should replace."""
 
@@ -267,6 +288,7 @@ __all__ = [
     "GIANT_PACT_FORCED_WEAPON_DROPS",
     "active_slot",
     "clear_alt_reload_active_if_gate_open",
+    "dual_fire_suppressed",
     "dual_wielding",
     "fire_rate_cost_mult",
     "flip_active_slot",

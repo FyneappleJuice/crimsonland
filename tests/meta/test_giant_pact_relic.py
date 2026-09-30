@@ -226,6 +226,32 @@ def test_manual_reload_forces_both_slots_full_and_flips_active_slot(monkeypatch:
     assert player.giant_pact_active_slot == 1
 
 
+def test_dual_wielding_costs_ten_percent_move_speed(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Run enough ticks for move_speed's own accel ramp and turn-alignment
+    # scale to settle, so the comparison isn't muddied by first-tick
+    # transients - aim is set dead ahead of pos so heading needs no turning.
+    dt = 1.0 / 60.0
+    ticks = 90
+
+    def run(pos: Vec2) -> float:
+        state = GameplayState()
+        player = _dual_pistol_player()
+        player.pos = pos
+        input_state = PlayerInput(move=Vec2(1.0, 0.0), aim=Vec2(pos.x + 100.0, pos.y))
+        for _ in range(ticks):
+            player_update(player, input_state, dt, state)
+        return float(player.pos.x) - float(pos.x)
+
+    _equip(monkeypatch)
+    baseline_delta = run(Vec2(500.0, 500.0))
+    assert baseline_delta > 0.0
+
+    _equip(monkeypatch, RelicId.GIANT_PACT_LOW)
+    dual_delta = run(Vec2(500.0, 500.0))
+
+    assert dual_delta == pytest.approx(baseline_delta * 0.9, rel=0.02)
+
+
 def test_weapon_pickup_targets_the_active_slot(monkeypatch: pytest.MonkeyPatch) -> None:
     _equip(monkeypatch, RelicId.GIANT_PACT_LOW)
     state = GameplayState()
@@ -392,6 +418,47 @@ def test_a_weapon_firing_alone_uses_its_normal_fire_rate(monkeypatch: pytest.Mon
     both_loaded = _alt_cooldown(10.0)
     partner_dry = _alt_cooldown(0.0)
     assert both_loaded == pytest.approx(partner_dry * giant_pact.GIANT_PACT_FIRE_RATE_COST_MULT, rel=1e-4)
+
+
+def test_plasma_overload_suppresses_dual_fire_to_the_normal_solo_rate(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Regression: Plasma Overload overrides every wielded weapon to the same
+    # fixed-rate, zero-ammo-cost shot - before this fix, alternating between
+    # two now-identical "weapons" cleared shots ~33% faster than a solo
+    # player, a free DPS bump neither bonus is tuned for (unlike a real
+    # weapon pair, e.g. Mini-Rocket Swarmers, whose own cooldown is untouched
+    # by dual-wielding). Confirm the alt slot never fires while it's active,
+    # and the shot count over time matches a solo player with the same bonus.
+    _equip(monkeypatch, RelicId.GIANT_PACT_LOW)
+    _never_crit(monkeypatch)
+    dt = 1.0 / 60.0
+    ticks = 300
+
+    dual_state = GameplayState()
+    dual_player = _dual_pistol_player()
+    dual_player.plasma_overload_timer = 1000.0
+    assert dual_player.alt_weapon is not None
+    alt_ammo_before = float(dual_player.alt_weapon.ammo)
+    for _ in range(ticks):
+        player_update(dual_player, PlayerInput(aim=Vec2(100.0, 0.0), fire_down=True), dt=dt, state=dual_state)
+    assert float(dual_player.alt_weapon.ammo) == pytest.approx(alt_ammo_before)
+    dual_bolts = len([p for p in dual_state.projectiles.entries if p.active])
+
+    # Baseline: a genuinely solo player, relic unequipped entirely - not just
+    # "equipped but no alt_weapon", since giant_pact.fire_rate_cost_mult only
+    # checks whether the relic is owned at all, not whether this particular
+    # player is actually dual-wielding (a separate, pre-existing gap outside
+    # this fix's scope).
+    _equip(monkeypatch)
+    solo_state = GameplayState()
+    solo_player = PlayerState(index=0, pos=Vec2())
+    weapon_assign_player(solo_player, WeaponId.PISTOL, state=solo_state)
+    solo_player.plasma_overload_timer = 1000.0
+    for _ in range(ticks):
+        player_update(solo_player, PlayerInput(aim=Vec2(100.0, 0.0), fire_down=True), dt=dt, state=solo_state)
+    solo_bolts = len([p for p in solo_state.projectiles.entries if p.active])
+
+    assert dual_bolts > 0
+    assert dual_bolts == solo_bolts
 
 
 def test_second_forced_drop_leans_toward_the_first_weapon() -> None:

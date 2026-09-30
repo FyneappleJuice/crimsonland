@@ -50,6 +50,7 @@ class RelicId(IntEnum):
     FORTIFY_LOW = 34
     WARBANNER_LOW = 37
     GIANT_PACT_LOW = 40
+    TURRET_LOW = 43
 
 
 # Not native: with --test-mode, init_relics tops the inventory up so exactly
@@ -79,6 +80,7 @@ RELIC_FAMILY: dict[int, str] = {
     RelicId.FORTIFY_LOW: "fortify",
     RelicId.WARBANNER_LOW: "warbanner",
     RelicId.GIANT_PACT_LOW: "giant",
+    RelicId.TURRET_LOW: "turret",
 }
 
 RELIC_NAME: dict[int, str] = {
@@ -93,6 +95,7 @@ RELIC_NAME: dict[int, str] = {
     RelicId.FORTIFY_LOW: "Pact of Fortification",
     RelicId.WARBANNER_LOW: "War Banner",
     RelicId.GIANT_PACT_LOW: "Pact of the Giant",
+    RelicId.TURRET_LOW: "Relic of the Turret",
 }
 
 # Short label drawn inside a placed relic's grid cells.
@@ -108,6 +111,7 @@ RELIC_LABEL: dict[int, str] = {
     RelicId.FORTIFY_LOW: "Fort",
     RelicId.WARBANNER_LOW: "Bnr",
     RelicId.GIANT_PACT_LOW: "Dual",
+    RelicId.TURRET_LOW: "Trrt",
 }
 
 # Not native: short mechanical summary per relic, same spirit as
@@ -119,12 +123,13 @@ RELIC_BLURB: dict[int, str] = {
     RelicId.GATHERING_WINDS_LOW: "landing hits builds toward +20% speed/-20% damage taken; getting hit strips half",
     RelicId.SLAYER_PACT_LOW: "a kill streak opens a window at 1.2x damage taken; 0.8x otherwise",
     RelicId.CRITICAL_MASS_LOW: "crit chance rises with nearby enemies; crit damage dips below 5 nearby",
-    RelicId.LEECH_LOW: "hits heal a % of damage dealt over time; kills cost a % of current HP",
+    RelicId.LEECH_LOW: "hits heal a % of damage dealt over time (up to 10 at once); kills cost a % of current HP",
     RelicId.IMPALER_LOW: "hits deal -20% damage but stack an Impale that later hits also trigger",
     RelicId.FIRST_STRIKE_LOW: "first hit on a creature deals +60% damage; until then it hits you 40% harder",
     RelicId.FORTIFY_LOW: "landing hits builds stacks of damage reduction (up to -12%); -10% move speed",
     RelicId.WARBANNER_LOW: "each level-up plants a banner; nearby banners give +25% attack & move speed",
-    RelicId.GIANT_PACT_LOW: "a second weapon fires alongside the first, alternating; both pay 1.5x slower fire rate",
+    RelicId.GIANT_PACT_LOW: "a second weapon fires alongside the first, alternating; both pay 1.5x slower fire rate and -10% move speed",
+    RelicId.TURRET_LOW: "you can never fire your own weapon; hold Reload to build a turret (up to 2) that mirrors your stats and fires on its own at 40% damage",
 }
 
 # (width, height) in grid cells. Unlisted ids default to 1x1. The pact

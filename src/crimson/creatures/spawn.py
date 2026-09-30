@@ -771,6 +771,9 @@ class CreatureInit(msgspec.Struct):
     # Rewrite-only: destructible Barrel prop (creatures/barrels.py).
     is_barrel: bool = False
 
+    # Rewrite-only: Relic of the Turret (meta/relics_impl/turret.py).
+    is_turret: bool = False
+
 
 class SpawnSlotInit(msgspec.Struct):
     owner_creature: int

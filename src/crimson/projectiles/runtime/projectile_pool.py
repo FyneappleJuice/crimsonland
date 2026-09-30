@@ -20,6 +20,7 @@ from ...meta.relics_impl import first_strike as relic_first_strike
 from ...meta.relics_impl import fortify as relic_fortify
 from ...meta.relics_impl import impaler as relic_impaler
 from ...meta.relics_impl import ricochet as relic_ricochet
+from ...weapon_runtime.crit_vfx import queue_crit_spark
 from ...math_parity import (
     NATIVE_HALF_PI,
     f32,
@@ -408,6 +409,15 @@ class ProjectilePool:
 
         def _creature_is_collidable(creature: CreatureState) -> bool:
             if not creature.active:
+                return False
+            # Not native: Relic of the Turret - a turret is a real
+            # CreatureState sitting right at its own muzzle position, so
+            # without this a rocket (or any projectile) could register an
+            # immediate self-hit the instant it spawns. Turrets only ever
+            # take damage through the dedicated creature-bite contact pass
+            # (creatures/runtime.py's _apply_turret_contact_damage), never
+            # through this collision path.
+            if creature.is_turret:
                 return False
             return creature_lifecycle_is_collidable(creature.lifecycle_stage)
 
@@ -882,6 +892,8 @@ class ProjectilePool:
                         # compensation-only multiplier) freezes the target.
                         if shooter is not None and perk_active(shooter, PerkId.COLD_SNAP):
                             creature.crit_freeze_timer = COLD_SNAP_FREEZE_DURATION
+                        # Not native: golden crit-spark VFX at the hit point.
+                        queue_crit_spark(runtime_state, creature.pos)
 
                     if proj.ricochet_damage > 0.0:
                         # Not native: a Pact of Ricochet bounce deals exactly
@@ -1002,15 +1014,20 @@ class ProjectilePool:
                                     from ..types import SecondaryProjectileTypeId
                                     from .secondary_pool import SecondarySpawnSpec
 
-                                    # Not native: a Hollow Form clone shares its
-                                    # real player's index (see OwnerRef.
-                                    # via_hollow_form's comment) - spawn from the
-                                    # clone's frozen position instead of wherever
-                                    # the real player currently is, when this hit
-                                    # came from the clone.
-                                    bonus_spawn_pos = (
-                                        shooter.hollow_form_pos if proj.owner.via_hollow_form else shooter.pos
-                                    )
+                                    # Not native: a Hollow Form clone or a
+                                    # Relic of the Turret turret shares its real
+                                    # player's index (see OwnerRef.via_hollow_form
+                                    # / via_turret's comments) - spawn from the
+                                    # clone's frozen position or the turret's
+                                    # current position instead of wherever the
+                                    # real player currently is, when this hit
+                                    # came from either.
+                                    if proj.owner.via_hollow_form:
+                                        bonus_spawn_pos = shooter.hollow_form_pos
+                                    elif proj.owner.via_turret:
+                                        bonus_spawn_pos = shooter.turret_last_fire_pos
+                                    else:
+                                        bonus_spawn_pos = shooter.pos
                                     rocket_idx = runtime_state.secondary_projectiles.spawn_from_spec(
                                         SecondarySpawnSpec(
                                             pos=bonus_spawn_pos,

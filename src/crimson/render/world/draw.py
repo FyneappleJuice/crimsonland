@@ -26,6 +26,7 @@ from ...meta.relics_impl import warbanner as relic_warbanner
 from ...perks import PerkId
 from ...perks.helpers import perk_active
 from ...sim.world_defs import CREATURE_ANIM, CREATURE_ASSET
+from ...weapon_runtime.crit_vfx import CRIT_SPARK_DURATION_S, CRIT_SPARK_FRAME_COUNT, CRIT_SPARK_WORLD_SIZE
 from ...ui.cursor import draw_aim_cursor
 from . import viewport
 from .arc_gun import draw_arc_bolts
@@ -39,6 +40,7 @@ from .dummy_stats import draw_dummy_stats
 from .monster_tooltip import draw_monster_rarity_tooltip
 from .effects import draw_effect_pool, draw_particle_pool, draw_sprite_effect_pool
 from .overlays import draw_aim_circle, draw_clock_gauge, draw_direction_arrows, draw_kinetic_discipline_fill
+from .turret_render import draw_turret_build_progress, draw_turrets
 from .player_status import draw_players_status
 from .profile_hooks import profile_pass
 from .projectiles import draw_projectile, draw_secondary_projectile, draw_sharpshooter_laser_sight
@@ -164,6 +166,9 @@ def draw_world(
             )
         with profile_pass("projectiles_effects"):
             draw_projectiles_and_effects(render_ctx, ctx=draw_ctx)
+        # Not native: golden crit-spark VFX - drawn on top of everything so
+        # far (creatures/players/projectiles), same as any other hit flash.
+        _draw_crit_sparks(render_ctx, ctx=draw_ctx)
         with profile_pass("blade_orbits"):
             draw_blade_orbits(
                 render_ctx,
@@ -331,17 +336,19 @@ def draw_hollow_form_clones(render_ctx: WorldRenderCtx, *, ctx: WorldDrawContext
 
 def iter_active_creature_overlay_pass(creatures: Sequence[CreatureState]) -> Iterator[CreatureState]:
     for creature in creatures:
-        if creature.active and not creature.is_barrel:
+        if creature.active and not creature.is_barrel and not creature.is_turret:
             yield creature
 
 
 def iter_native_creature_sprite_pass(creatures: Sequence[CreatureState]) -> Iterator[CreatureState]:
-    # Barrels borrow a native type_id purely for damage/collision bookkeeping
-    # (see creatures/barrels.py) - they draw through _draw_barrels instead, so
-    # they're excluded here the same way the overlay pass excludes them.
+    # Barrels and turrets both borrow a native type_id purely for
+    # damage/collision bookkeeping (creatures/barrels.py,
+    # meta/relics_impl/turret.py) - they draw through _draw_barrels/
+    # draw_turrets instead, so they're excluded here the same way the
+    # overlay pass excludes them.
     for type_id in _NATIVE_CREATURE_SPRITE_DRAW_ORDER:
         for creature in creatures:
-            if creature.active and creature.type_id == type_id and not creature.is_barrel:
+            if creature.active and creature.type_id == type_id and not creature.is_barrel and not creature.is_turret:
                 yield creature
 
 
@@ -547,6 +554,8 @@ def draw_creatures(render_ctx: WorldRenderCtx, *, ctx: WorldDrawContext) -> None
 
     _draw_barrels(render_ctx, ctx=ctx)
     _draw_barrel_breaks(render_ctx, ctx=ctx)
+    draw_turrets(render_ctx, ctx=ctx)
+    draw_turret_build_progress(render_ctx, ctx=ctx)
 
 
 # Rewrite-only: destructible Barrel prop (creatures/barrels.py). Drawn as a
@@ -592,6 +601,30 @@ def _draw_barrel_breaks(render_ctx: WorldRenderCtx, *, ctx: WorldDrawContext) ->
     for effect in pending:
         tick = int(float(effect.elapsed) / _BARREL_BREAK_FRAME_S)
         if tick >= _BARREL_BREAK_FRAME_COUNT:
+            continue
+        screen = render_ctx._world_to_screen_with(effect.pos, camera=ctx.camera, view_scale=ctx.view_scale)
+        dst = rl.Rectangle(screen.x - side * 0.5, screen.y - side * 0.5, side, side)
+        src = rl.Rectangle(frame_w * tick, 0, frame_w, texture.height)
+        rl.draw_texture_pro(texture, src, dst, rl.Vector2(0, 0), 0.0, tint)
+
+
+_CRIT_SPARK_FRAME_S = CRIT_SPARK_DURATION_S / CRIT_SPARK_FRAME_COUNT
+
+
+def _draw_crit_sparks(render_ctx: WorldRenderCtx, *, ctx: WorldDrawContext) -> None:
+    frame = render_ctx.frame
+    texture = frame.resources.texture_optional(TextureId.CRIT_SPARK)
+    if texture is None:
+        return
+    pending = getattr(frame.state, "pending_crit_sparks", None)
+    if not pending:
+        return
+    frame_w = texture.width / CRIT_SPARK_FRAME_COUNT
+    tint = rl.Color(255, 255, 255, int(clamp(ctx.entity_alpha, 0.0, 1.0) * 255.0 + 0.5))
+    side = CRIT_SPARK_WORLD_SIZE * ctx.scale
+    for effect in pending:
+        tick = int(float(effect.elapsed) / _CRIT_SPARK_FRAME_S)
+        if tick >= CRIT_SPARK_FRAME_COUNT:
             continue
         screen = render_ctx._world_to_screen_with(effect.pos, camera=ctx.camera, view_scale=ctx.view_scale)
         dst = rl.Rectangle(screen.x - side * 0.5, screen.y - side * 0.5, side, side)

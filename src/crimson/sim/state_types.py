@@ -315,6 +315,25 @@ class PlayerState(msgspec.Struct):
     auto_fire_mode_enabled: bool = False
     auto_fire_active: bool = False
 
+    # Rewrite-only: Relic of the Turret (meta/relics_impl/turret.py). Reload
+    # is repurposed into building a stationary turret instead of reloading -
+    # the player can't fire their own weapon at all while this relic is
+    # equipped. turret_build_timer counts down from turret_build_duration
+    # while turret_relic_building; the player is rooted in place for that
+    # whole window. turret_indices is a FIFO list of CreaturePool indices
+    # (oldest first), so hitting the cap evicts index 0.
+    turret_relic_building: bool = False
+    turret_build_timer: float = 0.0
+    turret_build_duration: float = 0.0
+    turret_indices: list[int] = msgspec.field(default_factory=list)
+    # Not native: the position of whichever turret fired most recently - lets
+    # OwnerRef.via_turret hit-resolution code (Seeker Rounds' bonus rocket)
+    # spawn from the turret's location instead of the real player's current
+    # one, the same role hollow_form_pos plays for Hollow Form. With 2 turrets
+    # both firing, this is whichever fired last, not necessarily the one this
+    # specific hit came from - an accepted imprecision for a rare edge case.
+    turret_last_fire_pos: Vec2 = Vec2()
+
 
 class BonusPickupEvent(msgspec.Struct, frozen=True):
     player_index: int

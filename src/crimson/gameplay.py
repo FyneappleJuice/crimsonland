@@ -23,6 +23,7 @@ from .meta.relics_impl import gathering_winds as relic_gathering_winds
 from .meta.relics_impl import giant_pact as relic_giant_pact
 from .meta.relics_impl import leech as relic_leech
 from .meta.relics_impl import slayer_pact as relic_slayer_pact
+from .meta.relics_impl import turret as relic_turret
 from .meta.relics_impl import warbanner as relic_warbanner
 from .math_parity import (
     NATIVE_HALF_PI,
@@ -97,10 +98,11 @@ from .weapon_runtime import (
 from .weapon_runtime import (
     weapon_slot_active as _weapon_slot_active,
 )
+from .weapon_runtime.crit_vfx import CritSparkEffect
 from .weapons import WEAPON_TABLE, WeaponId
 
 if TYPE_CHECKING:
-    from .creatures.runtime import CreatureState
+    from .creatures.runtime import CreaturePool, CreatureState
     from .creatures.spawn import SpawnSlotInit
     from .persistence.save_status import GameStatus
     from .sim.input import PlayerInput
@@ -189,6 +191,9 @@ class GameplayState(msgspec.Struct):
     # entry per Barrel that broke this tick, aged out once its 4-frame
     # destruction strip finishes playing.
     pending_barrel_breaks: list[BarrelBreakEffect] = msgspec.field(default_factory=list)
+    # Not native: golden crit-spark VFX (weapon_runtime/crit_vfx.py) - one
+    # entry per crit hit this tick, aged out once its 8-frame burst finishes.
+    pending_crit_sparks: list[CritSparkEffect] = msgspec.field(default_factory=list)
     shock_chain_links_left: int = 0
     shock_chain_projectile_id: int = -1
     survival_reward_handout_enabled: bool = True
@@ -917,6 +922,7 @@ def giant_pact_dual_fire(
     creatures: Sequence[CreatureState] | None,
     players: list[PlayerState] | None,
     player_death_runtime: PlayerDeathRuntime | None = None,
+    suppress_empty_clip_self_cost_perks: bool = False,
 ) -> None:
     """Not native: Pact of the Giant's alternating dual-fire, then the combined
     reload once both slots are dry. Shared by player_update and Hollow Form's
@@ -960,6 +966,7 @@ def giant_pact_dual_fire(
                     player_death_runtime=player_death_runtime,
                     suppress_ammo_auto_reload=True,
                     giant_pact_partner_dry=other_dry,
+                    suppress_empty_clip_self_cost_perks=suppress_empty_clip_self_cost_perks,
                 ),
             )
         if fire_result.fired:
@@ -981,6 +988,7 @@ def player_update(
     player_death_runtime: PlayerDeathRuntime | None = None,
     creature_damage_runtime: CreatureDamageRuntime | None = None,
     reload_active_any: bool | None = None,
+    creature_pool: CreaturePool | None = None,
 ) -> None:
     """Port of `player_update` (0x004136b0) for the rewrite runtime."""
 
@@ -1095,6 +1103,9 @@ def player_update(
     speed_multiplier *= relic_fortify.speed_mult()
     # Not native: War Banner relic - its own multiplicative bucket.
     speed_multiplier *= relic_warbanner.move_speed_mult(player)
+    # Not native: Pact of the Giant's cost - carrying a second live weapon.
+    if relic_giant_pact.dual_wielding(player):
+        speed_multiplier *= 0.9
 
     movement_dt = float(dt)
     if state.time_scale_active and movement_dt > 0.0:
@@ -1120,6 +1131,10 @@ def player_update(
     # Not native: Acid Lob monster affix's damage-over-time instances drip and
     # age out the same way, in the opposite direction.
     monster_rarity.tick_acid_dot(player, dt)
+    # Not native: Relic of the Turret's build countdown - decays unconditionally
+    # every tick while building, independent of the Reload-key edge that
+    # started it.
+    relic_turret.tick_build(player, dt)
 
     apply_player_perk_ticks(
         player=player,
@@ -1138,6 +1153,12 @@ def player_update(
     # Movement.
     raw_move = input_state.move
     raw_mag = raw_move.length()
+    # Not native: Relic of the Turret roots the player in place for the whole
+    # build window - force this tick's movement input to nothing so the
+    # existing decel-to-stop logic below brings them smoothly to a halt.
+    if relic_turret.turret_relic_active() and player.turret_relic_building:
+        raw_move = Vec2()
+        raw_mag = 0.0
     phase_sign = 1.0
     move = _direction_from_heading_native(float(player.heading))
     speed = 0.0
@@ -1378,11 +1399,18 @@ def player_update(
         and (not state.demo_mode_active)
         and (not has_alt_weapon_perk)
         and (not giant_pact_dual_wielding)
+        and (not relic_turret.turret_relic_active())
         and move_mode != MovementControlType.MOUSE_POINT_CLICK
         and float(player.weapon.reload_timer) == 0.0
         and bool(single_player_mode)
     )
-    if manual_reload_allowed:
+    if relic_turret.turret_relic_active():
+        # Not native: Relic of the Turret's own Reload-key handling takes
+        # unconditional priority - Reload builds/cancels a turret instead of
+        # ever reloading a weapon while this relic is equipped.
+        relic_turret.handle_reload_key(player, input_state, dt, state)
+        relic_turret.maybe_spawn_ready_turret(player, creature_pool, player_index=int(player.index))
+    elif manual_reload_allowed:
         _player_start_reload(player, state, players=players)
     elif (
         giant_pact_dual_wielding
@@ -1453,7 +1481,19 @@ def player_update(
     if force_pre_swap_fire_gate:
         player.weapon.shot_cooldown = 0.0
 
-    if giant_pact_dual_wielding:
+    # Not native: Fire Bullets / Plasma Overload override every wielded
+    # weapon to the same fixed-rate, zero-ammo shot - dual-fire's turn-based
+    # alternation between two now-identical "weapons" nets a free ~33% DPS
+    # bump neither bonus is tuned for (see giant_pact.dual_fire_suppressed's
+    # docstring). Falling back to the single-slot path for the primary
+    # weapon alone reproduces the bonus's intended solo rate;
+    # giant_pact_partner_dry=True (only meaningful while giant_pact_dual_wielding
+    # is actually True) waives the relic's own 1.5x tax for that shot, the
+    # same waiver Relic of the Turret uses when it fires a single slot.
+    weapon_override_suppresses_dual_fire = giant_pact_dual_wielding and relic_giant_pact.dual_fire_suppressed(player)
+    if not relic_turret.can_fire_own_weapon(player):
+        pass  # Relic of the Turret: the player never fires their own weapon.
+    elif giant_pact_dual_wielding and not weapon_override_suppresses_dual_fire:
         giant_pact_dual_fire(
             player,
             input_state,
@@ -1476,6 +1516,7 @@ def player_update(
                 players=players,
                 force_pre_swap_fire_gate=bool(force_pre_swap_fire_gate),
                 player_death_runtime=player_death_runtime,
+                giant_pact_partner_dry=weapon_override_suppresses_dual_fire,
             ),
         )
 

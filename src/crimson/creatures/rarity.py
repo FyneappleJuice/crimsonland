@@ -865,8 +865,22 @@ def update_monster_affixes(players, creatures, dt: float, *, state) -> None:
                     if state.bonuses.freeze > 0.0:
                         state.bonuses.freeze = max(0.0, float(state.bonuses.freeze) - extra)
 
+        # Not native: Vortex's pull is otherwise player-only (it lerps `p.pos`
+        # directly, bypassing move_speed entirely) - a turret has no
+        # self-propulsion (move_speed=0.0 by design) but should still be
+        # yanked around by a gravity well the same as any other unit on the
+        # field, using the identical direct-position-lerp mechanism.
+        if _has(c, AffixId.VORTEX):
+            for t in entries:
+                if not t.active or not t.is_turret or float(t.hp) <= 0.0:
+                    continue
+                tx, ty = float(t.pos.x), float(t.pos.y)
+                if math.hypot(tx - cx, ty - cy) <= VORTEX_RANGE:
+                    frac = min(1.0, VORTEX_PULL_FRAC_PER_S * dt)
+                    t.pos = Vec2(tx + (cx - tx) * frac, ty + (cy - ty) * frac)
+
     _tick_pending_detonations(players, creatures, dt, state=state)
-    _tick_pending_area_effects(players, dt, state=state)
+    _tick_pending_area_effects(players, creatures, dt, state=state)
 
 
 # --- runtime: on-hit (called from creatures/damage.py) ---------------
@@ -1211,7 +1225,7 @@ def _queue_area_effect(
     except Exception:
         pass
 
-def _apply_area_effect_tick(effect: PendingMonsterAreaEffect, dt: float, *, state, players) -> None:
+def _apply_area_effect_tick(effect: PendingMonsterAreaEffect, dt: float, *, state, players, creatures) -> None:
     from ..player_damage import player_take_damage
 
     cx, cy = float(effect.pos.x), float(effect.pos.y)
@@ -1230,8 +1244,21 @@ def _apply_area_effect_tick(effect: PendingMonsterAreaEffect, dt: float, *, stat
             frac = min(1.0, ANCHORING_PULL_FRAC_PER_S * dt)
             p.pos = Vec2(px + (cx - px) * frac, py + (cy - py) * frac)
 
+    if effect.kind == _AreaEffectKind.ANCHOR:
+        # Not native: same direct-position pull extended to turrets - see the
+        # matching Vortex comment above update_monster_affixes' pull block.
+        entries = list(creatures.entries) if hasattr(creatures, "entries") else list(creatures)
+        for t in entries:
+            if not t.active or not t.is_turret or float(t.hp) <= 0.0:
+                continue
+            tx, ty = float(t.pos.x), float(t.pos.y)
+            if math.hypot(tx - cx, ty - cy) > float(effect.radius):
+                continue
+            frac = min(1.0, ANCHORING_PULL_FRAC_PER_S * dt)
+            t.pos = Vec2(tx + (cx - tx) * frac, ty + (cy - ty) * frac)
 
-def _tick_pending_area_effects(players, dt: float, *, state) -> None:
+
+def _tick_pending_area_effects(players, creatures, dt: float, *, state) -> None:
     pending = getattr(state, "pending_monster_area_effects", None)
     if not pending:
         return
@@ -1244,7 +1271,7 @@ def _tick_pending_area_effects(players, dt: float, *, state) -> None:
                 continue
             effect.triggered = True
         effect.duration = float(effect.duration) - float(dt)
-        _apply_area_effect_tick(effect, dt, state=state, players=players)
+        _apply_area_effect_tick(effect, dt, state=state, players=players, creatures=creatures)
         if effect.duration > 0.0:
             remaining.append(effect)
     state.pending_monster_area_effects = remaining

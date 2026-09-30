@@ -69,6 +69,24 @@ def test_each_hit_gets_its_own_independent_instance() -> None:
     assert player.leech_pending_timers[1] == pytest.approx(leech.LEECH_HEAL_DURATION)
 
 
+def test_a_proc_past_the_instance_cap_heals_nothing() -> None:
+    player = PlayerState(index=0, pos=Vec2(), health=50.0)
+    for _ in range(leech.LEECH_MAX_INSTANCES):
+        leech.heal_on_hit(player, 100.0)
+    assert len(player.leech_pending_timers) == leech.LEECH_MAX_INSTANCES
+
+    leech.heal_on_hit(player, 100.0)  # the 11th proc
+
+    assert len(player.leech_pending_timers) == leech.LEECH_MAX_INSTANCES
+    assert len(player.leech_pending_heal) == leech.LEECH_MAX_INSTANCES
+
+    # Once one instance expires, there's room for a fresh proc again.
+    leech.tick(player, leech.LEECH_HEAL_DURATION)
+    assert player.leech_pending_timers == []
+    leech.heal_on_hit(player, 100.0)
+    assert len(player.leech_pending_timers) == 1
+
+
 def test_nothing_happens_without_the_relic(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(relics, "_ACTIVE_RELIC_IDS", ())
     player = PlayerState(index=0, pos=Vec2(), health=80.0)

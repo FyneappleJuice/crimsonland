@@ -37,8 +37,13 @@ MENU_DESC_X = -12.0
 MENU_DESC_Y_AFTER_LIST = 32.0
 MENU_DESC_Y_EXTRA_TIGHTEN = 20.0
 MENU_BUTTON_X = 162.0
-MENU_BUTTON_Y = 276.0
+MENU_BUTTON_Y = 336.0
 MENU_DESC_RIGHT_X = 480.0
+
+# Not native: gap between the rules-text (stat_description) block and the
+# flavor-text block underneath it, both drawn inside the same description
+# rect (see PerkMenuController.draw).
+MENU_DESC_STAT_GAP_Y = 6.0
 
 
 class PerkMenuLayout(msgspec.Struct):
@@ -46,8 +51,11 @@ class PerkMenuLayout(msgspec.Struct):
     # Capture (1024x768) shows the perk menu panel uses the 3-slice variant:
     #   open bbox (-108,119) -> (402,497)
     # which corresponds to ui_element pos (-45,110) + geom (-63,-81) and size 510x378.
+    # Not native: panel_size.y (and MENU_BUTTON_Y above) are grown +60px past
+    # that native 378 to make room for the rules-text block added above the
+    # flavor-text description (see PerkMenuController.draw).
     panel_pos: Vec2 = Vec2(-108.0, 29.0)
-    panel_size: Vec2 = Vec2(510.0, 378.0)
+    panel_size: Vec2 = Vec2(510.0, 438.0)
 
 
 class PerkMenuComputedLayout(msgspec.Struct):

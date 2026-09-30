@@ -14,6 +14,7 @@ from ..creatures.barrels import barrel_keep_corpse, tick_barrel_break_effects
 from ..creatures.dummy import sandbox_keep_corpse, tick_test_monster_respawns, update_test_dummies
 from ..creatures.rarity import update_monster_affixes
 from ..weapon_runtime.arc_gun import update_arc_gun
+from ..weapon_runtime.crit_vfx import tick_crit_spark_effects
 from ..weapon_runtime.power_up import WPU_FLAME_DAMAGE_MULT
 from ..weapon_runtime.scythe_sweep import update_scythe_swings
 from ..bonuses.pickup_fx import emit_bonus_pickup_effects
@@ -33,6 +34,7 @@ from ..gameplay import (
     player_update,
     survival_progression_update,
 )
+from ..meta.relics_impl import turret as relic_turret
 from ..owner_ref import OwnerRef
 from ..perks import PerkId
 from ..perks.helpers import perk_active
@@ -117,6 +119,11 @@ class _WorldStepRuntime(ProjectileHitRuntime, CreatureDamageRuntime, PlayerDeath
         creature = self.world.creatures.entries[idx]
         if not creature.active:
             return
+        # Not native: Relic of the Turret's is_turret/owner.is_player()
+        # exclusion lives in creature_apply_damage_with_lethal_followup
+        # itself (creatures/damage.py) - the true shared choke point every
+        # caller (this wrapper, plus perk procs that call it directly) routes
+        # through - rather than duplicated here.
         creature_apply_damage_with_lethal_followup(
             creature,
             creature_index=idx,
@@ -131,6 +138,10 @@ class _WorldStepRuntime(ProjectileHitRuntime, CreatureDamageRuntime, PlayerDeath
             detail_preset=int(self.detail_preset),
             creature_damage_runtime=self,
             is_projectile_hit=is_projectile_hit,
+            # Not native: lets Leech's turret-side heal-on-hit resolve which
+            # specific turret fired (OwnerRef.turret_creature_index) - see
+            # creatures/damage.py's creature_apply_damage.
+            creatures=self.world.creatures.entries,
         )
 
     def on_creature_lethal(
@@ -448,6 +459,7 @@ class WorldState(msgspec.Struct):
                 player_death_runtime=step_runtime,
                 creature_damage_runtime=step_runtime,
                 reload_active_any=bool(reload_active_any),
+                creature_pool=self.creatures,
             )
             player_dt = player_frame_dt_after_roundtrip(
                 dt=player_dt,
@@ -455,6 +467,28 @@ class WorldState(msgspec.Struct):
                 reflex_boost_timer=float(self.state.bonuses.reflex_boost),
             )
         dt = float(player_dt)
+        # Not native: Relic of the Turret - each turret's own AI (target
+        # pick, aim, fire) ticks once per world step, right after every
+        # player's frame has updated, so it always sees this tick's fresh
+        # stats/position rather than last tick's.
+        if dt > 0.0 and relic_turret.turret_relic_active():
+            for player in self.players:
+                for turret_index in list(player.turret_indices):
+                    if not (0 <= turret_index < len(self.creatures.entries)):
+                        continue
+                    entry = self.creatures.entries[turret_index]
+                    if not entry.active:
+                        continue
+                    relic_turret.tick_turret(
+                        entry,
+                        turret_index,
+                        player=player,
+                        state=self.state,
+                        players=self.players,
+                        creatures=self.creatures.entries,
+                        dt=dt,
+                        creature_damage_runtime=step_runtime,
+                    )
         if dt > 0.0:
             self._advance_creature_anim(dt)
         if mid_step_runtime is not None:
@@ -502,6 +536,9 @@ class WorldState(msgspec.Struct):
         # Not native: destructible Barrel break VFX - ages out pending break
         # animations (creatures/barrels.py).
         tick_barrel_break_effects(self.state, dt)
+        # Not native: golden crit-spark VFX - ages out pending crit bursts
+        # (weapon_runtime/crit_vfx.py).
+        tick_crit_spark_effects(self.state, dt)
         # Not native: advance orbiting-blade bonuses and apply their contact hits.
         update_blade_orbits(
             self.players,

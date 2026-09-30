@@ -124,6 +124,16 @@ class TextureId(Enum):
     # (render/world/draw.py's draw_pending_area_effect_warnings). Absent from
     # a stock PAQ - always served from the committed fallback copy.
     CINDERBURST_GROUND = auto()
+    # Rewrite-only content: the golden spark burst played on a creature crit
+    # hit (weapon_runtime/crit_vfx.py, render/world/draw.py), an 8-frame
+    # strip. Absent from a stock PAQ - always served from the committed
+    # fallback copy.
+    CRIT_SPARK = auto()
+    # Rewrite-only content: Relic of the Turret's stationary base + rotating
+    # gun sprite (meta/relics_impl/turret.py, render/world/turret_render.py),
+    # a 3x3-grid spritesheet. Absent from a stock PAQ - always served from the
+    # committed fallback copy.
+    TURRET1 = auto()
 
 
 class TextureSpec(msgspec.Struct, frozen=True):
@@ -219,6 +229,8 @@ OPTIONAL_TEXTURE_SPECS: Final[dict[TextureId, TextureSpec]] = {
     TextureId.BARREL: TextureSpec("game/barrel.png", clamp=True, point_filter=True),
     TextureId.BARREL_BREAK: TextureSpec("game/barrel_break.png", clamp=True, point_filter=True),
     TextureId.CINDERBURST_GROUND: TextureSpec("game/cinderburst_ground.png", clamp=True),
+    TextureId.CRIT_SPARK: TextureSpec("game/crit_spark.png", clamp=True),
+    TextureId.TURRET1: TextureSpec("game/turret1.png", clamp=True, point_filter=True),
 }
 _OPTIONAL_TEXTURE_FALLBACK_DIR: Final[Path] = Path(__file__).resolve().parent / "optional_textures"
 

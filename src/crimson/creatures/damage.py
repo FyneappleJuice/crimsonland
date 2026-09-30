@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import random as _random
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 
 import msgspec
 
@@ -116,6 +116,12 @@ class _CreatureDamageCtx(msgspec.Struct):
     # Plasma/Energy have no second event to distinguish from, so their
     # projectile-mult step is unconditional (no flag needed).
     is_projectile_hit: bool = False
+    # Not native: the full creature pool, needed only so Leech's turret-side
+    # heal-on-hit (meta/relics_impl/turret.py's turret_leech_heal_on_hit) can
+    # resolve the SPECIFIC turret that fired (OwnerRef.turret_creature_index)
+    # from a player who owns more than one. None wherever a caller doesn't
+    # have it handy - Leech's turret-crediting just no-ops in that case.
+    creatures: Sequence[CreatureState] | None = None
 
 
 _CreatureDamageStep = Callable[[_CreatureDamageCtx], None]
@@ -435,6 +441,7 @@ def creature_apply_damage(
     players: list[PlayerState],
     rng: CrandLike,
     is_projectile_hit: bool = False,
+    creatures: Sequence[CreatureState] | None = None,
 ) -> bool:
     """Apply damage to a creature, returning True if the hit killed it.
 
@@ -469,6 +476,7 @@ def creature_apply_damage(
         # attributed to the shooter.
         team_stats=team_stats,
         elemental_type_stats=(resolve_team_stats_perks_only(players) if owner.no_run_mod_affinity else team_stats),
+        creatures=creatures,
     )
 
     _damage_generic_damage_mult(ctx)
@@ -597,6 +605,17 @@ def creature_apply_damage(
     )
     if leech_shooter is not None and not ctx.owner.via_impale:
         relic_leech.heal_on_hit(leech_shooter, float(ctx.damage))
+        # Not native: a turret's own hits ALSO build its own Leech instances
+        # (heals its own hp), on top of the real player's above - per the
+        # owner's explicit call that turret and player both benefit.
+        if ctx.owner.via_turret and ctx.creatures is not None:
+            turret_idx = ctx.owner.turret_creature_index
+            if 0 <= turret_idx < len(ctx.creatures):
+                turret_creature = ctx.creatures[turret_idx]
+                if turret_creature.active and turret_creature.is_turret:
+                    from ..meta.relics_impl.turret import turret_leech_heal_on_hit
+
+                    turret_leech_heal_on_hit(turret_creature, float(ctx.damage))
 
     # Not native: sandbox mode damage dummy (creatures/dummy.py) - records the
     # final, fully-resolved hit for the damage/dps/last-hit floating text.
@@ -636,12 +655,23 @@ def creature_apply_damage_with_lethal_followup(
     detail_preset: int = 5,
     creature_damage_runtime: CreatureDamageRuntime,
     is_projectile_hit: bool = False,
+    creatures: Sequence[CreatureState] | None = None,
 ) -> bool:
     """Apply damage and run a required lethal follow-up exactly on death transition.
 
     This helper keeps lethal bookkeeping adjacent to damage application so runtime
     call sites cannot accidentally skip death handling side effects.
     """
+
+    # Not native: Relic of the Turret - a turret is a plain CreatureState with
+    # no faction concept, so it's otherwise indistinguishable from a hostile
+    # monster to every player-sourced damage source. This is the true shared
+    # choke point: sim/world_state.py's apply_creature_damage routes through
+    # here, but several perk procs (Man Bomb, Final Revenge) call this
+    # function directly and skip that wrapper entirely - guarding here
+    # instead covers both in one place.
+    if creature.is_turret and owner.is_player():
+        return False
 
     # Native gates the lethal branch purely on entry health; a creature whose
     # death was already handled with hp still positive (shrinkifier shrink-death,
@@ -658,6 +688,7 @@ def creature_apply_damage_with_lethal_followup(
         players=players,
         rng=rng,
         is_projectile_hit=is_projectile_hit,
+        creatures=creatures,
     )
     if killed and death_start_needed:
 

@@ -182,6 +182,14 @@ class WeaponFireCtx(msgspec.Struct):
     # weapon is firing alone and doesn't pay the pact's fire-rate cost.
     giant_pact_partner_dry: bool = False
     player_death_runtime: PlayerDeathRuntime | None = None
+    # Not native: Relic of the Turret (meta/relics_impl/turret.py) - the
+    # turret fires through a disposable per-tick clone of the real player
+    # (`shooter`), so empty-clip self-cost perks (Ammunition Within,
+    # Regression Bullets) must not run: Ammunition Within's cost would call
+    # player_take_damage on that throwaway clone, which still pushes a real
+    # pain SFX into the *shared* sfx_queue even though no real player lost
+    # health. Default False = zero behavior change for every other caller.
+    suppress_empty_clip_self_cost_perks: bool = False
 
 
 class WeaponFireResult(msgspec.Struct, frozen=True):
@@ -389,6 +397,8 @@ def _fire_weapon_impl(ctx: WeaponFireCtx) -> WeaponFireResult:
     perk_fire_ready = (not force_pre_swap_fire_gate) and player.weapon.reload_timer > 0.0
     use_regression_bullets = False
     use_ammunition_within = False
+    if perk_fire_ready and ctx.suppress_empty_clip_self_cost_perks:
+        return WeaponFireResult(fired=False)
     if perk_fire_ready:
         if player.experience <= 0:
             return WeaponFireResult(fired=False)

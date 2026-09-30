@@ -46,6 +46,21 @@ class OwnerRef(msgspec.Struct, frozen=True):
     # hollow_form_pos instead of the real player's current (possibly very
     # different) position.
     via_hollow_form: bool = False
+    # Not native: set on every shot Relic of the Turret's turret fires
+    # (meta/relics_impl/turret.py's tick_turret) - parallels via_hollow_form:
+    # the turret shares its owning player's index/OwnerRef for kill/XP
+    # attribution, but anything that needs the actual firing *position* at hit
+    # time (Seeker Rounds' bonus rocket) must use the turret's own current
+    # creature position, not the live player's - a turret can be far from its
+    # owner and doesn't move on its own.
+    via_turret: bool = False
+    # Not native: which of the owning player's turret CreatureState indices
+    # actually fired this shot (meta/relics_impl/turret.py's tick_turret) - a
+    # player can own up to 2 turrets, so via_turret alone can't say which one.
+    # -1 = none/not a turret shot. Lets hit/kill-time code (Leech's own
+    # heal-on-hit and hp-cost-on-kill) credit/charge that SPECIFIC turret's
+    # own HP, not just the owning player's.
+    turret_creature_index: int = -1
     # Not native: set on the burst damage a Pact of the Impaler stack releases
     # (meta/relics_impl/impaler.py) - it's the shooter's damage (kill/XP
     # credit), but mustn't impale again or heal through Leech.

@@ -720,6 +720,20 @@ def test_vortex_pulls_the_player_toward_it() -> None:
     assert 0.0 < player.pos.x < 100.0
 
 
+def test_vortex_also_pulls_a_turret_toward_it() -> None:
+    # Not native: Relic of the Turret (meta/relics_impl/turret.py) - a turret
+    # has move_speed=0.0 by design (no self-propulsion), but Vortex's pull is
+    # a direct position lerp independent of move_speed, so it should still
+    # drag a turret the same as it would any other unit on the field.
+    creature = CreatureState(active=True, hp=100.0, max_hp=100.0, rarity=3, affixes=(R.AffixId.VORTEX,), pos=Vec2(0.0, 0.0))
+    turret = CreatureState(active=True, is_turret=True, hp=100.0, max_hp=100.0, move_speed=0.0, pos=Vec2(100.0, 0.0))
+    pool = _AffixPool([creature, turret])
+
+    R.update_monster_affixes([], pool, 1.0, state=object())
+
+    assert 0.0 < turret.pos.x < 100.0
+
+
 def test_pyre_and_anchoring_queue_a_delayed_area_effect_then_resolve() -> None:
     from crimson.gameplay import GameplayState
 
@@ -742,18 +756,42 @@ def test_pyre_and_anchoring_queue_a_delayed_area_effect_then_resolve() -> None:
         entries: list = []
 
     # Still fused.
-    R._tick_pending_area_effects([player], 0.05, state=state)
+    R._tick_pending_area_effects([player], _EmptyPool(), 0.05, state=state)
     assert player.health == pytest.approx(100.0)
     assert state.pending_monster_area_effects[0].triggered is False
 
     # Fuse runs out - the field goes live and starts ticking damage.
-    R._tick_pending_area_effects([player], R.PYRE_FUSE_DELAY_S, state=state)
+    R._tick_pending_area_effects([player], _EmptyPool(), R.PYRE_FUSE_DELAY_S, state=state)
     assert state.pending_monster_area_effects[0].triggered is True
     assert player.health < 100.0
 
     # Runs for its full duration, then despawns.
-    R._tick_pending_area_effects([player], R.PYRE_DURATION_S, state=state)
+    R._tick_pending_area_effects([player], _EmptyPool(), R.PYRE_DURATION_S, state=state)
     assert state.pending_monster_area_effects == []
+
+
+def test_anchoring_also_pulls_a_turret_toward_the_zone() -> None:
+    # Not native: same move_speed-independent pull as Vortex, but for the
+    # delayed post-death "Gravemark" zone instead of a live creature's aura.
+    from crimson.gameplay import GameplayState
+
+    state = GameplayState()
+    anchor_creature = CreatureState(
+        active=True, hp=0.0, max_hp=100.0, rarity=3, affixes=(R.AffixId.ANCHORING,), pos=Vec2(0.0, 0.0),
+    )
+    turret = CreatureState(active=True, is_turret=True, hp=100.0, max_hp=100.0, move_speed=0.0, pos=Vec2(100.0, 0.0))
+
+    R.apply_monster_death_affixes(
+        object(), 0, anchor_creature, state=state, players=[], rng=None, detail_preset=5,
+        world_width=1000.0, world_height=1000.0,
+    )
+    assert len(state.pending_monster_area_effects) == 1
+
+    pool = _AffixPool([turret])
+    # Fuse runs out - the pull zone goes live.
+    R._tick_pending_area_effects([], pool, R.ANCHORING_FUSE_DELAY_S, state=state)
+    assert state.pending_monster_area_effects[0].triggered is True
+    assert 0.0 < turret.pos.x < 100.0
 
 
 def test_bomber_detonation_resolves_with_nerfed_damage_once_the_fuse_runs_out() -> None:

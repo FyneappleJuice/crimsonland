@@ -5,16 +5,17 @@ from collections.abc import Sequence
 import msgspec
 
 from grim.assets import RuntimeResources, TextureId
-from grim.fonts.small import SmallFontData, measure_small_text_width
+from grim.fonts.small import SmallFontData, measure_small_text_height, measure_small_text_width
 from grim.math import clamp
 from grim.raylib_api import rl
 from grim.sfx_map import SfxId
 
-from ...perks import PerkId, perk_display_description, perk_display_name
+from ...perks import PerkId, perk_display_description, perk_display_name, perk_display_stat_description
 from ...sim.state_types import PlayerState
 from ...ui.layout import ui_origin, ui_scale
 from ...ui.menu_panel import draw_classic_menu_panel
 from ...ui.perk_menu import (
+    MENU_DESC_STAT_GAP_Y,
     PERK_MENU_TRANSITION_MS,
     PerkMenuLayout,
     UiButtonState,
@@ -29,6 +30,8 @@ from ...ui.perk_menu import (
 )
 
 UI_TEXT_COLOR = rl.Color(220, 220, 220, 255)
+UI_STAT_DESC_COLOR = rl.Color(220, 220, 220, 255)
+UI_FLAVOR_DESC_COLOR = rl.Color(140, 140, 140, 255)
 UI_SPONSOR_COLOR = rl.Color(255, 255, 255, int(255 * 0.5))
 
 
@@ -107,6 +110,7 @@ class PerkMenuController:
         self._selected_index = 0
         self._timeline_ms = 0.0
         self._wrapped_desc_cache: dict[tuple[int, int], str] = {}
+        self._wrapped_stat_desc_cache: dict[int, str] = {}
 
     def _prewrapped_perk_desc(
         self,
@@ -130,6 +134,21 @@ class PerkMenuController:
             scale=1.0,
         )
         self._wrapped_desc_cache[key] = wrapped
+        return wrapped
+
+    def _prewrapped_perk_stat_desc(self, perk_id: PerkId, font: SmallFontData) -> str:
+        key = int(perk_id)
+        cached = self._wrapped_stat_desc_cache.get(key)
+        if cached is not None:
+            return cached
+        stat_desc = perk_display_stat_description(perk_id)
+        wrapped = self._wrap_small_text_native(
+            font,
+            stat_desc,
+            max_width_px=self._DESC_WRAP_WIDTH_PX,
+            scale=1.0,
+        )
+        self._wrapped_stat_desc_cache[key] = wrapped
         return wrapped
 
     @staticmethod
@@ -340,21 +359,29 @@ class PerkMenuController:
             draw_menu_item(ctx.resources, label, pos=item_pos, scale=scale, hovered=hovered)
 
         selected = choices[self._selected_index]
-        desc = perk_display_description(
+        font = ctx.resources.small_font
+        stat_desc = self._prewrapped_perk_stat_desc(selected, font)
+        flavor_desc = self._prewrapped_perk_desc(
             selected,
-            violence_disabled=int(ctx.violence_disabled),
-        )
-        desc = self._prewrapped_perk_desc(
-            selected,
-            ctx.resources.small_font,
+            font,
             violence_disabled=int(ctx.violence_disabled),
         )
         draw_ui_text(
             ctx.resources,
-            desc,
+            stat_desc,
             computed.desc.top_left,
             scale=scale,
-            color=UI_TEXT_COLOR,
+            color=UI_STAT_DESC_COLOR,
+        )
+        flavor_pos = computed.desc.top_left.offset(
+            dy=measure_small_text_height(font, stat_desc) * scale + MENU_DESC_STAT_GAP_Y * scale,
+        )
+        draw_ui_text(
+            ctx.resources,
+            flavor_desc,
+            flavor_pos,
+            scale=scale,
+            color=UI_FLAVOR_DESC_COLOR,
         )
 
         cancel_w = button_width(

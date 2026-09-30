@@ -335,6 +335,12 @@ def _post_hit_shrinkifier(ctx: _ProjectileUpdateCtx, hit: _ProjectileHitInfo) ->
     )
 
     creature = ctx.creatures[int(hit.hit_idx)]
+    # Not native: Relic of the Turret - this bypasses apply_creature_damage
+    # (world_state.py's is_turret/owner.is_player() gate) entirely by calling
+    # on_creature_lethal directly, so it needs its own exclusion.
+    if creature.is_turret:
+        hit.proj.life_timer = 0.25
+        return
     new_size = float(creature.size) * 0.65
     creature.size = new_size
     if new_size < 16.0:

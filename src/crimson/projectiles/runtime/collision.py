@@ -57,6 +57,12 @@ def creature_find_nearest_alive(
             continue
         if not creature_lifecycle_is_alive(creature.lifecycle_stage):
             continue
+        # Not native: Relic of the Turret - every caller of this function is
+        # player-sourced targeting (homing rockets, chain lightning); a
+        # turret should never be lockable as a target by the player's own
+        # utility effects.
+        if creature.is_turret:
+            continue
         dx = x87_pc24_sub(f32(origin.x), f32(creature.pos.x))
         dy = x87_pc24_sub(f32(origin.y), f32(creature.pos.y))
         distance = x87_pc24_hypot(dx, dy)
@@ -89,6 +95,10 @@ def creature_find_nearest_active(
     for idx in range(max_index):
         creature = creatures[idx]
         if not creature.active or idx == int(exclude_id):
+            continue
+        # Not native: Relic of the Turret - this is the Ion Rifle shock-chain
+        # target search, player-sourced; a turret should never be chainable.
+        if creature.is_turret:
             continue
         dx = x87_pc24_sub(f32(origin.x), f32(creature.pos.x))
         dy = x87_pc24_sub(f32(origin.y), f32(creature.pos.y))

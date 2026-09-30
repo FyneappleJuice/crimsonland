@@ -21,6 +21,7 @@ from ...meta.relics_impl import first_strike as relic_first_strike
 from ...meta.relics_impl import fortify as relic_fortify
 from ...meta.relics_impl import impaler as relic_impaler
 from ...meta.relics_impl import ricochet as relic_ricochet
+from ...weapon_runtime.crit_vfx import queue_crit_spark
 from ...math_parity import (
     NATIVE_HALF_PI,
     f32,
@@ -413,11 +414,17 @@ class SecondaryProjectilePool:
             if shooter.seeker_rounds_hit_counter < SEEKER_ROUNDS_HIT_THRESHOLD:
                 return
             shooter.seeker_rounds_hit_counter = 0
-            # Not native: a Hollow Form clone shares its real player's index
-            # (see OwnerRef.via_hollow_form's comment) - spawn from the
-            # clone's frozen position instead of wherever the real player
-            # currently is, when this hit came from the clone.
-            spawn_pos = shooter.hollow_form_pos if entry.owner.via_hollow_form else shooter.pos
+            # Not native: a Hollow Form clone or a Relic of the Turret turret
+            # shares its real player's index (see OwnerRef.via_hollow_form /
+            # via_turret's comments) - spawn from the clone's frozen position
+            # or the turret's current position instead of wherever the real
+            # player currently is, when this hit came from either.
+            if entry.owner.via_hollow_form:
+                spawn_pos = shooter.hollow_form_pos
+            elif entry.owner.via_turret:
+                spawn_pos = shooter.turret_last_fire_pos
+            else:
+                spawn_pos = shooter.pos
             bonus_index = self.spawn_from_spec(
                 SecondarySpawnSpec(
                     pos=spawn_pos,
@@ -448,6 +455,9 @@ class SecondaryProjectilePool:
             creature = creatures[int(hit_idx)]
             if entry.did_crit and perk_active(shooter, PerkId.COLD_SNAP):
                 creature.crit_freeze_timer = COLD_SNAP_FREEZE_DURATION
+            if entry.did_crit:
+                # Not native: golden crit-spark VFX at the hit point.
+                queue_crit_spark(runtime_state, creature.pos)
             if creature.hp <= 0.0:
                 return
             if entry.did_crit:
@@ -498,6 +508,12 @@ class SecondaryProjectilePool:
 
         def _creature_is_collidable(creature: CreatureState) -> bool:
             if not creature.active:
+                return False
+            # Not native: Relic of the Turret - see projectile_pool.py's
+            # identical exclusion. A rocket fired by a turret spawns right at
+            # the turret's own position, so without this it could detonate
+            # against itself immediately on spawn.
+            if creature.is_turret:
                 return False
             return creature_lifecycle_is_collidable(creature.lifecycle_stage)
 

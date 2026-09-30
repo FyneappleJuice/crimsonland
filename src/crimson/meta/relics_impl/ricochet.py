@@ -79,6 +79,10 @@ def pick_chain_target(
     for idx, creature in enumerate(creatures):
         if idx == exclude_idx or not creature.active or float(creature.hp) <= 0.0:
             continue
+        # Not native: Relic of the Turret - this is player-sourced shot
+        # chaining; a turret should never be chainable.
+        if creature.is_turret:
+            continue
         dx = float(creature.pos.x) - ox
         dy = float(creature.pos.y) - oy
         if dx * dx + dy * dy <= radius_sq:
